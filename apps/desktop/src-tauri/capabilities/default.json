@@ -2,5 +2,12 @@
   "identifier": "default",
   "description": "Least-privilege permissions for the ATLAS main window: SQL plugin only, no fs/shell/http/network access.",
   "windows": ["main"],
-  "permissions": ["core:default", "sql:default"]
+  "permissions": [
+    "core:default",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-close"
+  ]
 }

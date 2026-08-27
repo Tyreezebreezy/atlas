@@ -1,5 +1,8 @@
 import { lazy, Suspense, useState } from 'react';
+import { useGymMode } from '../gym/GymModeContext';
+import { HistoryScreen } from '../history/HistoryScreen';
 import { EmptyScreen } from '../screens/EmptyScreen';
+import { TodayScreen } from '../today/TodayScreen';
 import { NAV_TABS, NAV_TAB_LABELS, type NavTab } from './tabs';
 
 // Lazy: both pull in the exercise library (and its ~1.3MB seed data), so they
@@ -10,16 +13,18 @@ const LibraryScreen = lazy(() =>
 const ProgramScreen = lazy(() =>
   import('../program/ProgramScreen').then((m) => ({ default: m.ProgramScreen })),
 );
+const GymModeScreen = lazy(() =>
+  import('../gym/GymModeScreen').then((m) => ({ default: m.GymModeScreen })),
+);
 
-// v0.0.1 foundation, v0.0.2 library, v0.0.3 program/workout builder: the rest
-// stay placeholders until their own version builds out a real screen.
-const PLACEHOLDER_TABS = ['today', 'progress', 'more'] as const;
+// v0.0.4: "More" just shows History directly rather than a menu -- Body/
+// Imports/Exports/Settings arrive in later versions and can earn a real menu
+// then, not before there's a second thing to put in it.
+const PLACEHOLDER_TABS = ['progress'] as const;
 type PlaceholderTab = (typeof PLACEHOLDER_TABS)[number];
 
 const TAB_DESCRIPTIONS: Record<PlaceholderTab, string> = {
-  today: "Today's workout will show up here once a program is active.",
   progress: 'PRs, milestones, and trends will show up here.',
-  more: 'History, body data, imports, exports, and settings.',
 };
 
 function isPlaceholderTab(tab: NavTab): tab is PlaceholderTab {
@@ -28,10 +33,26 @@ function isPlaceholderTab(tab: NavTab): tab is PlaceholderTab {
 
 export function NavShell() {
   const [activeTab, setActiveTab] = useState<NavTab>('today');
+  const { activeSessionId, exitGymMode } = useGymMode();
+
+  // An active workout takes over the whole app -- no tab bar, no context
+  // switching mid-set. Exiting (finish or back) returns to the normal tabs.
+  if (activeSessionId) {
+    return (
+      <div className="atlas-shell">
+        <main className="atlas-shell__content">
+          <Suspense fallback={<EmptyScreen title="Workout" description="Loading…" />}>
+            <GymModeScreen sessionId={activeSessionId} onExit={exitGymMode} />
+          </Suspense>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="atlas-shell">
       <main className="atlas-shell__content">
+        {activeTab === 'today' && <TodayScreen />}
         {activeTab === 'library' && (
           <Suspense
             fallback={<EmptyScreen title="Library" description="Loading exercise library…" />}
@@ -44,6 +65,7 @@ export function NavShell() {
             <ProgramScreen />
           </Suspense>
         )}
+        {activeTab === 'more' && <HistoryScreen />}
         {isPlaceholderTab(activeTab) && (
           <EmptyScreen
             title={NAV_TAB_LABELS[activeTab]}

@@ -14,10 +14,13 @@ apps/
   web/       React + TypeScript + Vite PWA — the shared frontend
   desktop/   Tauri 2 shell wrapping apps/web for Windows
 packages/
-  data-model/  Shared TypeScript types for every core entity
-  storage/     Storage interface + IndexedDB (Dexie) and SQLite (Tauri SQL) adapters
-  core/        Platform-independent domain logic (IDs, device identity, storage selection)
-  ui/          Shared design tokens
+  data-model/       Shared TypeScript types for every core entity
+  storage/          Storage interface + IndexedDB (Dexie) and SQLite (Tauri SQL) adapters
+  core/             Platform-independent domain logic (IDs, device identity, storage selection)
+  ui/               Shared design tokens
+  exercise-library/ Exercise search/seed/custom-exercise logic
+  workout-engine/   Workout template authoring + workout session execution (Gym Mode)
+  program-engine/   Program authoring + active-program selection
 docs/          Architecture, data model, roadmap, security notes
 ```
 
@@ -39,8 +42,15 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
-npm run tauri build -- --debug   # or: cd apps/desktop/src-tauri && cargo check
+cd apps/desktop/src-tauri && cargo check && cargo test   # Rust compiles + Rust-side tests
+npm run tauri build                                      # required to verify the *packaged app*
 ```
+
+`cargo check`/`cargo test` only validate the Rust code compiles — they don't
+catch frontend-loading issues. A raw `cargo build --release` (skipping the
+Tauri CLI) has been observed to load the Vite dev URL instead of the bundled
+app; always go through `npm run tauri build` / `npm run tauri dev` when the
+question is "does the packaged app actually work," not just "does it compile."
 
 ## Requirements
 

@@ -8,6 +8,10 @@
 - **Imported**: 2026-08-27, from the `main` branch (`data/exercises.json` + `data/exercises.schema.json`),
   via a `--filter=blob:none` sparse checkout of only the `data/` directory (the `images/`/`videos/`
   directories were never fetched).
+- **Commit**: `7455efae41b330c265e7cd4b78dfa848e7ce5ebd` (verified 2026-08-27 by re-fetching this exact
+  commit and diffing a fresh transform against `packages/exercise-library/src/data/atlas-exercises.json`
+  field-for-field, excluding the randomly-generated `id`/`created_at`/`updated_at` — 1,324 records,
+  zero mismatches).
 - **Row count**: 1,324 exercises, all imported.
 - **License**: dual — MIT for code, dataset structure, and instruction text; exercise media
   (images/GIFs) is © Gym Visual, redistributed under Gym Visual's own terms, **not** MIT.

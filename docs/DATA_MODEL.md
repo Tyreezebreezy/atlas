@@ -16,7 +16,7 @@ interface SyncMeta {
 }
 ```
 
-## Entities (v0.0.1 — types only, no engines yet)
+## Entities
 
 | Entity                                       | File          | Notes                                                                                                                                                                                                                                                                       |
 | -------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -56,3 +56,41 @@ behaviorally identical to the IndexedDB one (both are "whole document"
 stores) and avoids hand-writing a column mapping for ten entities nothing
 queries relationally yet. Move a table to real columns when the
 progress/analytics engine (v0.0.6+) needs SQL-level aggregation over it.
+
+**`putMany` does not use an explicit SQL transaction.** `tauri-plugin-sql` pools
+connections per `execute()` call, so a `BEGIN` issued on one call isn't
+guaranteed to be the connection a later call runs on — confirmed by testing:
+the second `execute()` inside a nominal "transaction" succeeded, but the final
+`COMMIT` failed with "cannot commit - no transaction is active", and the
+`catch` block's `ROLLBACK` failed the same way, silently swallowing the real
+error. `putMany` instead sends 50-row multi-value `INSERT` statements (each
+already atomic on its own) with no `BEGIN`/`COMMIT` wrapper. If this plugin
+ever exposes a real pooled/pinned-connection transaction API, revisit this.
+
+## Gym Mode execution semantics (v0.0.4)
+
+`packages/workout-engine/src/session.ts` owns the `WorkoutSession` lifecycle:
+`startWorkoutSession` (snapshots `planned_snapshot` from the template/program
+day — a copy, never a live reference, so later template edits can't rewrite
+history), `addPerformedSet`/`removePerformedSet`, `completeWorkoutSession`,
+`discardWorkoutSession` (a status change, not a delete), `setSessionNote`.
+
+**Draft vs. performed**: a set being typed into (`ExerciseLogger`'s per-row
+`weight`/`reps`/etc. inputs) is pure React state, never touching storage. A
+`PerformedSet` record is created — and immediately persisted via
+`storage.workoutSessions.put()` — only once the user taps the row's complete
+button. There's no separate "draft" storage concept: a planned slot either has
+a `PerformedSet` or it doesn't. This means in-flight typed-but-not-confirmed
+values don't survive a reload (acceptable — the handoff marks restoring
+"incomplete set drafts" as "if practical"), while every _completed_ set does,
+immediately, matching the non-negotiable autosave requirement.
+
+**Active-session recovery**: on load, `TodayScreen` queries
+`workoutSessions.getAll()` for a `status === 'in_progress'` record. If one
+exists, it shows a resume/discard card instead of the normal Today content.
+Resuming calls `firstIncompleteExerciseIndex()` (`GymModeScreen.tsx`) to land
+on the first exercise that isn't fully logged yet, not always exercise 1.
+
+**Gym Mode takes over the whole app** (`GymModeContext` + `NavShell`) — no tab
+bar while a session is active, so navigating tabs can't context-switch away
+mid-set. Only `GymModeScreen`'s own Back/Finish exit it.

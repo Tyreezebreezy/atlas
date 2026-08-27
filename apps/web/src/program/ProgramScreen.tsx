@@ -86,6 +86,7 @@ export function ProgramScreen() {
               <button
                 type="button"
                 onClick={() => setView({ kind: 'program', programId: program.id })}
+                aria-label={`${program.name}, ${program.weeks.length} week${program.weeks.length === 1 ? '' : 's'}${program.is_active ? ', active' : ''}`}
               >
                 <span className="atlas-library__item-name" aria-hidden="true">
                   {program.name}
@@ -129,6 +130,7 @@ export function ProgramScreen() {
                 onClick={() =>
                   setView({ kind: 'template', templateId: template.id, isQuickWorkout: true })
                 }
+                aria-label={`${template.name}, ${template.exercises.length} exercise${template.exercises.length === 1 ? '' : 's'}`}
               >
                 <span className="atlas-library__item-name" aria-hidden="true">
                   {template.name}

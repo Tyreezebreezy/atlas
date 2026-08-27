@@ -3,6 +3,7 @@
 ## hasaneyldrm/exercises-dataset
 
 - **Source**: https://github.com/hasaneyldrm/exercises-dataset
+- **Commit**: `7455efae41b330c265e7cd4b78dfa848e7ce5ebd`
 - **Imported**: 2026-08-27 (`main` branch, `data/exercises.json` + `data/exercises.schema.json`)
 - **License**: dual-licensed —
   - Code, dataset structure, and instruction text: **MIT** (Copyright Hasan Emir Yıldırım)

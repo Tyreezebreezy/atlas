@@ -79,3 +79,31 @@ program state — they carry their own copy. See `docs/DATA_MODEL.md`.
 No network sync is implemented yet. Every entity's `SyncMeta` fields exist from
 v0.0.1 so CITADEL sync (v0.3.0) doesn't require a schema redesign — just a sync
 queue and conflict resolution layered on top of the existing storage interface.
+
+## Gym Mode (v0.0.4)
+
+`GymModeContext` (`apps/web/src/gym/GymModeContext.tsx`) is lifted above
+`NavShell`, not inside it — an active `WorkoutSession` takes over the _entire_
+app (no tab bar) rather than being just one tab's content, so there's no way
+to accidentally context-switch away mid-set. `TodayScreen` is the only entry
+point that calls `enterGymMode()`; everything else about starting a workout
+(picking a program day, picking a Quick Workout) lives there.
+
+Session-execution logic lives in `packages/workout-engine` alongside the
+existing template-authoring logic (`session.ts`, `previousPerformance.ts`,
+`sessionSummary.ts`) rather than a new package — "workout" already covers
+both authoring and execution conceptually, and the split was never about
+topic, only about which version added real logic first.
+
+## A real build/runtime gotcha found during v0.0.4 testing
+
+Building the desktop shell via plain `cargo build --release` (bypassing
+`@tauri-apps/cli`) produces a binary that loads `devUrl` (the Vite dev
+server) instead of the embedded `frontendDist` assets — confirmed by testing:
+`cargo build --release` directly, then launching the binary, loaded whatever
+happened to be running on `localhost:5173` rather than the app's own bundled
+UI. **Always build the desktop shell via `npm run tauri build` /
+`npm run tauri dev`, never a raw `cargo build`/`cargo check` alone**, when the
+question is "does the packaged app behave correctly" rather than just "does
+the Rust compile." `cargo check`/`cargo test` remain fine for compiler-level
+validation.

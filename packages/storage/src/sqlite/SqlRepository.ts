@@ -39,16 +39,31 @@ export class SqlRepository<T extends SyncMeta> implements Repository<T> {
     );
   }
 
+  // ponytail: 50 rows/statement, not one call per row -- cuts a 1,324-row
+  // seed from that many IPC round trips to ~27. No explicit BEGIN/COMMIT:
+  // tauri-plugin-sql pools connections per call, so a transaction opened on
+  // one call isn't guaranteed to be the one a later call runs on -- confirmed
+  // by testing (the second execute in a "transaction" throws "no transaction
+  // is active" on COMMIT). Each multi-row INSERT is already atomic on its
+  // own, which is all a bulk seed needs; ON CONFLICT DO UPDATE keeps re-runs
+  // idempotent if a batch partway through ever needs retrying.
   async putMany(entities: T[]): Promise<void> {
-    await this.db.execute('BEGIN');
-    try {
-      for (const entity of entities) {
-        await this.put(entity);
-      }
-      await this.db.execute('COMMIT');
-    } catch (error) {
-      await this.db.execute('ROLLBACK');
-      throw error;
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < entities.length; i += BATCH_SIZE) {
+      const batch = entities.slice(i, i + BATCH_SIZE);
+      const placeholders = batch
+        .map((_, idx) => `($${idx * 3 + 1}, $${idx * 3 + 2}, $${idx * 3 + 3})`)
+        .join(', ');
+      const values = batch.flatMap((entity) => [
+        entity.id,
+        entity.deleted_at,
+        JSON.stringify(entity),
+      ]);
+      await this.db.execute(
+        `INSERT INTO ${this.table} (id, deleted_at, data) VALUES ${placeholders}
+         ON CONFLICT(id) DO UPDATE SET deleted_at = excluded.deleted_at, data = excluded.data`,
+        values,
+      );
     }
   }
 
