@@ -49,11 +49,17 @@ program-engine, substitution-engine, progress-engine, pr-engine,
 milestone-engine, benchmark-engine, body-composition, import-export,
 exercise-library) — explicitly marked "conceptual... prefer simpler
 organization." v0.0.1 only created packages with real content
-(`data-model`, `storage`, `core`, `ui`); v0.0.2 added `exercise-library` when
-it actually got logic. Each remaining engine package gets created when its
-roadmap version adds logic to it, instead of sitting empty for months. This is
-a structural simplification, not a scope cut — every concept in section 9 of
-the handoff still gets its own module, just introduced on demand.
+(`data-model`, `storage`, `core`, `ui`); v0.0.2 added `exercise-library`;
+v0.0.3 added `workout-engine` and `program-engine` when they got real logic.
+Each remaining engine package gets created when its roadmap version adds
+logic to it, instead of sitting empty for months. This is a structural
+simplification, not a scope cut — every concept in section 9 of the handoff
+still gets its own module, just introduced on demand.
+
+`workout-engine`/`program-engine` hold pure data-transform functions (create,
+duplicate, reorder, activate-one-of-many) — storage reads/writes happen in
+the `apps/web` screens that call them, same division as `exercise-library`.
+Neither package owns a UI framework dependency.
 
 `exercise-library`'s seed data (`src/data/atlas-exercises.json`) lives inside
 the package itself rather than the handoff's suggested top-level `data/`

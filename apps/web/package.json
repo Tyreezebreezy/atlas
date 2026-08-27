@@ -13,8 +13,10 @@
     "@atlas/core": "*",
     "@atlas/data-model": "*",
     "@atlas/exercise-library": "*",
+    "@atlas/program-engine": "*",
     "@atlas/storage": "*",
     "@atlas/ui": "*",
+    "@atlas/workout-engine": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

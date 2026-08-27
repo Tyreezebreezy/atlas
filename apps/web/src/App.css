@@ -284,3 +284,270 @@ button {
   background: transparent;
   color: var(--atlas-color-text-primary);
 }
+
+/* Program screen */
+
+.atlas-program-screen section {
+  margin-top: var(--atlas-space-6);
+}
+
+.atlas-program-screen h2 {
+  font-size: 1.1rem;
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-program-screen__empty {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.atlas-program-screen__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-program-screen__list li {
+  display: flex;
+  align-items: stretch;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-program-screen__list li > button:first-child {
+  flex: 1;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.atlas-program-screen__activate {
+  min-height: 44px;
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-sage);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Template & program editors (shared) */
+
+.atlas-template-editor__back {
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-sage);
+  padding: 0;
+  margin-bottom: var(--atlas-space-3);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.atlas-template-editor label,
+.atlas-program-editor label {
+  display: block;
+  margin-top: var(--atlas-space-3);
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-template-editor input[type='text'],
+.atlas-template-editor > input,
+.atlas-program-editor > input,
+.atlas-program-editor > textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  margin-top: var(--atlas-space-1);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-primary);
+  font-size: 1rem;
+}
+
+.atlas-template-editor__quick-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-4);
+}
+
+.atlas-template-editor__quick-toggle input {
+  width: 20px;
+  height: 20px;
+}
+
+.atlas-template-editor__exercises {
+  list-style: none;
+  margin: var(--atlas-space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-template-editor__exercise {
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  padding: var(--atlas-space-3);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-template-editor__exercise-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.atlas-template-editor__exercise-actions {
+  display: flex;
+  gap: var(--atlas-space-1);
+}
+
+.atlas-template-editor__exercise-actions button {
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.atlas-template-editor__exercise-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.atlas-template-editor__exercise-fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--atlas-space-2) var(--atlas-space-3);
+  margin-top: var(--atlas-space-3);
+}
+
+.atlas-number-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--atlas-space-1) var(--atlas-space-2);
+  margin-top: 2px;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-background);
+  font-size: 0.95rem;
+}
+
+.atlas-template-editor__actions,
+.atlas-program-screen__list + .atlas-library__create {
+  display: flex;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-6);
+}
+
+.atlas-template-editor__actions button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--atlas-radius-sm);
+  border: 1px solid var(--atlas-color-border);
+  background: transparent;
+  color: var(--atlas-color-text-primary);
+  cursor: pointer;
+}
+
+.atlas-template-editor__save {
+  border-color: var(--atlas-color-sage) !important;
+  background: var(--atlas-color-sage) !important;
+  color: var(--atlas-color-surface) !important;
+  font-weight: 600;
+}
+
+/* Program editor: weeks & days */
+
+.atlas-program-editor__week {
+  margin-top: var(--atlas-space-6);
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-program-editor__week-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.atlas-program-editor__week-header h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.atlas-program-editor__week-header button {
+  min-height: 36px;
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.atlas-program-editor__days {
+  list-style: none;
+  margin: var(--atlas-space-3) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-program-editor__day {
+  display: flex;
+  gap: var(--atlas-space-2);
+  align-items: center;
+}
+
+.atlas-program-editor__day input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-background);
+}
+
+.atlas-program-editor__day select {
+  flex: 2;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-background);
+}
+
+.atlas-program-editor__day button {
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.atlas-program-editor__day button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

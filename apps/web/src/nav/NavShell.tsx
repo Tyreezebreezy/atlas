@@ -2,20 +2,29 @@ import { lazy, Suspense, useState } from 'react';
 import { EmptyScreen } from '../screens/EmptyScreen';
 import { NAV_TABS, NAV_TAB_LABELS, type NavTab } from './tabs';
 
-// Lazy: the exercise seed data (~1.3MB) should only load once someone opens
-// the Library tab, not on every app boot.
+// Lazy: both pull in the exercise library (and its ~1.3MB seed data), so they
+// should only load once someone actually opens that tab, not on every boot.
 const LibraryScreen = lazy(() =>
   import('../library/LibraryScreen').then((m) => ({ default: m.LibraryScreen })),
 );
+const ProgramScreen = lazy(() =>
+  import('../program/ProgramScreen').then((m) => ({ default: m.ProgramScreen })),
+);
 
-// v0.0.1 foundation, v0.0.2 library: the rest stay placeholders until v0.0.3
-// (workout/program builder) and beyond build out their real screens.
-const TAB_DESCRIPTIONS: Record<Exclude<NavTab, 'library'>, string> = {
+// v0.0.1 foundation, v0.0.2 library, v0.0.3 program/workout builder: the rest
+// stay placeholders until their own version builds out a real screen.
+const PLACEHOLDER_TABS = ['today', 'progress', 'more'] as const;
+type PlaceholderTab = (typeof PLACEHOLDER_TABS)[number];
+
+const TAB_DESCRIPTIONS: Record<PlaceholderTab, string> = {
   today: "Today's workout will show up here once a program is active.",
-  program: 'Manage your active program, weeks, and days here.',
   progress: 'PRs, milestones, and trends will show up here.',
   more: 'History, body data, imports, exports, and settings.',
 };
+
+function isPlaceholderTab(tab: NavTab): tab is PlaceholderTab {
+  return (PLACEHOLDER_TABS as readonly string[]).includes(tab);
+}
 
 export function NavShell() {
   const [activeTab, setActiveTab] = useState<NavTab>('today');
@@ -23,13 +32,19 @@ export function NavShell() {
   return (
     <div className="atlas-shell">
       <main className="atlas-shell__content">
-        {activeTab === 'library' ? (
+        {activeTab === 'library' && (
           <Suspense
             fallback={<EmptyScreen title="Library" description="Loading exercise library…" />}
           >
             <LibraryScreen />
           </Suspense>
-        ) : (
+        )}
+        {activeTab === 'program' && (
+          <Suspense fallback={<EmptyScreen title="Program" description="Loading…" />}>
+            <ProgramScreen />
+          </Suspense>
+        )}
+        {isPlaceholderTab(activeTab) && (
           <EmptyScreen
             title={NAV_TAB_LABELS[activeTab]}
             description={TAB_DESCRIPTIONS[activeTab]}
