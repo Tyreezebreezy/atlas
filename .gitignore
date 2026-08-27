@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+*.local
+*.log
+target/
+gen/
+.DS_Store
+Thumbs.db

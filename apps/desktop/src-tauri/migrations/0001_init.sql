@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS exercises (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS programs (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS workout_templates (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS workout_sessions (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS exercise_notes (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS program_notes (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS personal_records (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS milestones (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS benchmarks (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS body_measurements (id TEXT PRIMARY KEY, deleted_at TEXT, data TEXT NOT NULL);

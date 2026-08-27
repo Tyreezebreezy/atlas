@@ -1,0 +1,27 @@
+/* ATLAS — Stone & Sage. Temporary direction, pending Figma review (handoff sec. 39). */
+:root {
+  --atlas-color-background: #f2f0ea;
+  --atlas-color-surface: #faf9f6;
+  --atlas-color-text-primary: #252a2d;
+  --atlas-color-text-secondary: #626b70;
+  --atlas-color-sage: #557568;
+  --atlas-color-sage-mist: #dce6e0;
+  --atlas-color-bronze: #b77a3f;
+  --atlas-color-success: #477058;
+  --atlas-color-timer: #526f91;
+  --atlas-color-warning: #b6664b;
+  --atlas-color-border: #d8d5cd;
+
+  --atlas-radius-sm: 6px;
+  --atlas-radius-md: 12px;
+  --atlas-radius-lg: 20px;
+
+  --atlas-space-1: 4px;
+  --atlas-space-2: 8px;
+  --atlas-space-3: 12px;
+  --atlas-space-4: 16px;
+  --atlas-space-6: 24px;
+  --atlas-space-8: 32px;
+
+  --atlas-font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
