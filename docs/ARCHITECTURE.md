@@ -48,11 +48,17 @@ The handoff doc's structure lists a package per engine (workout-engine,
 program-engine, substitution-engine, progress-engine, pr-engine,
 milestone-engine, benchmark-engine, body-composition, import-export,
 exercise-library) — explicitly marked "conceptual... prefer simpler
-organization." v0.0.1 only creates packages with real content
-(`data-model`, `storage`, `core`, `ui`). Each engine package gets created when
-its roadmap version actually adds logic to it, instead of sitting empty for
-months. This is a structural simplification, not a scope cut — every concept in
-section 9 of the handoff still gets its own module, just introduced on demand.
+organization." v0.0.1 only created packages with real content
+(`data-model`, `storage`, `core`, `ui`); v0.0.2 added `exercise-library` when
+it actually got logic. Each remaining engine package gets created when its
+roadmap version adds logic to it, instead of sitting empty for months. This is
+a structural simplification, not a scope cut — every concept in section 9 of
+the handoff still gets its own module, just introduced on demand.
+
+`exercise-library`'s seed data (`src/data/atlas-exercises.json`) lives inside
+the package itself rather than the handoff's suggested top-level `data/`
+folder, so the package stays self-contained instead of reaching outside its
+own directory via a relative import.
 
 ## Planned vs. performed (critical)
 

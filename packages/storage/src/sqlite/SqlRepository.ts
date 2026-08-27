@@ -39,6 +39,19 @@ export class SqlRepository<T extends SyncMeta> implements Repository<T> {
     );
   }
 
+  async putMany(entities: T[]): Promise<void> {
+    await this.db.execute('BEGIN');
+    try {
+      for (const entity of entities) {
+        await this.put(entity);
+      }
+      await this.db.execute('COMMIT');
+    } catch (error) {
+      await this.db.execute('ROLLBACK');
+      throw error;
+    }
+  }
+
   async softDelete(id: string): Promise<void> {
     const existing = await this.get(id);
     if (!existing) return;

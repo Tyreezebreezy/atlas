@@ -12,6 +12,7 @@
   "dependencies": {
     "@atlas/core": "*",
     "@atlas/data-model": "*",
+    "@atlas/exercise-library": "*",
     "@atlas/storage": "*",
     "@atlas/ui": "*",
     "react": "^19.0.0",

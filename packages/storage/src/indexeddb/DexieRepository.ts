@@ -17,6 +17,10 @@ export class DexieRepository<T extends SyncMeta> implements Repository<T> {
     return this.table.put(entity).then(() => undefined);
   }
 
+  putMany(entities: T[]): Promise<void> {
+    return this.table.bulkPut(entities).then(() => undefined);
+  }
+
   async softDelete(id: string): Promise<void> {
     const existing = await this.table.get(id);
     if (!existing) return;

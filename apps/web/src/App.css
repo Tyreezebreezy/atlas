@@ -99,3 +99,188 @@ button {
   color: inherit;
   cursor: pointer;
 }
+
+/* Library */
+
+.atlas-library__search,
+.atlas-library__filters select,
+.atlas-custom-exercise-form input,
+.atlas-custom-exercise-form textarea,
+.atlas-exercise-detail__add-note textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  margin-top: var(--atlas-space-1);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-primary);
+  font-size: 1rem;
+}
+
+.atlas-library__filters {
+  display: flex;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-2);
+}
+
+.atlas-library__filters select {
+  margin-top: 0;
+}
+
+.atlas-library__count {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+  margin: var(--atlas-space-3) 0 var(--atlas-space-2);
+}
+
+.atlas-library__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-library__list button {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.atlas-library__item-name {
+  font-weight: 600;
+}
+
+.atlas-library__item-meta {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.atlas-library__truncated {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.8rem;
+  margin: var(--atlas-space-2) 0;
+}
+
+.atlas-library__create {
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-sage);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Exercise detail */
+
+.atlas-exercise-detail__back {
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-sage);
+  padding: 0;
+  margin-bottom: var(--atlas-space-3);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.atlas-exercise-detail__meta {
+  color: var(--atlas-color-text-secondary);
+  text-transform: capitalize;
+  margin-top: 0;
+}
+
+.atlas-exercise-detail__instructions {
+  padding-left: 1.25rem;
+}
+
+.atlas-exercise-detail__instructions li {
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-exercise-detail__notes {
+  padding-left: 1.25rem;
+}
+
+.atlas-exercise-detail__add-note {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--atlas-space-2);
+}
+
+.atlas-exercise-detail__add-note textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.atlas-exercise-detail__add-note button {
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: var(--atlas-space-2);
+  padding: 0 var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-sage);
+  color: var(--atlas-color-surface);
+  cursor: pointer;
+}
+
+.atlas-exercise-detail__attribution {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.75rem;
+  margin-top: var(--atlas-space-6);
+}
+
+/* Custom exercise form */
+
+.atlas-custom-exercise-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.atlas-custom-exercise-form label {
+  margin-top: var(--atlas-space-3);
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-custom-exercise-form__actions {
+  display: flex;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-6);
+}
+
+.atlas-custom-exercise-form__actions button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--atlas-radius-sm);
+  cursor: pointer;
+}
+
+.atlas-custom-exercise-form__actions button[type='submit'] {
+  border: 1px solid var(--atlas-color-sage);
+  background: var(--atlas-color-sage);
+  color: var(--atlas-color-surface);
+  font-weight: 600;
+}
+
+.atlas-custom-exercise-form__actions button[type='button'] {
+  border: 1px solid var(--atlas-color-border);
+  background: transparent;
+  color: var(--atlas-color-text-primary);
+}

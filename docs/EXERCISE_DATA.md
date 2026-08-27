@@ -1,43 +1,52 @@
 # Exercise Data
 
-**Status: not yet imported.** This is a placeholder — v0.0.2 fills it in.
+## Provenance
 
-## Plan
+- **Source**: [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset) on GitHub —
+  not Kaggle. The dataset was originally sourced from Kaggle per the build handoff, but is mirrored/published
+  directly on GitHub with no authentication required, which is what ATLAS actually imports from.
+- **Imported**: 2026-08-27, from the `main` branch (`data/exercises.json` + `data/exercises.schema.json`),
+  via a `--filter=blob:none` sparse checkout of only the `data/` directory (the `images/`/`videos/`
+  directories were never fetched).
+- **Row count**: 1,324 exercises, all imported.
+- **License**: dual — MIT for code, dataset structure, and instruction text; exercise media
+  (images/GIFs) is © Gym Visual, redistributed under Gym Visual's own terms, **not** MIT.
 
-Source: `hasaneyldrm/exercises-dataset` (Kaggle), ~1,300 structured exercises.
+## What was imported
 
-Before import:
+Per exercise: `id` (as `source_id`), `name`, `body_part` (as `category`), `equipment`, `target` (as
+`target_muscle`), `secondary_muscles`, and `instruction_steps.en` (as `instructions`) — English only;
+the source also carries the same instructions in es/it/tr/ru/zh/hi/pl/ko/fr, not imported since ATLAS
+has no i18n requirement. `muscle_group` was dropped — it overlaps with `target`/`secondary_muscles`
+closely enough that keeping a fourth muscle field wasn't worth it.
 
-1. Confirm the dataset is still reachable and note the exact snapshot date/commit
-   (Kaggle datasets don't have stable version numbers the way git does — record
-   the download date and any version indicator the listing provides).
-2. Re-verify the license on the listing at import time, not from memory.
-3. Import structured fields only: id, name, body part, equipment, target/secondary
-   muscles, category, instructions, and other structured text metadata.
-4. **Exclude all bundled media** (images/GIFs/videos). Prior research found the
-   media associated with this dataset traces to Gym Visual, which carries
-   separate licensing terms not covered by the dataset's own MIT license. ATLAS
-   does not bundle or reference that media.
-5. Record the final provenance (source, download date, license, row count
-   actually imported) in this file and in `LICENSES/`.
+`measurement_type` isn't in the source at all. The import script
+(`scripts/import-exercises.mjs`) uses a one-line heuristic — `body_part === 'cardio'` gets `'time'`,
+everything else gets `'reps_weight'` — not a real classifier. Known-imperfect: e.g. planks and other
+timed core exercises filed under `waist` still come in as `reps_weight`. Correct these by hand as
+they're noticed rather than building a classifier for a few dozen edge cases.
 
-## Known blocker
+**Excluded, deliberately**: `image`, `gif_url`, `media_id`, `attribution` (all Gym Visual media
+fields) and `created_at` (the source's row-creation timestamp — ATLAS stamps its own
+`created_at`/`updated_at` at seed time instead). No media file was ever downloaded — the sparse
+checkout only pulled `data/`, never `images/` or `videos/`.
 
-Kaggle requires an authenticated download (API token or logged-in browser
-session) for most datasets. The build agent has neither Kaggle credentials nor
-authorization to create an account or enter credentials on the user's behalf.
-Resolution is one of:
+## Re-running the import
 
-- the user downloads the dataset manually and hands the file to the agent, or
-- a license-compatible public mirror (GitHub/Hugging Face) is located and used
-  instead, with the substitution noted here.
+```bash
+git clone --filter=blob:none --sparse --depth 1 https://github.com/hasaneyldrm/exercises-dataset.git <tmp>
+cd <tmp> && git sparse-checkout set data
+node scripts/import-exercises.mjs <tmp>/data/exercises.json packages/exercise-library/src/data/atlas-exercises.json
+```
+
+Re-verify the license at the source repo before re-running — this file documents what was true on
+2026-08-27, not a live guarantee.
 
 ## Enrichment layer
 
-`Exercise` in `packages/data-model` already carries the enrichment fields
-(movement pattern/family, push/pull/squat/hinge/carry/rotation flags,
-bilateral/unilateral, difficulty, known substitutes) needed for the
-substitution engine (v0.0.5). The dataset import does not populate these —
-enrichment is seeded manually for a representative subset when the
-substitution engine is actually built, per the handoff's explicit instruction
-not to hand-enrich all ~1,300 rows up front.
+`Exercise` in `packages/data-model` carries the enrichment fields (movement pattern/family,
+push/pull/squat/hinge/carry/rotation flags, bilateral/unilateral, difficulty, known substitutes)
+needed for the substitution engine (v0.0.5). The import does not populate these — every imported
+exercise has `enrichment: null`. Enrichment gets seeded manually for a representative subset when
+the substitution engine is actually built, per the original instruction not to hand-enrich all
+~1,300 rows up front.

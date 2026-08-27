@@ -21,6 +21,8 @@ export interface Repository<T extends SyncMeta> {
   get(id: string): Promise<T | undefined>;
   getAll(): Promise<T[]>;
   put(entity: T): Promise<void>;
+  /** Bulk insert/update, e.g. for seeding the exercise library on first run. */
+  putMany(entities: T[]): Promise<void>;
   softDelete(id: string): Promise<void>;
 }
 

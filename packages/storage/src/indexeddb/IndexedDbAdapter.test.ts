@@ -61,4 +61,13 @@ describe('IndexedDbAdapter', () => {
     await adapter.exercises.put(makeExercise());
     expect(await adapter.programs.getAll()).toHaveLength(0);
   });
+
+  it('putMany bulk inserts', async () => {
+    const batch = [makeExercise(), makeExercise(), makeExercise()];
+    await adapter.exercises.putMany(batch);
+
+    const all = await adapter.exercises.getAll();
+    expect(all).toHaveLength(3);
+    expect(all.map((e) => e.id).sort()).toEqual(batch.map((e) => e.id).sort());
+  });
 });
