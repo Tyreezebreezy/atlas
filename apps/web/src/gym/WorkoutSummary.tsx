@@ -1,15 +1,22 @@
 import { summarizeSession } from '@atlas/workout-engine';
-import type { Exercise, PersonalRecord, WorkoutSession } from '@atlas/data-model';
+import type { Exercise, Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
 import { describePR } from '../progress/formatPR';
 
 interface WorkoutSummaryProps {
   session: WorkoutSession;
   newPRs: PersonalRecord[];
+  newMilestones: Milestone[];
   exercises: Map<string, Exercise>;
   onDone: () => void;
 }
 
-export function WorkoutSummary({ session, newPRs, exercises, onDone }: WorkoutSummaryProps) {
+export function WorkoutSummary({
+  session,
+  newPRs,
+  newMilestones,
+  exercises,
+  onDone,
+}: WorkoutSummaryProps) {
   const summary = summarizeSession(session);
   return (
     <div className="atlas-workout-summary">
@@ -58,6 +65,24 @@ export function WorkoutSummary({ session, newPRs, exercises, onDone }: WorkoutSu
                 </li>
               );
             })}
+          </ul>
+        </div>
+      )}
+
+      {newMilestones.length > 0 && (
+        <div className="atlas-workout-summary__milestones">
+          <h2>Milestones</h2>
+          <ul>
+            {newMilestones.map((milestone) => (
+              <li key={milestone.id}>
+                <span className="atlas-workout-summary__milestone-exercise">
+                  {milestone.exercise_id
+                    ? (exercises.get(milestone.exercise_id)?.name ?? 'Exercise')
+                    : ''}
+                </span>
+                <span className="atlas-workout-summary__milestone-title">{milestone.title}</span>
+              </li>
+            ))}
           </ul>
         </div>
       )}

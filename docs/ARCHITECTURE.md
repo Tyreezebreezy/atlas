@@ -43,6 +43,12 @@ interface, not a rewrite.
   recalculate-on-finish trigger live in `apps/web`.
 - **progress-engine** — exercise summaries and chart-series generation,
   built on `pr-engine`'s eligibility rules. No storage dependency.
+- **milestone-engine** — built-in + custom milestone evaluation over
+  `WorkoutSession[]`, built on `pr-engine`'s `eligibleSetsForExercise`. No
+  storage dependency; persistence and the evaluate-on-finish trigger live in
+  `apps/web`, same division as `pr-engine`.
+- **benchmark-engine** — percentile interpolation and the seeded population
+  benchmark dataset. No storage dependency.
 - **ui** — design tokens (Stone & Sage) shared by every screen.
 - **apps/web** — screens, navigation, PWA manifest/service worker.
 - **apps/desktop** — `src-tauri/` only: Rust entry point, Tauri config, SQL
@@ -145,6 +151,27 @@ division of labor. See docs/PRS.md for the full PR/progress design
 the live-vs-persisted read tradeoff, and the hand-rolled-SVG charting
 decision).
 
+## Milestones & Benchmarks (v0.0.7)
+
+`milestone-engine` and `benchmark-engine` are pure and storage-independent,
+same division as every other engine package. Milestones follow PRs'
+integration pattern closely — evaluated and persisted from
+`GymModeScreen.handleFinish` (`apps/web/src/progress/evaluateMilestonesForSession.ts`),
+surfaced in `WorkoutSummary` and `ProgressScreen` — but with one deliberate
+behavioral difference (achieved-once, never re-evaluated, vs. PRs'
+always-current-best) documented in docs/MILESTONES.md. Benchmarks are a
+different shape entirely: no achievement event, no workout-finish
+integration at all — a comparison is computed live wherever it's shown,
+against whichever `Benchmark` rows are currently seeded. See
+docs/MILESTONES.md and docs/BENCHMARKS.md for the full design.
+
+The custom milestone builder (`apps/web/src/progress/MilestoneForm.tsx`)
+reuses the existing `ExercisePicker` component unmodified — the first
+concrete case of a `program/` screen component being reused from
+`progress/`, made possible because `ExercisePicker` already took its
+`storage`/`onPick`/`onCancel` props generically rather than assuming a
+program-building context.
+
 ## A real build/runtime gotcha found during v0.0.4 testing
 
 Building the desktop shell via plain `cargo build --release` (bypassing
@@ -157,3 +184,25 @@ UI. **Always build the desktop shell via `npm run tauri build` /
 question is "does the packaged app behave correctly" rather than just "does
 the Rust compile." `cargo check`/`cargo test` remain fine for compiler-level
 validation.
+
+## A real caching gotcha found during v0.0.7 desktop testing
+
+Rebuilding and relaunching the desktop app against the **same** WebView2
+user-data directory (`%LOCALAPPDATA%/com.tyree.atlas/EBWebView`, persistent
+across launches by design, same identifier every build) can keep serving a
+**stale cached `index.html`** — confirmed directly: after a fresh
+`npm run tauri build --no-bundle` with new frontend code, the running app's
+`<script src>` still pointed at a hashed filename from a previous build.
+Deleting the `EBWebView` directory (or otherwise clearing the profile) before
+relaunching fixed it immediately. The content-hashed JS chunks themselves
+aren't the problem — `index.html` is the one asset with a stable filename
+across builds, so it's the one WebView2's cache can serve stale without any
+hash mismatch to notice. This only bit iterative same-machine
+rebuild-and-relaunch testing (a real end user installing an actual new
+version gets a fresh install, not a live profile reuse), so it wasn't
+treated as an ATLAS bug to fix — but it's worth knowing before concluding a
+rebuilt desktop app "isn't picking up changes" when it's actually not being
+served the new build at all. If a desktop CDP test ever shows unexpectedly
+stale UI right after a rebuild, check the loaded script hash
+(`[...document.querySelectorAll('script[src]')].map(s => s.src)`) against
+`apps/web/dist/assets/` before assuming the app itself has a bug.

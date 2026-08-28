@@ -81,5 +81,11 @@ describe('applyCuratedEnrichment', () => {
       const [result] = applyCuratedEnrichment([bench]);
       expect(result?.measurement_type).toBe('reps_weight');
     });
+
+    it('v0.0.7: weighted front plank is reclassified to time (a timed hold, not a rep/weight movement) for the Plank milestone', () => {
+      const plank = makeExercise('plank-id', 'weighted front plank');
+      const [result] = applyCuratedEnrichment([plank]);
+      expect(result?.measurement_type).toBe('time');
+    });
   });
 });

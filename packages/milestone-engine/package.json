@@ -1,0 +1,22 @@
+{
+  "name": "@atlas/milestone-engine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atlas/core": "*",
+    "@atlas/data-model": "*",
+    "@atlas/exercise-library": "*",
+    "@atlas/pr-engine": "*",
+    "@atlas/storage": "*"
+  },
+  "devDependencies": {
+    "@atlas/workout-engine": "*",
+    "fake-indexeddb": "^6.0.0"
+  }
+}

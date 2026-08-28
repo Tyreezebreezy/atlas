@@ -10,9 +10,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@atlas/benchmark-engine": "*",
     "@atlas/core": "*",
     "@atlas/data-model": "*",
     "@atlas/exercise-library": "*",
+    "@atlas/milestone-engine": "*",
     "@atlas/pr-engine": "*",
     "@atlas/program-engine": "*",
     "@atlas/progress-engine": "*",

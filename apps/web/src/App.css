@@ -107,6 +107,8 @@ button {
 .atlas-custom-exercise-form input,
 .atlas-custom-exercise-form select,
 .atlas-custom-exercise-form textarea,
+.atlas-milestone-form input,
+.atlas-milestone-form select,
 .atlas-exercise-detail__add-note textarea {
   width: 100%;
   min-height: 44px;
@@ -403,6 +405,65 @@ button {
 }
 
 .atlas-custom-exercise-form__actions button[type='button'] {
+  border: 1px solid var(--atlas-color-border);
+  background: transparent;
+  color: var(--atlas-color-text-primary);
+}
+
+/* Milestone form */
+
+.atlas-milestone-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.atlas-milestone-form label {
+  margin-top: var(--atlas-space-3);
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-milestone-form__exercise {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--atlas-space-3);
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  font-weight: 600;
+}
+
+.atlas-milestone-form__exercise button {
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-sage);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.atlas-milestone-form__actions {
+  display: flex;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-6);
+}
+
+.atlas-milestone-form__actions button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--atlas-radius-sm);
+  cursor: pointer;
+}
+
+.atlas-milestone-form__actions button[type='submit'] {
+  border: 1px solid var(--atlas-color-sage);
+  background: var(--atlas-color-sage);
+  color: var(--atlas-color-surface);
+  font-weight: 600;
+}
+
+.atlas-milestone-form__actions button[type='button'] {
   border: 1px solid var(--atlas-color-border);
   background: transparent;
   color: var(--atlas-color-text-primary);
@@ -1031,6 +1092,64 @@ button {
   text-align: right;
 }
 
+.atlas-workout-summary__milestones {
+  text-align: left;
+  margin: var(--atlas-space-6) 0;
+  padding: var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-bronze);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .atlas-workout-summary__milestones {
+    animation: atlas-milestone-reveal 0.4s ease-out;
+  }
+}
+
+@keyframes atlas-milestone-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.atlas-workout-summary__milestones h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--atlas-color-bronze);
+  margin: 0 0 var(--atlas-space-3);
+}
+
+.atlas-workout-summary__milestones ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-workout-summary__milestones li {
+  display: flex;
+  flex-direction: column;
+}
+
+.atlas-workout-summary__milestone-exercise {
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-workout-summary__milestone-title {
+  font-weight: 600;
+  color: var(--atlas-color-bronze);
+}
+
 /* Trend chart */
 
 .atlas-trend-chart svg {
@@ -1416,6 +1535,11 @@ button {
   margin-bottom: var(--atlas-space-2);
 }
 
+.atlas-progress__month-row {
+  display: flex;
+  gap: var(--atlas-space-6);
+}
+
 .atlas-progress__month-stat {
   display: flex;
   align-items: baseline;
@@ -1426,6 +1550,10 @@ button {
   font-size: 2.5rem;
   font-weight: 700;
   color: var(--atlas-color-success);
+}
+
+.atlas-progress__month-count--bronze {
+  color: var(--atlas-color-bronze);
 }
 
 .atlas-progress__month-label {
@@ -1470,6 +1598,14 @@ button {
   text-align: right;
 }
 
+.atlas-progress__recent-item--milestone {
+  border-left: 3px solid var(--atlas-color-bronze) !important;
+}
+
+.atlas-progress__recent-item--milestone .atlas-progress__recent-meta {
+  color: var(--atlas-color-bronze);
+}
+
 .atlas-progress__trend-list li {
   display: flex;
   justify-content: space-between;
@@ -1492,6 +1628,99 @@ button {
   color: var(--atlas-color-sage);
   font-weight: 600;
   cursor: pointer;
+}
+
+.atlas-progress__milestones > button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-bronze);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-bronze);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.atlas-progress__milestone-list {
+  list-style: none;
+  margin: 0 0 var(--atlas-space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-progress__milestone-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-progress__milestone-list--achieved li {
+  border-color: var(--atlas-color-bronze);
+}
+
+.atlas-progress__milestone-title {
+  font-weight: 600;
+}
+
+.atlas-progress__milestone-list--achieved .atlas-progress__milestone-title {
+  color: var(--atlas-color-bronze);
+}
+
+.atlas-progress__milestone-date,
+.atlas-progress__milestone-exercise {
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-progress__benchmark-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-progress__benchmark-list li {
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-progress__benchmark-exercise {
+  display: block;
+  font-weight: 600;
+}
+
+.atlas-progress__benchmark-display {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--atlas-color-sage);
+  margin-top: var(--atlas-space-1);
+}
+
+.atlas-progress__benchmark-details {
+  margin-top: var(--atlas-space-2);
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-progress__benchmark-details summary {
+  cursor: pointer;
+  color: var(--atlas-color-sage);
+}
+
+.atlas-progress__benchmark-details p {
+  margin: var(--atlas-space-1) 0 0;
 }
 
 /* History */

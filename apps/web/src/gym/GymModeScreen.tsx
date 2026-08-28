@@ -18,13 +18,16 @@ import {
   type LogSetInput,
 } from '@atlas/workout-engine';
 import { newPRsFromSession } from '@atlas/pr-engine';
+import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
 import type {
   Exercise,
   ExerciseReplacement,
+  Milestone,
   PersonalRecord,
   WorkoutSession,
 } from '@atlas/data-model';
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
+import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
 import { useStorage } from '../storage/StorageContext';
 import { ExerciseLogger } from './ExerciseLogger';
 import { ReplaceExercisePanel } from './ReplaceExercisePanel';
@@ -60,10 +63,12 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [skipReasonDraft, setSkipReasonDraft] = useState('');
   const [showReplacePanel, setShowReplacePanel] = useState(false);
   const [newPRs, setNewPRs] = useState<PersonalRecord[]>([]);
+  const [newMilestones, setNewMilestones] = useState<Milestone[]>([]);
 
   useEffect(() => {
     if (!storage) return;
     void (async () => {
+      await ensureBuiltInMilestonesSeeded(storage);
       const [existing, allExercises, allSessions] = await Promise.all([
         storage.workoutSessions.get(sessionId),
         storage.exercises.getAll(),
@@ -126,6 +131,8 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     await recalculatePRsForSession(activeStorage, touchedExerciseIds, exercises);
     const allPRs = await activeStorage.personalRecords.getAll();
     setNewPRs(newPRsFromSession(allPRs, completed.id));
+
+    setNewMilestones(await evaluateMilestonesForSession(activeStorage));
 
     setFinished(true);
   }
@@ -191,7 +198,13 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
 
   if (finished) {
     return (
-      <WorkoutSummary session={session} newPRs={newPRs} exercises={exercises} onDone={onExit} />
+      <WorkoutSummary
+        session={session}
+        newPRs={newPRs}
+        newMilestones={newMilestones}
+        exercises={exercises}
+        onDone={onExit}
+      />
     );
   }
 

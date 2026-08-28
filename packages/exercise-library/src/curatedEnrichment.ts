@@ -388,6 +388,13 @@ export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
     purpose: 'core_stability',
     difficulty: 'beginner',
     substitutes: [],
+    // v0.0.7: EXERCISE_DATA.md already flags planks as a known import-
+    // heuristic miss ("timed core exercises... still come in as
+    // reps_weight"). This is the closest exact dataset name to a plain
+    // plank -- the "weighted" in its name is a dataset-naming artifact,
+    // not a statement that added weight is required; no weight field
+    // shows once this is 'time' (see ExerciseLogger's showsWeight gate).
+    measurement_type_override: 'time',
   },
   'hanging leg raise': {
     movement_pattern: 'isolation',
