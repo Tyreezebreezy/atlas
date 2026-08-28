@@ -10,11 +10,12 @@ import type { AtlasStorage } from '@atlas/storage';
  * enough to just re-run in full on every workout finish at this scale.
  */
 export async function evaluateMilestonesForSession(storage: AtlasStorage): Promise<Milestone[]> {
-  const [milestones, sessions] = await Promise.all([
+  const [milestones, sessions, bodyMeasurements] = await Promise.all([
     storage.milestones.getAll(),
     storage.workoutSessions.getAll(),
+    storage.bodyMeasurements.getAll(),
   ]);
-  const updated = evaluateMilestones(milestones, sessions);
+  const updated = evaluateMilestones(milestones, sessions, bodyMeasurements);
   const changed = updated.filter((m, i) => m !== milestones[i]);
   if (changed.length > 0) await storage.milestones.putMany(changed);
   return newlyAchievedMilestones(milestones, updated);

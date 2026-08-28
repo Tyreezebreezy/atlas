@@ -13,4 +13,5 @@ export interface BodyMeasurement extends SyncMeta {
   bone_mass: number | null;
   bmr: number | null;
   source: string | null;
+  notes: string | null;
 }

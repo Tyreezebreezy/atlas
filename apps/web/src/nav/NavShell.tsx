@@ -4,6 +4,7 @@ import { HistoryScreen } from '../history/HistoryScreen';
 import { EmptyScreen } from '../screens/EmptyScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { TodayScreen } from '../today/TodayScreen';
+import { BodyScreen } from '../body/BodyScreen';
 import { NAV_TABS, NAV_TAB_LABELS, type NavTab } from './tabs';
 
 // Lazy: both pull in the exercise library (and its ~1.3MB seed data), so they
@@ -21,12 +22,13 @@ const ProgressScreen = lazy(() =>
   import('../progress/ProgressScreen').then((m) => ({ default: m.ProgressScreen })),
 );
 
-type MoreView = 'menu' | 'history' | 'settings';
+type MoreView = 'menu' | 'history' | 'settings' | 'body';
 
 function MoreTab() {
   const [view, setView] = useState<MoreView>('menu');
   if (view === 'history') return <HistoryScreen />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
+  if (view === 'body') return <BodyScreen onBack={() => setView('menu')} />;
   return (
     <div className="atlas-more-menu">
       <h1>More</h1>
@@ -35,6 +37,13 @@ function MoreTab() {
           <button type="button" onClick={() => setView('history')} aria-label="History">
             <span className="atlas-library__item-name" aria-hidden="true">
               History
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => setView('body')} aria-label="Body">
+            <span className="atlas-library__item-name" aria-hidden="true">
+              Body
             </span>
           </button>
         </li>

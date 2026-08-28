@@ -49,6 +49,9 @@ interface, not a rewrite.
   `apps/web`, same division as `pr-engine`.
 - **benchmark-engine** — percentile interpolation and the seeded population
   benchmark dataset. No storage dependency.
+- **body-composition** — body-measurement chart series and the
+  date-aware bodyweight selection rule `milestone-engine` uses for
+  `bodyweight_multiplier` evaluation. No storage dependency.
 - **ui** — design tokens (Stone & Sage) shared by every screen.
 - **apps/web** — screens, navigation, PWA manifest/service worker.
 - **apps/desktop** — `src-tauri/` only: Rust entry point, Tauri config, SQL
@@ -68,8 +71,8 @@ logic to it, instead of sitting empty for months. This is a structural
 simplification, not a scope cut — every concept in section 9 of the handoff
 still gets its own module, just introduced on demand. `substitution-engine`
 was created this way in v0.0.5; `pr-engine`/`progress-engine` in v0.0.6;
-`milestone-engine`/`benchmark-engine` in v0.0.7 — each the first version
-that gave that concept real logic.
+`milestone-engine`/`benchmark-engine` in v0.0.7; `body-composition` in
+v0.0.8 — each the first version that gave that concept real logic.
 
 `workout-engine`/`program-engine` hold pure data-transform functions (create,
 duplicate, reorder, activate-one-of-many) — storage reads/writes happen in
@@ -171,6 +174,20 @@ concrete case of a `program/` screen component being reused from
 `progress/`, made possible because `ExercisePicker` already took its
 `storage`/`onPick`/`onCancel` props generically rather than assuming a
 program-building context.
+
+## Body Composition (v0.0.8)
+
+`BodyMeasurement` is not a new entity either — same "existed since v0.0.1,
+unused until an engine populates it" story as PRs/Milestones/Benchmarks,
+extended with one field (`notes`), no migration. `body-composition` is pure
+and storage-independent; `apps/web/src/body/BodyScreen.tsx` (reached from
+the "More" tab, not a new primary tab) owns persistence and reuses
+`TrendChart` unchanged for weight/body-fat trends. The one place this
+version's logic reaches into an existing package: `milestone-engine`'s
+`bodyweight_multiplier` dimension now depends on `body-composition` to
+resolve a per-set target dynamically against logged bodyweight history,
+replacing the creation-time-snapshot stopgap v0.0.7 shipped before this UI
+existed. See docs/BODY_COMPOSITION.md and docs/MILESTONES.md.
 
 ## A real build/runtime gotcha found during v0.0.4 testing
 

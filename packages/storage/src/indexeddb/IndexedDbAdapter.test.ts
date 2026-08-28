@@ -1,6 +1,12 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Benchmark, Exercise, Milestone, PersonalRecord } from '@atlas/data-model';
+import type {
+  Benchmark,
+  BodyMeasurement,
+  Exercise,
+  Milestone,
+  PersonalRecord,
+} from '@atlas/data-model';
 import { IndexedDbAdapter } from './IndexedDbAdapter';
 
 function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
@@ -165,5 +171,38 @@ describe('IndexedDbAdapter: v0.0.6 PR/Milestone/Benchmark fields round-trip with
     };
     await adapter.benchmarks.put(benchmark);
     expect(await adapter.benchmarks.get(benchmark.id)).toEqual(benchmark);
+  });
+});
+
+/**
+ * bodyMeasurements has existed since v0.0.1 too, same reasoning as above --
+ * v0.0.8 only added `notes`, no new store/index.
+ */
+describe('IndexedDbAdapter: v0.0.8 BodyMeasurement fields round-trip without a migration', () => {
+  it('round-trips a BodyMeasurement including the new v0.0.8 notes field', async () => {
+    const adapter = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    const now = new Date().toISOString();
+    const measurement: BodyMeasurement = {
+      id: crypto.randomUUID(),
+      created_at: now,
+      updated_at: now,
+      version: 1,
+      device_id: 'test-device',
+      deleted_at: null,
+      date: '2026-08-28',
+      weight: 180,
+      body_fat_percentage: 18.5,
+      fat_mass: null,
+      lean_mass: null,
+      muscle_mass: null,
+      water_percentage: null,
+      visceral_fat: null,
+      bone_mass: null,
+      bmr: null,
+      source: 'manual',
+      notes: 'Morning weigh-in, fasted',
+    };
+    await adapter.bodyMeasurements.put(measurement);
+    expect(await adapter.bodyMeasurements.get(measurement.id)).toEqual(measurement);
   });
 });

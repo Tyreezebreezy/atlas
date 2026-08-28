@@ -58,7 +58,7 @@ export function MilestoneForm({ storage, onCreated, onCancel }: MilestoneFormPro
         targetVolume: parseNum(targetVolume),
         targetDurationSeconds: parseNum(targetDurationSeconds),
         targetDistanceMeters: parseNum(targetDistanceMeters),
-        referenceValue: parseNum(referenceValue),
+        referenceValue: dimension === 'custom' ? parseNum(referenceValue) : null,
         multiplier: parseNum(multiplier),
       }),
     );
@@ -183,13 +183,9 @@ export function MilestoneForm({ storage, onCreated, onCancel }: MilestoneFormPro
         </>
       )}
 
-      {(dimension === 'bodyweight_multiplier' || dimension === 'custom') && (
+      {dimension === 'custom' && (
         <>
-          <label htmlFor="ms-reference">
-            {dimension === 'bodyweight_multiplier'
-              ? 'Your current bodyweight (lb)'
-              : 'Reference value'}
-          </label>
+          <label htmlFor="ms-reference">Reference value</label>
           <input
             id="ms-reference"
             type="number"
@@ -206,6 +202,24 @@ export function MilestoneForm({ storage, onCreated, onCancel }: MilestoneFormPro
             onChange={(e) => setMultiplier(e.target.value)}
             required
           />
+        </>
+      )}
+
+      {dimension === 'bodyweight_multiplier' && (
+        <>
+          <label htmlFor="ms-bw-multiplier">Multiplier (e.g. 2 for 2&times; bodyweight)</label>
+          <input
+            id="ms-bw-multiplier"
+            type="number"
+            step="0.01"
+            value={multiplier}
+            onChange={(e) => setMultiplier(e.target.value)}
+            required
+          />
+          <p className="atlas-milestone-form__hint">
+            Resolved against your logged bodyweight automatically -- log a weight entry under Body
+            first.
+          </p>
         </>
       )}
 

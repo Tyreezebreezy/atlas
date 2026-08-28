@@ -29,26 +29,52 @@ Eight dimension types were required; `Milestone.dimension` covers exactly these
 via nullable `target_*` fields (a new milestone is a data row, never a code
 change):
 
-| Dimension               | Checked against                                                                                                |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `weight`                | `set.weight >= target_weight`                                                                                  |
-| `reps`                  | `set.reps >= target_reps`                                                                                      |
-| `weight_and_reps`       | both of the above, same set                                                                                    |
-| `volume`                | session-summed `weight × reps` for the exercise `>= target_volume`                                             |
-| `duration`              | `set.duration_seconds >= target_duration_seconds`                                                              |
-| `distance`              | `set.distance_meters >= target_distance_meters`                                                                |
-| `bodyweight_multiplier` | `set.weight >= target_weight`, where `target_weight = reference_value * multiplier`, computed once at creation |
-| `custom`                | same as `bodyweight_multiplier` — the only difference is semantic (e.g. "Squat Six Girlfriends" = 100 lb × 6)  |
+| Dimension               | Checked against                                                                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `weight`                | `set.weight >= target_weight`                                                                                                                                            |
+| `reps`                  | `set.reps >= target_reps`                                                                                                                                                |
+| `weight_and_reps`       | both of the above, same set                                                                                                                                              |
+| `volume`                | session-summed `weight × reps` for the exercise `>= target_volume`                                                                                                       |
+| `duration`              | `set.duration_seconds >= target_duration_seconds`                                                                                                                        |
+| `distance`              | `set.distance_meters >= target_distance_meters`                                                                                                                          |
+| `bodyweight_multiplier` | `set.weight >= bodyweightAtSet * multiplier` — `bodyweightAtSet` resolved per-set against `BodyMeasurement` history, see "Bodyweight-relative resolution (v0.0.8)" below |
+| `custom`                | `set.weight >= target_weight`, where `target_weight = reference_value * multiplier`, computed once at creation (e.g. "Squat Six Girlfriends" = 100 lb × 6)               |
 
-`bodyweight_multiplier` and `custom` collapse to the same `weight` check at
-evaluation time because `createMilestone` precomputes `target_weight` once,
-at creation — evaluation never needs to know which of the two it's looking
-at. `bodyweight_multiplier` deliberately does **not** read from
-`BodyMeasurement` (no bodyweight-entry UI exists before v0.0.8): the user
-types their own current bodyweight into `reference_value` when creating the
-milestone, same mechanism `custom` already uses. `volume` is evaluated
-per-session rather than per-set (`findVolumeMatch`), since no single set
-carries a session total.
+`custom` precomputes `target_weight` once at creation because it's a
+deliberately fixed number chosen by the user, unrelated to their own
+bodyweight. `bodyweight_multiplier` cannot do the same — see below.
+`volume` is evaluated per-session rather than per-set (`findVolumeMatch`),
+since no single set carries a session total.
+
+## Bodyweight-relative resolution (v0.0.8)
+
+Before v0.0.8, `bodyweight_multiplier` had no bodyweight history to read —
+the user typed their own current weight into `reference_value` at creation
+time, same mechanism as `custom`, and that snapshot never changed. Now that
+`BodyMeasurement` has a real entry UI (docs/BODY_COMPOSITION.md), the target
+is resolved dynamically: `evaluateMilestone` calls
+`resolveBodyweightForDate(bodyMeasurements, set.completed_at)` for every
+candidate set and compares against `bodyweightAtSet * milestone.multiplier`
+— per the documented selection rule (latest measurement on or before the
+set's date; if none, the latest measurement available at all; if no
+measurement exists anywhere, the milestone cannot be evaluated yet).
+`createMilestone` no longer precomputes `target_weight` for this dimension
+at all — it starts `null` and stays that way until achievement.
+
+The "do not retroactively alter achieved status when future weight
+measurements change, preserve the value used when achievement occurred"
+requirement falls out of the existing achieved-once-never-re-evaluated rule
+for free, but with one addition: the resolved `bodyweightAtSet * multiplier`
+at the moment of the matching set is **frozen into `target_weight`** as part
+of achievement, alongside `achieved_at`/`origin_session_id`/`origin_set_id`
+— so a user can see exactly what target they hit, and it can never drift
+even if they log a much lower (or higher) weight afterward. Verified
+directly (not just unit-tested): achieved a "2x Bodyweight Deadlift"
+milestone with a 178 lb logged bodyweight (target froze at 356 lb), then
+logged a 150 lb measurement and finished another workout to force a second
+evaluation pass — `target_weight` and `achieved_at` were provably unchanged
+(same `version`, same timestamp) both in the browser and in the packaged
+Tauri+SQLite build.
 
 ## Built-in milestones
 
@@ -75,6 +101,9 @@ value) with only the relevant numeric field(s) shown per dimension. Every
 dimension requires an exercise — even `custom`/`bodyweight_multiplier`,
 since `evaluateMilestone` unconditionally skips any milestone with no
 `exercise_id`, and there'd otherwise be no set to check the target against.
+`bodyweight_multiplier` only asks for a multiplier (v0.0.8) — no reference
+value field, since bodyweight now resolves automatically from logged
+`BodyMeasurement` history instead of being typed in once.
 
 ## Workout completion integration
 

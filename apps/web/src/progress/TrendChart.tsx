@@ -18,7 +18,14 @@ const PADDING_TOP = 16;
 const PADDING_BOTTOM = 28;
 
 function formatDateShort(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Date-only strings ("YYYY-MM-DD", e.g. BodyMeasurement.date) must not go
+  // through the UTC-midnight parse `new Date(iso)` gives them -- in any
+  // timezone behind UTC, that renders as the PREVIOUS day once
+  // toLocaleDateString converts back to local time. Full timestamps
+  // (WorkoutSession.completed_at) are unambiguous and parse the same either way.
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const date = dateOnly ? new Date(`${iso}T00:00:00`) : new Date(iso);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /** A single-metric line chart: date on x, value on y. Handles 0/1/N points. */

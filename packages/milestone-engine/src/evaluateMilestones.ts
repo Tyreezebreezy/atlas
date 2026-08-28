@@ -1,27 +1,43 @@
 import { eligibleSetsForExercise, type EligibleSet } from '@atlas/pr-engine';
-import type { Milestone, PerformedSet, WorkoutSession } from '@atlas/data-model';
+import { resolveBodyweightForDate } from '@atlas/body-composition';
+import type { BodyMeasurement, Milestone, PerformedSet, WorkoutSession } from '@atlas/data-model';
 
 interface MilestoneMatch {
   session: WorkoutSession;
   setId: string;
   achievedAt: string;
+  /** Set only for 'bodyweight_multiplier' -- the resolved weight*multiplier target at the moment of achievement, frozen into target_weight so it never silently drifts if a later BodyMeasurement changes. */
+  resolvedTargetWeight?: number;
 }
 
 /**
- * 'bodyweight_multiplier' and 'custom' both precompute `target_weight` at
- * creation time (`reference_value * multiplier`, see createMilestone.ts),
- * so evaluating them reduces to the same check as 'weight' -- one weight
- * threshold, regardless of how it was derived.
+ * 'custom' precomputes `target_weight` at creation time (`reference_value *
+ * multiplier`, see createMilestone.ts) -- a deliberately fixed number, so it
+ * reduces to a plain weight-threshold check. 'bodyweight_multiplier' has no
+ * static target: `bodyweightAtSet` (the resolved logged bodyweight as of
+ * this particular set's date, see findSetMatch) times `milestone.multiplier`
+ * is computed fresh for every candidate set, per the documented selection
+ * rule in docs/BODY_COMPOSITION.md.
  */
-function checkSet(milestone: Milestone, set: PerformedSet): boolean {
+function checkSet(
+  milestone: Milestone,
+  set: PerformedSet,
+  bodyweightAtSet: number | null,
+): boolean {
   switch (milestone.dimension) {
     case 'weight':
-    case 'bodyweight_multiplier':
     case 'custom':
       return (
         milestone.target_weight != null &&
         set.weight != null &&
         set.weight >= milestone.target_weight
+      );
+    case 'bodyweight_multiplier':
+      return (
+        milestone.multiplier != null &&
+        bodyweightAtSet != null &&
+        set.weight != null &&
+        set.weight >= bodyweightAtSet * milestone.multiplier
       );
     case 'weight_and_reps':
       return (
@@ -54,13 +70,30 @@ function checkSet(milestone: Milestone, set: PerformedSet): boolean {
 }
 
 /** Earliest eligible set (across all history) that satisfies the milestone, or null. */
-function findSetMatch(milestone: Milestone, sessions: WorkoutSession[]): MilestoneMatch | null {
+function findSetMatch(
+  milestone: Milestone,
+  sessions: WorkoutSession[],
+  bodyMeasurements: BodyMeasurement[],
+): MilestoneMatch | null {
   if (!milestone.exercise_id) return null;
   const eligible = eligibleSetsForExercise(sessions, milestone.exercise_id);
   const sorted = [...eligible].sort((a, b) => a.set.completed_at.localeCompare(b.set.completed_at));
   for (const e of sorted) {
-    if (checkSet(milestone, e.set)) {
-      return { session: e.session, setId: e.set.id, achievedAt: e.set.completed_at };
+    const bodyweightAtSet =
+      milestone.dimension === 'bodyweight_multiplier'
+        ? resolveBodyweightForDate(bodyMeasurements, e.set.completed_at)
+        : null;
+    if (checkSet(milestone, e.set, bodyweightAtSet)) {
+      const resolvedTargetWeight =
+        bodyweightAtSet != null && milestone.multiplier != null
+          ? bodyweightAtSet * milestone.multiplier
+          : undefined;
+      return {
+        session: e.session,
+        setId: e.set.id,
+        achievedAt: e.set.completed_at,
+        resolvedTargetWeight,
+      };
     }
   }
   return null;
@@ -106,8 +139,18 @@ function findVolumeMatch(milestone: Milestone, sessions: WorkoutSession[]): Mile
  * skipped. Otherwise this is a full recompute over all eligible history
  * every time, so backfilling an older qualifying session correctly assigns
  * the earlier date -- there's no incremental state to get out of sync.
+ *
+ * For 'bodyweight_multiplier', the resolved target at the moment of match
+ * gets frozen into `target_weight` -- satisfying "do not retroactively
+ * alter achieved status when future weight measurements change, preserve
+ * the value used when achievement occurred" for free, the same way
+ * achieved-once-never-re-evaluated already does for every other dimension.
  */
-export function evaluateMilestone(milestone: Milestone, sessions: WorkoutSession[]): Milestone {
+export function evaluateMilestone(
+  milestone: Milestone,
+  sessions: WorkoutSession[],
+  bodyMeasurements: BodyMeasurement[],
+): Milestone {
   if (milestone.achieved_at != null) return milestone;
   if (!milestone.active) return milestone;
   if (!milestone.exercise_id) return milestone;
@@ -115,11 +158,12 @@ export function evaluateMilestone(milestone: Milestone, sessions: WorkoutSession
   const match =
     milestone.dimension === 'volume'
       ? findVolumeMatch(milestone, sessions)
-      : findSetMatch(milestone, sessions);
+      : findSetMatch(milestone, sessions, bodyMeasurements);
   if (!match) return milestone;
 
   return {
     ...milestone,
+    target_weight: match.resolvedTargetWeight ?? milestone.target_weight,
     achieved_at: match.achievedAt,
     origin_session_id: match.session.id,
     origin_set_id: match.setId,
@@ -131,6 +175,7 @@ export function evaluateMilestone(milestone: Milestone, sessions: WorkoutSession
 export function evaluateMilestones(
   milestones: Milestone[],
   sessions: WorkoutSession[],
+  bodyMeasurements: BodyMeasurement[],
 ): Milestone[] {
-  return milestones.map((m) => evaluateMilestone(m, sessions));
+  return milestones.map((m) => evaluateMilestone(m, sessions, bodyMeasurements));
 }

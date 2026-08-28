@@ -11,18 +11,24 @@ export interface CreateMilestoneInput {
   targetDurationSeconds?: number | null;
   targetDistanceMeters?: number | null;
   targetBodyweightMultiplier?: number | null;
-  /** For 'custom' and 'bodyweight_multiplier': target_weight = referenceValue * multiplier, computed once here. */
+  /** For 'custom' only: target_weight = referenceValue * multiplier, computed once here. */
   referenceValue?: number | null;
+  /** For 'custom' (with referenceValue) and 'bodyweight_multiplier' (alone). */
   multiplier?: number | null;
   isBuiltin?: boolean;
 }
 
 export function createMilestone(input: CreateMilestoneInput): Milestone {
   const now = new Date().toISOString();
-  const computesFromReference =
-    input.dimension === 'custom' || input.dimension === 'bodyweight_multiplier';
+  // 'bodyweight_multiplier' no longer precomputes a static target here (v0.0.8):
+  // it's resolved dynamically per-set against logged bodyweight history at
+  // evaluation time (see evaluateMilestones.ts / docs/BODY_COMPOSITION.md),
+  // since a fixed snapshot would go stale the moment the user's weight
+  // changes. 'custom' has no such history to resolve against -- its target
+  // is a deliberately fixed number chosen by the user (e.g. "100 lb x 6"),
+  // so it still precomputes exactly as before.
   const computedTargetWeight =
-    computesFromReference && input.referenceValue != null && input.multiplier != null
+    input.dimension === 'custom' && input.referenceValue != null && input.multiplier != null
       ? input.referenceValue * input.multiplier
       : (input.targetWeight ?? null);
 

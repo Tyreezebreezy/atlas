@@ -7,7 +7,8 @@ import {
   startWorkoutSession,
   type LogSetInput,
 } from '@atlas/workout-engine';
-import type { WorkoutSession } from '@atlas/data-model';
+import { createBodyMeasurement } from '@atlas/body-composition';
+import type { BodyMeasurement, WorkoutSession } from '@atlas/data-model';
 import { createMilestone } from './createMilestone';
 import { evaluateMilestone, evaluateMilestones } from './evaluateMilestones';
 import { newlyAchievedMilestones } from './detectNewMilestones';
@@ -46,6 +47,10 @@ function completedSession(
   return { ...session, completed_at: completedAt };
 }
 
+function weighIn(date: string, weight: number): BodyMeasurement {
+  return createBodyMeasurement({ date, weight });
+}
+
 describe('evaluateMilestone: dimensions', () => {
   it('weight: achieved once a set reaches the target weight', () => {
     const milestone = createMilestone({
@@ -65,7 +70,7 @@ describe('evaluateMilestone: dimensions', () => {
       '2026-08-08T10:00:00.000Z',
     );
 
-    const result = evaluateMilestone(milestone, [notYet, achieves]);
+    const result = evaluateMilestone(milestone, [notYet, achieves], []);
     expect(result.achieved_at).toBe('2026-08-08T10:00:00.000Z');
     expect(result.origin_session_id).toBe(achieves.id);
   });
@@ -84,7 +89,7 @@ describe('evaluateMilestone: dimensions', () => {
       [set({ exerciseId: 'bench', weight: 225, reps: 1 })],
       '2026-08-01T10:00:00.000Z',
     );
-    const notAchieved = evaluateMilestone(milestone, [heavySingle]);
+    const notAchieved = evaluateMilestone(milestone, [heavySingle], []);
     expect(notAchieved.achieved_at).toBeNull();
 
     const realDeal = completedSession(
@@ -92,7 +97,7 @@ describe('evaluateMilestone: dimensions', () => {
       [set({ exerciseId: 'bench', weight: 225, reps: 5 })],
       '2026-08-08T10:00:00.000Z',
     );
-    const achieved = evaluateMilestone(milestone, [heavySingle, realDeal]);
+    const achieved = evaluateMilestone(milestone, [heavySingle, realDeal], []);
     expect(achieved.achieved_at).toBe('2026-08-08T10:00:00.000Z');
   });
 
@@ -108,7 +113,7 @@ describe('evaluateMilestone: dimensions', () => {
       [set({ exerciseId: 'pushup', reps: 50 })],
       '2026-08-01T10:00:00.000Z',
     );
-    const result = evaluateMilestone(milestone, [session]);
+    const result = evaluateMilestone(milestone, [session], []);
     expect(result.achieved_at).toBe('2026-08-01T10:00:00.000Z');
   });
 
@@ -124,7 +129,7 @@ describe('evaluateMilestone: dimensions', () => {
       [set({ exerciseId: 'plank', durationSeconds: 123 })],
       '2026-08-01T10:00:00.000Z',
     );
-    expect(evaluateMilestone(milestone, [session]).achieved_at).not.toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).not.toBeNull();
   });
 
   it('distance: distance target', () => {
@@ -139,7 +144,7 @@ describe('evaluateMilestone: dimensions', () => {
       [set({ exerciseId: 'carry', distanceMeters: 100 })],
       '2026-08-01T10:00:00.000Z',
     );
-    expect(evaluateMilestone(milestone, [session]).achieved_at).not.toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).not.toBeNull();
   });
 
   it('volume: session-scoped total, not a single set', () => {
@@ -159,7 +164,7 @@ describe('evaluateMilestone: dimensions', () => {
       '2026-08-01T10:00:00.000Z',
     );
     // 225*8*3 = 5400, not enough
-    expect(evaluateMilestone(milestone, [session]).achieved_at).toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).toBeNull();
 
     const biggerSession = completedSession(
       'bench',
@@ -167,26 +172,8 @@ describe('evaluateMilestone: dimensions', () => {
       '2026-08-08T10:00:00.000Z',
     );
     // 225*8*6 = 10800
-    const result = evaluateMilestone(milestone, [session, biggerSession]);
+    const result = evaluateMilestone(milestone, [session, biggerSession], []);
     expect(result.achieved_at).toBe('2026-08-08T10:00:00.000Z');
-  });
-
-  it('bodyweight_multiplier: reduces to a weight check against the precomputed target', () => {
-    const milestone = createMilestone({
-      title: '2x Bodyweight Deadlift',
-      exerciseId: 'deadlift',
-      dimension: 'bodyweight_multiplier',
-      targetBodyweightMultiplier: 2,
-      referenceValue: 180, // user-entered bodyweight at creation time
-      multiplier: 2,
-    });
-    expect(milestone.target_weight).toBe(360);
-    const session = completedSession(
-      'deadlift',
-      [set({ exerciseId: 'deadlift', weight: 365, reps: 1 })],
-      '2026-08-01T10:00:00.000Z',
-    );
-    expect(evaluateMilestone(milestone, [session]).achieved_at).not.toBeNull();
   });
 
   it('custom equivalent: target_weight computed from reference * multiplier at creation', () => {
@@ -203,7 +190,106 @@ describe('evaluateMilestone: dimensions', () => {
       [set({ exerciseId: 'squat', weight: 600, reps: 1 })],
       '2026-08-01T10:00:00.000Z',
     );
-    expect(evaluateMilestone(milestone, [session]).achieved_at).not.toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).not.toBeNull();
+  });
+});
+
+describe('evaluateMilestone: bodyweight_multiplier (v0.0.8 dynamic resolution)', () => {
+  it('resolves the target from the latest logged bodyweight on or before the set date, and freezes it into target_weight on achievement', () => {
+    const milestone = createMilestone({
+      title: '2x Bodyweight Deadlift',
+      exerciseId: 'deadlift',
+      dimension: 'bodyweight_multiplier',
+      multiplier: 2,
+    });
+    expect(milestone.target_weight).toBeNull(); // no static target at creation anymore
+
+    const bodyMeasurements = [weighIn('2026-07-01', 180), weighIn('2026-08-15', 175)];
+    // Set on 2026-08-01 -- latest weigh-in on/before that date is the 180 lb one, not the later 175 lb one.
+    const session = completedSession(
+      'deadlift',
+      [set({ exerciseId: 'deadlift', weight: 365, reps: 1 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+
+    const result = evaluateMilestone(milestone, [session], bodyMeasurements);
+    expect(result.achieved_at).not.toBeNull();
+    expect(result.target_weight).toBe(360); // 180 * 2, not 175 * 2
+  });
+
+  it('does not achieve when the set falls short of the resolved target', () => {
+    const milestone = createMilestone({
+      title: '2x Bodyweight Deadlift',
+      exerciseId: 'deadlift',
+      dimension: 'bodyweight_multiplier',
+      multiplier: 2,
+    });
+    const bodyMeasurements = [weighIn('2026-07-01', 180)];
+    const session = completedSession(
+      'deadlift',
+      [set({ exerciseId: 'deadlift', weight: 350, reps: 1 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(milestone, [session], bodyMeasurements).achieved_at).toBeNull();
+  });
+
+  it('falls back to the latest available bodyweight when none exists on or before the workout date', () => {
+    const milestone = createMilestone({
+      title: '2x Bodyweight Deadlift',
+      exerciseId: 'deadlift',
+      dimension: 'bodyweight_multiplier',
+      multiplier: 2,
+    });
+    // Only weigh-in is AFTER the workout -- backfilling an old session before ever logging bodyweight.
+    const bodyMeasurements = [weighIn('2026-09-01', 180)];
+    const session = completedSession(
+      'deadlift',
+      [set({ exerciseId: 'deadlift', weight: 365, reps: 1 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    const result = evaluateMilestone(milestone, [session], bodyMeasurements);
+    expect(result.achieved_at).not.toBeNull();
+    expect(result.target_weight).toBe(360);
+  });
+
+  it('cannot be evaluated when no bodyweight measurement exists at all', () => {
+    const milestone = createMilestone({
+      title: '2x Bodyweight Deadlift',
+      exerciseId: 'deadlift',
+      dimension: 'bodyweight_multiplier',
+      multiplier: 2,
+    });
+    const session = completedSession(
+      'deadlift',
+      [set({ exerciseId: 'deadlift', weight: 365, reps: 1 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).toBeNull();
+  });
+
+  it('does not retroactively alter an already-achieved milestone when a later, lower bodyweight is logged', () => {
+    const milestone = createMilestone({
+      title: '2x Bodyweight Deadlift',
+      exerciseId: 'deadlift',
+      dimension: 'bodyweight_multiplier',
+      multiplier: 2,
+    });
+    const bodyMeasurements = [weighIn('2026-07-01', 180)];
+    const session = completedSession(
+      'deadlift',
+      [set({ exerciseId: 'deadlift', weight: 365, reps: 1 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+
+    const achieved = evaluateMilestone(milestone, [session], bodyMeasurements);
+    expect(achieved.achieved_at).not.toBeNull();
+    expect(achieved.target_weight).toBe(360);
+
+    // A big weight-loss measurement logged AFTER achievement must not change anything on re-evaluation.
+    const laterMeasurements = [...bodyMeasurements, weighIn('2026-09-01', 150)];
+    const reEvaluated = evaluateMilestone(achieved, [session], laterMeasurements);
+    expect(reEvaluated).toEqual(achieved);
+    expect(reEvaluated.target_weight).toBe(360);
   });
 });
 
@@ -223,7 +309,7 @@ describe('evaluateMilestone: state rules', () => {
       [set({ exerciseId: 'bench', weight: 500, reps: 1 })],
       '2026-08-01T10:00:00.000Z',
     );
-    expect(evaluateMilestone(milestone, [session]).achieved_at).toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).toBeNull();
   });
 
   it('an already-achieved milestone is returned unchanged, never re-evaluated', () => {
@@ -243,7 +329,7 @@ describe('evaluateMilestone: state rules', () => {
       [set({ exerciseId: 'bench', weight: 500, reps: 1 })],
       '2026-08-01T10:00:00.000Z',
     );
-    const result = evaluateMilestone(achieved, [session]);
+    const result = evaluateMilestone(achieved, [session], []);
     expect(result).toEqual(achieved);
   });
 
@@ -265,7 +351,7 @@ describe('evaluateMilestone: state rules', () => {
       '2026-07-01T10:00:00.000Z',
     );
 
-    const result = evaluateMilestone(milestone, [recent, olderQualifying]);
+    const result = evaluateMilestone(milestone, [recent, olderQualifying], []);
     expect(result.achieved_at).toBe('2026-07-01T10:00:00.000Z');
     expect(result.origin_session_id).toBe(olderQualifying.id);
   });
@@ -287,7 +373,7 @@ describe('evaluateMilestone: state rules', () => {
     discarded = addPerformedSet(discarded, set({ exerciseId: 'bench', weight: 500, reps: 1 }));
     discarded = discardWorkoutSession(discarded);
 
-    expect(evaluateMilestone(milestone, [discarded]).achieved_at).toBeNull();
+    expect(evaluateMilestone(milestone, [discarded], []).achieved_at).toBeNull();
   });
 
   it('a skipped exercise (marked but with no sets) never satisfies a milestone', () => {
@@ -310,7 +396,7 @@ describe('evaluateMilestone: state rules', () => {
     };
     session = completeWorkoutSession(session);
 
-    expect(evaluateMilestone(milestone, [session]).achieved_at).toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).toBeNull();
   });
 
   it('a milestone with no exercise_id is never evaluated (can never be achieved yet)', () => {
@@ -325,7 +411,7 @@ describe('evaluateMilestone: state rules', () => {
       [set({ exerciseId: 'bench', weight: 500, reps: 1 })],
       '2026-08-01T10:00:00.000Z',
     );
-    expect(evaluateMilestone(milestone, [session]).achieved_at).toBeNull();
+    expect(evaluateMilestone(milestone, [session], []).achieved_at).toBeNull();
   });
 
   it('origin session/set are persisted on achievement', () => {
@@ -340,7 +426,7 @@ describe('evaluateMilestone: state rules', () => {
       [set({ exerciseId: 'bench', weight: 225, reps: 1 })],
       '2026-08-01T10:00:00.000Z',
     );
-    const result = evaluateMilestone(milestone, [session]);
+    const result = evaluateMilestone(milestone, [session], []);
     expect(result.origin_session_id).toBe(session.id);
     expect(result.origin_set_id).toBe(session.performed_sets[0]?.id);
   });
@@ -376,7 +462,7 @@ describe('evaluateMilestones (batch) and newlyAchievedMilestones', () => {
       '2026-08-01T10:00:00.000Z',
     );
     const before = [m1, m2, alreadyDone];
-    const after = evaluateMilestones(before, [session]);
+    const after = evaluateMilestones(before, [session], []);
 
     const newlyAchieved = newlyAchievedMilestones(before, after);
     expect(newlyAchieved).toHaveLength(1);
