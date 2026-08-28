@@ -17,7 +17,14 @@ import {
   unskipExerciseInSession,
   type LogSetInput,
 } from '@atlas/workout-engine';
-import type { Exercise, ExerciseReplacement, WorkoutSession } from '@atlas/data-model';
+import { newPRsFromSession } from '@atlas/pr-engine';
+import type {
+  Exercise,
+  ExerciseReplacement,
+  PersonalRecord,
+  WorkoutSession,
+} from '@atlas/data-model';
+import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { useStorage } from '../storage/StorageContext';
 import { ExerciseLogger } from './ExerciseLogger';
 import { ReplaceExercisePanel } from './ReplaceExercisePanel';
@@ -52,6 +59,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [showSkipField, setShowSkipField] = useState(false);
   const [skipReasonDraft, setSkipReasonDraft] = useState('');
   const [showReplacePanel, setShowReplacePanel] = useState(false);
+  const [newPRs, setNewPRs] = useState<PersonalRecord[]>([]);
 
   useEffect(() => {
     if (!storage) return;
@@ -108,7 +116,17 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   }
 
   async function handleFinish() {
-    await persist(completeWorkoutSession(currentSession));
+    const completed = completeWorkoutSession(currentSession);
+    await persist(completed);
+
+    // PRs are recomputed (not incrementally patched) for every exercise this
+    // session touched, then diffed against what's now stored to find which
+    // ones this session actually holds -- see recalculatePRs.ts.
+    const touchedExerciseIds = completed.performed_sets.map((s) => s.exercise_id);
+    await recalculatePRsForSession(activeStorage, touchedExerciseIds, exercises);
+    const allPRs = await activeStorage.personalRecords.getAll();
+    setNewPRs(newPRsFromSession(allPRs, completed.id));
+
     setFinished(true);
   }
 
@@ -172,7 +190,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   }
 
   if (finished) {
-    return <WorkoutSummary session={session} onDone={onExit} />;
+    return (
+      <WorkoutSummary session={session} newPRs={newPRs} exercises={exercises} onDone={onExit} />
+    );
   }
 
   const exerciseCount = session.planned_snapshot.length;

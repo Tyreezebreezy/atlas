@@ -34,12 +34,15 @@ interface, not a rewrite.
 - **storage** — the `AtlasStorage` interface plus two implementations
   (`IndexedDbAdapter`, `SqliteAdapter`). Owns migrations (via each backend's own
   native versioning — no custom migration engine).
-- **core** — ID generation, device identity, storage adapter selection. Future
-  versions add PR/milestone/benchmark engines here as their roadmap version
-  lands (see deviation note below).
+- **core** — ID generation, device identity, storage adapter selection.
 - **substitution-engine** — deterministic, offline exercise-substitution
   scoring (no LLM). Pure functions over `Exercise[]`; no storage or UI
   dependency, same division as `workout-engine`/`program-engine`.
+- **pr-engine** — eligibility rules and deterministic PR calculation over
+  `WorkoutSession[]`. No storage dependency; persistence and the
+  recalculate-on-finish trigger live in `apps/web`.
+- **progress-engine** — exercise summaries and chart-series generation,
+  built on `pr-engine`'s eligibility rules. No storage dependency.
 - **ui** — design tokens (Stone & Sage) shared by every screen.
 - **apps/web** — screens, navigation, PWA manifest/service worker.
 - **apps/desktop** — `src-tauri/` only: Rust entry point, Tauri config, SQL
@@ -58,7 +61,9 @@ Each remaining engine package gets created when its roadmap version adds
 logic to it, instead of sitting empty for months. This is a structural
 simplification, not a scope cut — every concept in section 9 of the handoff
 still gets its own module, just introduced on demand. `substitution-engine`
-was created this way in v0.0.5, the first version that gave it real logic.
+was created this way in v0.0.5; `pr-engine`/`progress-engine` in v0.0.6;
+`milestone-engine`/`benchmark-engine` in v0.0.7 — each the first version
+that gave that concept real logic.
 
 `workout-engine`/`program-engine` hold pure data-transform functions (create,
 duplicate, reorder, activate-one-of-many) — storage reads/writes happen in
@@ -121,6 +126,24 @@ outside Gym Mode (no tab bar during an active session), so there's no
 cross-component reactivity need, and there's exactly one preference so far
 (pre-exercise countdown). Revisit as a real `SyncMeta`-carrying entity if
 Settings grows enough to need CITADEL sync.
+
+## PRs & Progress (v0.0.6)
+
+`PersonalRecord`, `Milestone`, and `Benchmark` are not new entities — they,
+their storage repositories, their Dexie stores, and their SQLite tables
+have all existed since v0.0.1 (see docs/DATA_MODEL.md), simply unused until
+an engine existed to populate and read them. v0.0.6 only extended
+`Milestone`/`Benchmark` with a handful of new nullable/non-indexed fields
+(no `PersonalRecord` change was needed at all) — no migration, same "whole
+document" storage reasoning established in v0.0.5.
+
+`pr-engine`/`progress-engine` are pure and storage-independent; the
+recalculate-and-persist trigger (`apps/web/src/progress/recalculatePRs.ts`)
+and all UI live in `apps/web`, matching every other engine package's
+division of labor. See docs/PRS.md for the full PR/progress design
+(eligibility rules, e1RM formula, tie behavior, historical recalculation,
+the live-vs-persisted read tradeoff, and the hand-rolled-SVG charting
+decision).
 
 ## A real build/runtime gotcha found during v0.0.4 testing
 

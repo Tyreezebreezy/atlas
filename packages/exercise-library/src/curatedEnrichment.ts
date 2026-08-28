@@ -1,4 +1,9 @@
-import type { Exercise, ExerciseEnrichment, MovementPattern } from '@atlas/data-model';
+import type {
+  Exercise,
+  ExerciseEnrichment,
+  MeasurementType,
+  MovementPattern,
+} from '@atlas/data-model';
 
 /**
  * Hand-curated metadata for a representative subset of the 1,324-exercise
@@ -25,6 +30,16 @@ interface CuratedEntry {
   purpose: string;
   difficulty: NonNullable<ExerciseEnrichment['difficulty']>;
   substitutes: string[];
+  /**
+   * v0.0.6: corrects a handful of true bodyweight-rep movements that the
+   * v0.0.2 import heuristic mapped to `reps_weight` (its heuristic only
+   * ever produces 'reps_weight' or 'time' -- see docs/EXERCISE_DATA.md).
+   * Deliberately name-matched via this same curated table rather than a
+   * separate ID-pinned table: exact seed-data ids aren't stable across a
+   * re-import, names are, and this keeps one enrichment mechanism instead
+   * of two. See docs/PRS.md "Bodyweight exercise path."
+   */
+  measurement_type_override?: MeasurementType;
 }
 
 export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
@@ -116,7 +131,19 @@ export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
     is_axial_loading: false,
     purpose: 'primary_compound',
     difficulty: 'intermediate',
-    substitutes: ['cable lat pulldown full range of motion'],
+    substitutes: ['cable lat pulldown full range of motion', 'chin-up'],
+    measurement_type_override: 'reps_bodyweight',
+  },
+  'chin-up': {
+    movement_pattern: 'vertical_pull',
+    is_unilateral: false,
+    default_rest_seconds: 90,
+    movement_family: 'pull',
+    is_axial_loading: false,
+    purpose: 'primary_compound',
+    difficulty: 'intermediate',
+    substitutes: ['pull-up', 'cable lat pulldown full range of motion'],
+    measurement_type_override: 'reps_bodyweight',
   },
   'cable lat pulldown full range of motion': {
     movement_pattern: 'vertical_pull',
@@ -147,6 +174,17 @@ export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
     purpose: 'accessory_compound',
     difficulty: 'beginner',
     substitutes: ['barbell bent over row'],
+  },
+  'inverted row': {
+    movement_pattern: 'horizontal_pull',
+    is_unilateral: false,
+    default_rest_seconds: 90,
+    movement_family: 'pull',
+    is_axial_loading: false,
+    purpose: 'accessory_compound',
+    difficulty: 'beginner',
+    substitutes: ['cable seated row'],
+    measurement_type_override: 'reps_bodyweight',
   },
   'barbell full squat': {
     movement_pattern: 'squat',
@@ -317,6 +355,7 @@ export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
     purpose: 'accessory_compound',
     difficulty: 'intermediate',
     substitutes: ['push-up'],
+    measurement_type_override: 'reps_bodyweight',
   },
   'triceps dip': {
     movement_pattern: 'vertical_push',
@@ -327,6 +366,7 @@ export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
     purpose: 'accessory_compound',
     difficulty: 'intermediate',
     substitutes: ['cable triceps pushdown (v-bar)'],
+    measurement_type_override: 'reps_bodyweight',
   },
   'push-up': {
     movement_pattern: 'horizontal_push',
@@ -337,6 +377,7 @@ export const CURATED_ENRICHMENT: Record<string, CuratedEntry> = {
     purpose: 'accessory_compound',
     difficulty: 'beginner',
     substitutes: ['chest dip', 'dumbbell bench press'],
+    measurement_type_override: 'reps_bodyweight',
   },
   'weighted front plank': {
     movement_pattern: 'anti_rotation',
@@ -377,6 +418,7 @@ export function applyCuratedEnrichment(exercises: Exercise[]): Exercise[] {
       movement_pattern: curated.movement_pattern,
       is_unilateral: curated.is_unilateral,
       default_rest_seconds: curated.default_rest_seconds,
+      measurement_type: curated.measurement_type_override ?? exercise.measurement_type,
       enrichment: {
         movement_pattern: curated.movement_pattern,
         movement_family: curated.movement_family,

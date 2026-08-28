@@ -17,6 +17,9 @@ const ProgramScreen = lazy(() =>
 const GymModeScreen = lazy(() =>
   import('../gym/GymModeScreen').then((m) => ({ default: m.GymModeScreen })),
 );
+const ProgressScreen = lazy(() =>
+  import('../progress/ProgressScreen').then((m) => ({ default: m.ProgressScreen })),
+);
 
 type MoreView = 'menu' | 'history' | 'settings';
 
@@ -45,19 +48,6 @@ function MoreTab() {
       </ul>
     </div>
   );
-}
-
-// Body/Imports/Exports arrive in later versions and can earn their own tab
-// or a spot in this menu then, not before there's real content to show.
-const PLACEHOLDER_TABS = ['progress'] as const;
-type PlaceholderTab = (typeof PLACEHOLDER_TABS)[number];
-
-const TAB_DESCRIPTIONS: Record<PlaceholderTab, string> = {
-  progress: 'PRs, milestones, and trends will show up here.',
-};
-
-function isPlaceholderTab(tab: NavTab): tab is PlaceholderTab {
-  return (PLACEHOLDER_TABS as readonly string[]).includes(tab);
 }
 
 export function NavShell() {
@@ -94,13 +84,12 @@ export function NavShell() {
             <ProgramScreen />
           </Suspense>
         )}
-        {activeTab === 'more' && <MoreTab />}
-        {isPlaceholderTab(activeTab) && (
-          <EmptyScreen
-            title={NAV_TAB_LABELS[activeTab]}
-            description={TAB_DESCRIPTIONS[activeTab]}
-          />
+        {activeTab === 'progress' && (
+          <Suspense fallback={<EmptyScreen title="Progress" description="Loading…" />}>
+            <ProgressScreen onViewExercises={() => setActiveTab('library')} />
+          </Suspense>
         )}
+        {activeTab === 'more' && <MoreTab />}
       </main>
       <nav className="atlas-shell__tabbar" aria-label="Primary">
         {NAV_TABS.map((tab) => (

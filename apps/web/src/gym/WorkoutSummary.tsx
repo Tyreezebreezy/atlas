@@ -1,12 +1,15 @@
 import { summarizeSession } from '@atlas/workout-engine';
-import type { WorkoutSession } from '@atlas/data-model';
+import type { Exercise, PersonalRecord, WorkoutSession } from '@atlas/data-model';
+import { describePR } from '../progress/formatPR';
 
 interface WorkoutSummaryProps {
   session: WorkoutSession;
+  newPRs: PersonalRecord[];
+  exercises: Map<string, Exercise>;
   onDone: () => void;
 }
 
-export function WorkoutSummary({ session, onDone }: WorkoutSummaryProps) {
+export function WorkoutSummary({ session, newPRs, exercises, onDone }: WorkoutSummaryProps) {
   const summary = summarizeSession(session);
   return (
     <div className="atlas-workout-summary">
@@ -38,6 +41,27 @@ export function WorkoutSummary({ session, onDone }: WorkoutSummaryProps) {
           </div>
         )}
       </dl>
+
+      {newPRs.length > 0 && (
+        <div className="atlas-workout-summary__prs">
+          <h2>New PRs</h2>
+          <ul>
+            {newPRs.map((pr) => {
+              const { title, value } = describePR(pr);
+              return (
+                <li key={pr.id}>
+                  <span className="atlas-workout-summary__pr-exercise">
+                    {exercises.get(pr.exercise_id)?.name ?? 'Exercise'}
+                  </span>
+                  <span className="atlas-workout-summary__pr-value">{value}</span>
+                  <span className="atlas-workout-summary__pr-title">{title}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       <button type="button" className="atlas-template-editor__save" onClick={onDone}>
         Done
       </button>

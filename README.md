@@ -22,6 +22,8 @@ packages/
   workout-engine/       Workout template authoring + session execution (Gym Mode), timers, skip, replace
   program-engine/       Program authoring + active-program selection
   substitution-engine/  Deterministic, offline exercise-substitution scoring
+  pr-engine/            Personal-record eligibility, calculation, and recalculation
+  progress-engine/      Exercise summaries and chart-series generation
 docs/          Architecture, data model, roadmap, security notes
 ```
 

@@ -105,6 +105,7 @@ button {
 .atlas-library__search,
 .atlas-library__filters select,
 .atlas-custom-exercise-form input,
+.atlas-custom-exercise-form select,
 .atlas-custom-exercise-form textarea,
 .atlas-exercise-detail__add-note textarea {
   width: 100%;
@@ -244,6 +245,128 @@ button {
   color: var(--atlas-color-text-secondary);
   font-size: 0.75rem;
   margin-top: var(--atlas-space-6);
+}
+
+/* Exercise detail tabs + Progress */
+
+.atlas-exercise-detail__tabs {
+  display: flex;
+  gap: var(--atlas-space-2);
+  margin: var(--atlas-space-3) 0 var(--atlas-space-4);
+  border-bottom: 1px solid var(--atlas-color-border);
+}
+
+.atlas-exercise-detail__tabs button {
+  min-height: 44px;
+  padding: 0 var(--atlas-space-2);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.atlas-exercise-detail__tab--active {
+  color: var(--atlas-color-sage) !important;
+  border-bottom-color: var(--atlas-color-sage) !important;
+  font-weight: 600;
+}
+
+.atlas-exercise-progress__stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--atlas-space-4);
+  margin: 0 0 var(--atlas-space-5);
+}
+
+.atlas-exercise-progress__stats dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-exercise-progress__stats dd {
+  margin: 2px 0 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.atlas-exercise-progress__rep-bests {
+  margin-bottom: var(--atlas-space-5);
+}
+
+.atlas-exercise-progress__rep-bests h3,
+.atlas-exercise-progress__history h3 {
+  font-size: 0.9rem;
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-exercise-progress__rep-bests ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-exercise-progress__rep-bests li {
+  padding: var(--atlas-space-1) var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  font-size: 0.85rem;
+}
+
+.atlas-exercise-progress__chart {
+  margin-bottom: var(--atlas-space-5);
+}
+
+.atlas-exercise-progress__metric-picker {
+  display: flex;
+  gap: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-exercise-progress__metric-picker button {
+  min-height: 36px;
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.atlas-exercise-progress__metric--active {
+  border-color: var(--atlas-color-sage) !important;
+  background: var(--atlas-color-sage-mist) !important;
+  color: var(--atlas-color-sage) !important;
+  font-weight: 600;
+}
+
+.atlas-exercise-progress__history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-exercise-progress__history li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--atlas-space-2);
+  padding: var(--atlas-space-2) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
+  font-size: 0.9rem;
+}
+
+.atlas-exercise-progress__history-date {
+  color: var(--atlas-color-text-secondary);
+  white-space: nowrap;
 }
 
 /* Custom exercise form */
@@ -858,6 +981,111 @@ button {
   cursor: pointer;
 }
 
+.atlas-workout-summary__prs {
+  text-align: left;
+  margin: var(--atlas-space-6) 0;
+  padding: var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-success);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-sage-mist);
+}
+
+.atlas-workout-summary__prs h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--atlas-color-success);
+  margin: 0 0 var(--atlas-space-3);
+}
+
+.atlas-workout-summary__prs ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-workout-summary__prs li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--atlas-space-2);
+}
+
+.atlas-workout-summary__pr-exercise {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+.atlas-workout-summary__pr-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--atlas-color-success);
+}
+
+.atlas-workout-summary__pr-title {
+  align-self: center;
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+  text-align: right;
+}
+
+/* Trend chart */
+
+.atlas-trend-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.atlas-trend-chart__line {
+  stroke: var(--atlas-color-sage);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.atlas-trend-chart__point {
+  fill: var(--atlas-color-sage);
+  stroke: var(--atlas-color-surface);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.atlas-trend-chart__axis-label {
+  fill: var(--atlas-color-text-secondary);
+  font-size: 11px;
+}
+
+.atlas-trend-chart__tooltip {
+  min-height: 1.2em;
+  margin: var(--atlas-space-2) 0 0;
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-trend-chart__empty {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.atlas-trend-chart--single {
+  display: flex;
+  align-items: baseline;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-trend-chart__single-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--atlas-color-sage);
+}
+
+.atlas-trend-chart__single-date {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+}
+
 /* Rest timer */
 
 .atlas-rest-timer {
@@ -1172,6 +1400,98 @@ button {
   color: var(--atlas-color-text-secondary);
   font-size: 0.8rem;
   margin: var(--atlas-space-1) 0 0;
+}
+
+/* Progress screen */
+
+.atlas-progress section {
+  margin-top: var(--atlas-space-6);
+}
+
+.atlas-progress h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--atlas-color-text-secondary);
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-progress__month-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-progress__month-count {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--atlas-color-success);
+}
+
+.atlas-progress__month-label {
+  font-size: 1rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-progress__recent-list,
+.atlas-progress__trend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-progress__recent-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-progress__recent-exercise {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+.atlas-progress__recent-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--atlas-color-success);
+}
+
+.atlas-progress__recent-meta {
+  align-self: center;
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+  text-align: right;
+}
+
+.atlas-progress__trend-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--atlas-space-2) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
+}
+
+.atlas-progress__trend-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--atlas-color-timer);
+}
+
+.atlas-progress__view-exercises {
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--atlas-space-6);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-sage);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* History */

@@ -65,4 +65,21 @@ describe('applyCuratedEnrichment', () => {
     applyCuratedEnrichment([bench]);
     expect(bench.enrichment).toBeNull();
   });
+
+  describe('v0.0.6: bodyweight measurement_type correction', () => {
+    it.each(['push-up', 'pull-up', 'chin-up', 'chest dip', 'triceps dip', 'inverted row'])(
+      '%s is reclassified from the import default (reps_weight) to reps_bodyweight',
+      (name) => {
+        const exercise = makeExercise(`${name}-id`, name);
+        const [result] = applyCuratedEnrichment([exercise]);
+        expect(result?.measurement_type).toBe('reps_bodyweight');
+      },
+    );
+
+    it('leaves measurement_type untouched for curated exercises with no override (e.g. barbell bench press)', () => {
+      const bench = makeExercise('bench-id', 'barbell bench press');
+      const [result] = applyCuratedEnrichment([bench]);
+      expect(result?.measurement_type).toBe('reps_weight');
+    });
+  });
 });

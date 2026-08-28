@@ -65,3 +65,19 @@ Curated enrichment is name-matched at seed time, not a migration — an install 
 seeded before v0.0.5 will not retroactively pick up enrichment for those 33 exercises. There are
 no real users of this app yet, so this is an accepted limitation rather than something worth a
 migration path.
+
+## Bodyweight measurement_type correction (v0.0.6)
+
+The import heuristic above only ever produces `'reps_weight'` or `'time'` — it never produces
+`'reps_bodyweight'`, so true bodyweight-rep movements (push-up, pull-up, chin-up, dip, inverted
+row) were imported as `'reps_weight'` even though nothing meaningful is ever entered in their
+weight field. Combined with `CustomExerciseForm` previously hardcoding `measurementType:
+'reps_weight'` too, this meant `reps_bodyweight` had a real data model and a real PR kind
+(`packages/pr-engine`'s `bodyweight` kind) but **no reachable path to it anywhere in the UI** —
+found during v0.0.6 runtime testing, fixed the same version. See docs/PRS.md "Bodyweight exercise
+path" for the full writeup and docs/DATA_MODEL.md for the corrected exercise list.
+
+`curatedEnrichment.ts`'s existing name-matched table now also carries an optional
+`measurement_type_override`, applied at the same first-seed injection point as the rest of curated
+enrichment — deliberately reusing that one mechanism (and its "matched by name, not a re-import-
+fragile id" reasoning) rather than adding a second, separate override table.
