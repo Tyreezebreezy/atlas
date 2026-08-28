@@ -32,6 +32,10 @@ export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
     planned_snapshot: input.plannedSnapshot.map((exercise) => ({ ...exercise })),
     performed_sets: [],
     session_note: null,
+    active_timer: null,
+    skipped_exercises: [],
+    skip_reason: null,
+    replacements: [],
   };
 }
 
@@ -96,6 +100,7 @@ export function completeWorkoutSession(session: WorkoutSession): WorkoutSession 
     ...session,
     status: 'completed',
     completed_at: now,
+    active_timer: null,
     updated_at: now,
     version: session.version + 1,
   };
@@ -103,5 +108,5 @@ export function completeWorkoutSession(session: WorkoutSession): WorkoutSession 
 
 /** Durable status change, not a delete -- keeps abandoned sessions auditable/syncable. */
 export function discardWorkoutSession(session: WorkoutSession): WorkoutSession {
-  return { ...session, status: 'discarded', ...touch(session) };
+  return { ...session, status: 'discarded', active_timer: null, ...touch(session) };
 }

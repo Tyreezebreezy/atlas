@@ -1,16 +1,28 @@
 import { useEffect, useState } from 'react';
 import {
   addPerformedSet,
+  adjustActiveTimer,
+  clearActiveTimer,
   completeWorkoutSession,
   createPerformedSet,
   previousPerformance,
   removePerformedSet,
+  replaceExercise,
+  resolveRestSeconds,
+  applyExerciseReplacementToTemplate,
   setSessionNote,
+  skipExerciseInSession,
+  startExerciseTimer,
+  startRestTimer,
+  unskipExerciseInSession,
   type LogSetInput,
 } from '@atlas/workout-engine';
-import type { Exercise, WorkoutSession } from '@atlas/data-model';
+import type { Exercise, ExerciseReplacement, WorkoutSession } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
 import { ExerciseLogger } from './ExerciseLogger';
+import { ReplaceExercisePanel } from './ReplaceExercisePanel';
+import { RestTimer } from './RestTimer';
+import { useWakeLock } from './useWakeLock';
 import { WorkoutSummary } from './WorkoutSummary';
 
 interface GymModeScreenProps {
@@ -37,6 +49,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [finished, setFinished] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
+  const [showSkipField, setShowSkipField] = useState(false);
+  const [skipReasonDraft, setSkipReasonDraft] = useState('');
+  const [showReplacePanel, setShowReplacePanel] = useState(false);
 
   useEffect(() => {
     if (!storage) return;
@@ -56,6 +71,8 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     })();
   }, [storage, sessionId]);
 
+  useWakeLock(session?.active_timer != null);
+
   if (!storage || !session) {
     return (
       <div className="atlas-empty-screen">
@@ -68,6 +85,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   // after the guard above -- these consts capture the known-non-null values.
   const currentSession = session;
   const activeStorage = storage;
+  const currentPlanned = currentSession.planned_snapshot[exerciseIndex];
 
   async function persist(updated: WorkoutSession) {
     await activeStorage.workoutSessions.put(updated);
@@ -76,7 +94,13 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
 
   async function handleCompleteSet(input: LogSetInput) {
     // Immediate autosave: every completed set is written the instant it's marked done.
-    await persist(addPerformedSet(currentSession, createPerformedSet(input)));
+    let updated = addPerformedSet(currentSession, createPerformedSet(input));
+    const planned = currentSession.planned_snapshot.find((p) => p.exercise_id === input.exerciseId);
+    if (planned) {
+      const rest = resolveRestSeconds(planned, exercises.get(input.exerciseId));
+      updated = startRestTimer(updated, input.exerciseId, rest);
+    }
+    await persist(updated);
   }
 
   async function handleRemoveSet(setId: string) {
@@ -93,12 +117,68 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     setShowNoteField(false);
   }
 
+  async function handleAdjustRest(deltaSeconds: number) {
+    await persist(adjustActiveTimer(currentSession, deltaSeconds));
+  }
+
+  async function handleClearTimer() {
+    await persist(clearActiveTimer(currentSession));
+  }
+
+  async function handleStartExerciseTimer(durationSeconds: number) {
+    if (!currentPlanned) return;
+    await persist(startExerciseTimer(currentSession, currentPlanned.exercise_id, durationSeconds));
+  }
+
+  async function handleSkipExercise() {
+    if (!currentPlanned) return;
+    await persist(
+      skipExerciseInSession(currentSession, currentPlanned.exercise_id, skipReasonDraft),
+    );
+    setShowSkipField(false);
+    setSkipReasonDraft('');
+  }
+
+  async function handleUnskipExercise(exerciseId: string) {
+    await persist(unskipExerciseInSession(currentSession, exerciseId));
+  }
+
+  async function handleConfirmReplace(
+    replacementExerciseId: string,
+    reason: string | null,
+    scope: ExerciseReplacement['scope'],
+  ) {
+    if (!currentPlanned) return;
+    const originalExerciseId = currentPlanned.exercise_id;
+    const updated = replaceExercise(
+      currentSession,
+      originalExerciseId,
+      replacementExerciseId,
+      reason,
+      scope,
+    );
+
+    if (scope === 'program' && updated.template_id) {
+      const template = await activeStorage.workoutTemplates.get(updated.template_id);
+      if (template) {
+        await activeStorage.workoutTemplates.put(
+          applyExerciseReplacementToTemplate(template, originalExerciseId, replacementExerciseId),
+        );
+      }
+    }
+
+    await persist(updated);
+    setShowReplacePanel(false);
+  }
+
   if (finished) {
     return <WorkoutSummary session={session} onDone={onExit} />;
   }
 
   const exerciseCount = session.planned_snapshot.length;
-  const currentPlanned = session.planned_snapshot[exerciseIndex];
+  const skippedEntry = currentPlanned
+    ? session.skipped_exercises.find((s) => s.exercise_id === currentPlanned.exercise_id)
+    : undefined;
 
   return (
     <div className="atlas-gym-mode">
@@ -111,28 +191,98 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         </span>
       </div>
 
+      {session.active_timer?.kind === 'rest' && (
+        <RestTimer
+          timer={session.active_timer}
+          onAdjust={(delta) => void handleAdjustRest(delta)}
+          onSkip={() => void handleClearTimer()}
+          onComplete={() => void handleClearTimer()}
+        />
+      )}
+
       {currentPlanned ? (
-        (() => {
-          const exercise = exercises.get(currentPlanned.exercise_id);
-          const performedForExercise = session.performed_sets.filter(
-            (s) => s.exercise_id === currentPlanned.exercise_id,
-          );
-          const previousSets = exercise
-            ? previousPerformance(priorSessions, exercise.id, session.id)
-            : [];
-          return exercise ? (
-            <ExerciseLogger
-              exercise={exercise}
-              planned={currentPlanned}
-              performedSets={performedForExercise}
-              previousSets={previousSets}
-              onCompleteSet={(input) => void handleCompleteSet(input)}
-              onRemoveCompletedSet={(id) => void handleRemoveSet(id)}
-            />
-          ) : (
-            <p>Exercise not found in library.</p>
-          );
-        })()
+        skippedEntry ? (
+          <div className="atlas-gym-exercise atlas-gym-exercise--skipped">
+            <h2>{exercises.get(currentPlanned.exercise_id)?.name ?? 'Exercise'}</h2>
+            <p className="atlas-gym-exercise__skipped-note">
+              Skipped{skippedEntry.reason ? ` — ${skippedEntry.reason}` : ''}
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleUnskipExercise(currentPlanned.exercise_id)}
+            >
+              Undo Skip
+            </button>
+          </div>
+        ) : (
+          (() => {
+            const exercise = exercises.get(currentPlanned.exercise_id);
+            const performedForExercise = session.performed_sets.filter(
+              (s) => s.exercise_id === currentPlanned.exercise_id,
+            );
+            const previousSets = exercise
+              ? previousPerformance(priorSessions, exercise.id, session.id)
+              : [];
+            return exercise ? (
+              <>
+                <ExerciseLogger
+                  exercise={exercise}
+                  planned={currentPlanned}
+                  performedSets={performedForExercise}
+                  previousSets={previousSets}
+                  activeTimer={session.active_timer}
+                  onCompleteSet={(input) => void handleCompleteSet(input)}
+                  onRemoveCompletedSet={(id) => void handleRemoveSet(id)}
+                  onStartExerciseTimer={(duration) => void handleStartExerciseTimer(duration)}
+                  onStopExerciseTimer={() => void handleClearTimer()}
+                />
+
+                {showReplacePanel ? (
+                  <ReplaceExercisePanel
+                    currentExercise={exercise}
+                    allExercises={[...exercises.values()]}
+                    excludeExerciseIds={session.planned_snapshot
+                      .map((p) => p.exercise_id)
+                      .filter((id) => id !== exercise.id)}
+                    onCancel={() => setShowReplacePanel(false)}
+                    onConfirm={(replacementId, reason, scope) =>
+                      void handleConfirmReplace(replacementId, reason, scope)
+                    }
+                  />
+                ) : showSkipField ? (
+                  <div className="atlas-gym-mode__skip-editor">
+                    <label htmlFor="skip-reason">Reason (optional)</label>
+                    <textarea
+                      id="skip-reason"
+                      value={skipReasonDraft}
+                      onChange={(e) => setSkipReasonDraft(e.target.value)}
+                      placeholder="e.g. Shoulder tweak"
+                    />
+                    <div className="atlas-gym-mode__skip-editor-actions">
+                      <button type="button" onClick={() => setShowSkipField(false)}>
+                        Cancel
+                      </button>
+                      <button type="button" onClick={() => void handleSkipExercise()}>
+                        Confirm Skip
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="atlas-gym-exercise__secondary-actions">
+                    <button type="button" onClick={() => setShowSkipField(true)}>
+                      Skip Exercise
+                    </button>
+                    <button type="button" onClick={() => setShowReplacePanel(true)}>
+                      Replace Exercise
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p>Exercise not found in library.</p>
+            );
+          })()
+        )
       ) : (
         <p>This workout has no exercises.</p>
       )}

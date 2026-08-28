@@ -18,9 +18,10 @@ packages/
   storage/          Storage interface + IndexedDB (Dexie) and SQLite (Tauri SQL) adapters
   core/             Platform-independent domain logic (IDs, device identity, storage selection)
   ui/               Shared design tokens
-  exercise-library/ Exercise search/seed/custom-exercise logic
-  workout-engine/   Workout template authoring + workout session execution (Gym Mode)
-  program-engine/   Program authoring + active-program selection
+  exercise-library/     Exercise search/seed/custom-exercise logic + curated enrichment
+  workout-engine/       Workout template authoring + session execution (Gym Mode), timers, skip, replace
+  program-engine/       Program authoring + active-program selection
+  substitution-engine/  Deterministic, offline exercise-substitution scoring
 docs/          Architecture, data model, roadmap, security notes
 ```
 

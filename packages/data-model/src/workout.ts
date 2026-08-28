@@ -2,6 +2,37 @@ import type { SyncMeta } from './sync';
 
 export type SetType = 'working' | 'warmup' | 'drop' | 'amrap' | 'failure';
 
+/**
+ * Timestamp-based, not decrement-based: `ends_at` is always the source of
+ * truth for remaining time (`ends_at - now()`), never a live countdown
+ * that's trusted across a backgrounding/resume. `+15/-15` adjustments and
+ * pause-free resilience both fall out of recomputing `ends_at` rather than
+ * tracking elapsed ticks. See docs/DATA_MODEL.md.
+ */
+export interface TimerState {
+  kind: 'rest' | 'exercise';
+  /** The exercise this timer belongs to -- rest-after or the timed exercise itself. */
+  exercise_id: string;
+  started_at: string;
+  duration_seconds: number;
+  ends_at: string;
+}
+
+export interface SkippedExercise {
+  exercise_id: string;
+  reason: string | null;
+  skipped_at: string;
+}
+
+export interface ExerciseReplacement {
+  original_exercise_id: string;
+  replacement_exercise_id: string;
+  reason: string | null;
+  /** 'today' touches only this session; 'program' also updates the source WorkoutTemplate. */
+  scope: 'today' | 'program';
+  replaced_at: string;
+}
+
 /** The planned side: a target prescription, never a performed value. */
 export interface PlannedExercise {
   id: string;
@@ -31,7 +62,7 @@ export interface WorkoutTemplate extends SyncMeta {
   is_quick_workout: boolean;
 }
 
-export type WorkoutSessionStatus = 'in_progress' | 'completed' | 'discarded';
+export type WorkoutSessionStatus = 'in_progress' | 'completed' | 'discarded' | 'skipped';
 
 export interface WorkoutSession extends SyncMeta {
   name: string;
@@ -51,6 +82,13 @@ export interface WorkoutSession extends SyncMeta {
   performed_sets: PerformedSet[];
   /** 1:1 with the session, so it lives here rather than as a separate entity. */
   session_note: string | null;
+  /** Null when no rest/exercise timer is currently running. */
+  active_timer: TimerState | null;
+  /** Per-exercise skips within an otherwise in-progress session; undoable before finish. */
+  skipped_exercises: SkippedExercise[];
+  /** Only set when status is 'skipped' -- the whole workout was declined, not started. */
+  skip_reason: string | null;
+  replacements: ExerciseReplacement[];
 }
 
 export interface PerformedSet {

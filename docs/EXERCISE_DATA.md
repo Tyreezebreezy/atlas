@@ -50,7 +50,18 @@ Re-verify the license at the source repo before re-running — this file documen
 
 `Exercise` in `packages/data-model` carries the enrichment fields (movement pattern/family,
 push/pull/squat/hinge/carry/rotation flags, bilateral/unilateral, difficulty, known substitutes)
-needed for the substitution engine (v0.0.5). The import does not populate these — every imported
-exercise has `enrichment: null`. Enrichment gets seeded manually for a representative subset when
-the substitution engine is actually built, per the original instruction not to hand-enrich all
-~1,300 rows up front.
+needed for the substitution engine. The import script does not populate these — every freshly
+imported exercise still has `enrichment: null` and `movement_pattern: null`.
+
+As of v0.0.5, `packages/exercise-library/src/curatedEnrichment.ts` hand-curates ~33 common
+exercises (name-matched, case-insensitive, against this file's `name` field) and applies them at
+first-seed time via `ensureExercisesSeeded`, per the original instruction not to hand-enrich all
+~1,300 rows up front. The remaining ~1,290 rows are intentionally left `enrichment: null` — the
+substitution engine still scores them using the raw imported fields alone (`target_muscle`,
+`movement_pattern` when present, `secondary_muscles`, `equipment`), just without the curated
+signals. See docs/SUBSTITUTIONS.md.
+
+Curated enrichment is name-matched at seed time, not a migration — an install that was already
+seeded before v0.0.5 will not retroactively pick up enrichment for those 33 exercises. There are
+no real users of this app yet, so this is an accepted limitation rather than something worth a
+migration path.

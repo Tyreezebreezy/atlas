@@ -31,6 +31,12 @@ export function WorkoutSummary({ session, onDone }: WorkoutSummaryProps) {
             <dd>{summary.totalVolume.toLocaleString()} lb</dd>
           </div>
         )}
+        {summary.skippedCount > 0 && (
+          <div>
+            <dt>Skipped</dt>
+            <dd>{summary.skippedCount}</dd>
+          </div>
+        )}
       </dl>
       <button type="button" className="atlas-template-editor__save" onClick={onDone}>
         Done

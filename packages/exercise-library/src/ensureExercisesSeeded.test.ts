@@ -19,4 +19,13 @@ describe('ensureExercisesSeeded', () => {
     await ensureExercisesSeeded(storage);
     expect(await storage.exercises.getAll()).toHaveLength(1);
   });
+
+  it('applies curated enrichment to seeded exercises that have it', async () => {
+    const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    await ensureExercisesSeeded(storage);
+    const all = await storage.exercises.getAll();
+    const benchPress = all.find((e) => e.name.toLowerCase() === 'barbell bench press');
+    expect(benchPress?.enrichment).not.toBeNull();
+    expect(benchPress?.movement_pattern).toBe('horizontal_push');
+  });
 });

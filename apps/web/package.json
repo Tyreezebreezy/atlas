@@ -15,6 +15,7 @@
     "@atlas/exercise-library": "*",
     "@atlas/program-engine": "*",
     "@atlas/storage": "*",
+    "@atlas/substitution-engine": "*",
     "@atlas/ui": "*",
     "@atlas/workout-engine": "*",
     "react": "^19.0.0",

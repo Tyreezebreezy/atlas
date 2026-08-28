@@ -6,6 +6,7 @@ export interface SessionSummary {
   setCount: number;
   /** Sum of weight*reps over sets that have both -- omits bodyweight/timed/distance sets, not zero-fills them. */
   totalVolume: number;
+  skippedCount: number;
 }
 
 export function summarizeSession(session: WorkoutSession): SessionSummary {
@@ -20,5 +21,11 @@ export function summarizeSession(session: WorkoutSession): SessionSummary {
     return sum + s.weight * s.reps;
   }, 0);
 
-  return { durationMinutes, exerciseCount, setCount, totalVolume };
+  return {
+    durationMinutes,
+    exerciseCount,
+    setCount,
+    totalVolume,
+    skippedCount: session.skipped_exercises.length,
+  };
 }

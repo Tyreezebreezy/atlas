@@ -4,3 +4,6 @@ export * from './reorder';
 export * from './session';
 export * from './previousPerformance';
 export * from './sessionSummary';
+export * from './timer';
+export * from './skip';
+export * from './replace';

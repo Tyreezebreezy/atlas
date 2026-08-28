@@ -35,8 +35,11 @@ interface, not a rewrite.
   (`IndexedDbAdapter`, `SqliteAdapter`). Owns migrations (via each backend's own
   native versioning — no custom migration engine).
 - **core** — ID generation, device identity, storage adapter selection. Future
-  versions add workout/program/PR/milestone/benchmark/substitution engines here
-  as their roadmap version lands (see deviation note below).
+  versions add PR/milestone/benchmark engines here as their roadmap version
+  lands (see deviation note below).
+- **substitution-engine** — deterministic, offline exercise-substitution
+  scoring (no LLM). Pure functions over `Exercise[]`; no storage or UI
+  dependency, same division as `workout-engine`/`program-engine`.
 - **ui** — design tokens (Stone & Sage) shared by every screen.
 - **apps/web** — screens, navigation, PWA manifest/service worker.
 - **apps/desktop** — `src-tauri/` only: Rust entry point, Tauri config, SQL
@@ -54,7 +57,8 @@ v0.0.3 added `workout-engine` and `program-engine` when they got real logic.
 Each remaining engine package gets created when its roadmap version adds
 logic to it, instead of sitting empty for months. This is a structural
 simplification, not a scope cut — every concept in section 9 of the handoff
-still gets its own module, just introduced on demand.
+still gets its own module, just introduced on demand. `substitution-engine`
+was created this way in v0.0.5, the first version that gave it real logic.
 
 `workout-engine`/`program-engine` hold pure data-transform functions (create,
 duplicate, reorder, activate-one-of-many) — storage reads/writes happen in
@@ -94,6 +98,29 @@ existing template-authoring logic (`session.ts`, `previousPerformance.ts`,
 `sessionSummary.ts`) rather than a new package — "workout" already covers
 both authoring and execution conceptually, and the split was never about
 topic, only about which version added real logic first.
+
+## Timers, skip, replace (v0.0.5)
+
+Timer/skip/replace logic lives in `packages/workout-engine` (`timer.ts`,
+`skip.ts`, `replace.ts`) alongside session execution — same reasoning as
+Gym Mode itself: these are all `WorkoutSession` lifecycle concerns, not a
+new topic that earns its own package. `substitution-engine` is the one
+genuinely new package, because ranking candidate exercises is a distinct
+concept from anything session-lifecycle-shaped.
+
+`useWakeLock` (`apps/web/src/gym/useWakeLock.ts`) is a plain browser-API
+hook, not domain logic, so it lives in `apps/web` rather than a shared
+package — nothing about it is platform-independent (the Tauri desktop
+webview and the PWA both use the same web Screen Wake Lock API directly,
+there's no adapter to abstract).
+
+**Settings is device-local `localStorage`, not a new synced entity.**
+`apps/web/src/settings/settings.ts` reads/writes a single JSON blob. This
+was a deliberate choice, not an oversight: Settings can only be edited
+outside Gym Mode (no tab bar during an active session), so there's no
+cross-component reactivity need, and there's exactly one preference so far
+(pre-exercise countdown). Revisit as a real `SyncMeta`-carrying entity if
+Settings grows enough to need CITADEL sync.
 
 ## A real build/runtime gotcha found during v0.0.4 testing
 

@@ -1,6 +1,7 @@
 import type { AtlasStorage } from '@atlas/storage';
 import type { Exercise } from '@atlas/data-model';
 import seedData from './data/atlas-exercises.json';
+import { applyCuratedEnrichment } from './curatedEnrichment';
 
 export const seedExercises = seedData as Exercise[];
 
@@ -8,5 +9,5 @@ export const seedExercises = seedData as Exercise[];
 export async function ensureExercisesSeeded(storage: AtlasStorage): Promise<void> {
   const existing = await storage.exercises.getAll();
   if (existing.length > 0) return;
-  await storage.exercises.putMany(seedExercises);
+  await storage.exercises.putMany(applyCuratedEnrichment(seedExercises));
 }

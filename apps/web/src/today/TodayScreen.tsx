@@ -1,8 +1,39 @@
 import { useEffect, useState } from 'react';
-import { discardWorkoutSession, startWorkoutSession } from '@atlas/workout-engine';
+import {
+  discardWorkoutSession,
+  skipWorkoutSession,
+  startWorkoutSession,
+} from '@atlas/workout-engine';
 import type { Program, WorkoutSession, WorkoutTemplate } from '@atlas/data-model';
 import { useGymMode } from '../gym/GymModeContext';
 import { useStorage } from '../storage/StorageContext';
+
+interface SkipRowProps {
+  onCancel: () => void;
+  onConfirm: (reason: string | null) => void;
+}
+
+/** Inline confirm-with-optional-reason, replacing the row's own Start button -- same toggle pattern as the discard confirm below. */
+function SkipRow({ onCancel, onConfirm }: SkipRowProps) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className="atlas-today__skip-row">
+      <input
+        type="text"
+        aria-label="Reason for skipping (optional)"
+        placeholder="Reason (optional)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+      <button type="button" onClick={() => onConfirm(reason || null)}>
+        Confirm Skip
+      </button>
+    </div>
+  );
+}
 
 export function TodayScreen() {
   const storage = useStorage();
@@ -12,6 +43,7 @@ export function TodayScreen() {
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [templates, setTemplates] = useState<Map<string, WorkoutTemplate>>(new Map());
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const [skippingKey, setSkippingKey] = useState<string | null>(null);
 
   async function reload() {
     if (!storage) return;
@@ -52,6 +84,26 @@ export function TodayScreen() {
     if (!storage || !activeSession) return;
     await storage.workoutSessions.put(discardWorkoutSession(activeSession));
     setConfirmingDiscard(false);
+    await reload();
+  }
+
+  async function handleSkip(
+    template: WorkoutTemplate,
+    programId: string | null,
+    programDayId: string | null,
+    reason: string | null,
+  ) {
+    if (!storage) return;
+    const session = skipWorkoutSession({
+      name: template.name,
+      templateId: template.id,
+      programId,
+      programDayId,
+      plannedSnapshot: template.exercises,
+      reason,
+    });
+    await storage.workoutSessions.put(session);
+    setSkippingKey(null);
     await reload();
   }
 
@@ -131,6 +183,18 @@ export function TodayScreen() {
             <ul key={week.id} className="atlas-program-screen__list">
               {week.days.map((day) => {
                 const template = templates.get(day.template_id);
+                if (skippingKey === day.id && template) {
+                  return (
+                    <li key={day.id}>
+                      <SkipRow
+                        onCancel={() => setSkippingKey(null)}
+                        onConfirm={(reason) =>
+                          void handleSkip(template, activeProgram.id, day.id, reason)
+                        }
+                      />
+                    </li>
+                  );
+                }
                 return (
                   <li key={day.id}>
                     <button
@@ -148,6 +212,15 @@ export function TodayScreen() {
                         {template ? template.name : 'Workout not found'}
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      className="atlas-program-screen__activate"
+                      disabled={!template}
+                      onClick={() => setSkippingKey(day.id)}
+                      aria-label={`Skip ${day.label || 'Day'}, week ${weekIndex + 1}`}
+                    >
+                      Skip
+                    </button>
                   </li>
                 );
               })}
@@ -164,22 +237,40 @@ export function TodayScreen() {
           </p>
         ) : (
           <ul className="atlas-program-screen__list">
-            {quickWorkouts.map((template) => (
-              <li key={template.id}>
-                <button
-                  type="button"
-                  onClick={() => void startFromTemplate(template, null, null)}
-                  aria-label={`Start ${template.name}`}
-                >
-                  <span className="atlas-library__item-name" aria-hidden="true">
-                    {template.name}
-                  </span>
-                  <span className="atlas-library__item-meta" aria-hidden="true">
-                    {template.exercises.length} exercise{template.exercises.length === 1 ? '' : 's'}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {quickWorkouts.map((template) =>
+              skippingKey === template.id ? (
+                <li key={template.id}>
+                  <SkipRow
+                    onCancel={() => setSkippingKey(null)}
+                    onConfirm={(reason) => void handleSkip(template, null, null, reason)}
+                  />
+                </li>
+              ) : (
+                <li key={template.id}>
+                  <button
+                    type="button"
+                    onClick={() => void startFromTemplate(template, null, null)}
+                    aria-label={`Start ${template.name}`}
+                  >
+                    <span className="atlas-library__item-name" aria-hidden="true">
+                      {template.name}
+                    </span>
+                    <span className="atlas-library__item-meta" aria-hidden="true">
+                      {template.exercises.length} exercise
+                      {template.exercises.length === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="atlas-program-screen__activate"
+                    onClick={() => setSkippingKey(template.id)}
+                    aria-label={`Skip ${template.name}`}
+                  >
+                    Skip
+                  </button>
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>
