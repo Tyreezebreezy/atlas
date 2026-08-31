@@ -30,7 +30,14 @@ button {
 .atlas-shell__content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--atlas-space-6) var(--atlas-space-4);
+  /* Always reserve the safe-area buffer, not just when the tab bar (which
+     carries its own inset) is present -- Gym Mode replaces the tab bar
+     entirely with no other element to absorb the home-indicator area. */
+  padding-bottom: calc(var(--atlas-space-6) + env(safe-area-inset-bottom));
+  container-type: inline-size;
+  container-name: atlas-content;
 }
 
 .atlas-shell__tabbar {
@@ -53,6 +60,45 @@ button {
 .atlas-shell__tab[aria-current='page'] {
   color: var(--atlas-color-sage);
   font-weight: 600;
+}
+
+/* MEDIUM and up: a persistent side rail replaces the bottom tab bar --
+   same tabs, same order, no relearning, just repositioned for a shell
+   with room to spare. See docs/ADAPTIVE_UI.md "Navigation." */
+@media (min-width: 48rem) {
+  .atlas-shell {
+    flex-direction: row;
+  }
+
+  .atlas-shell__content {
+    max-width: var(--atlas-content-max-width-wide);
+    margin: 0 auto;
+    padding-bottom: var(--atlas-space-6);
+  }
+
+  .atlas-shell__tabbar {
+    order: -1;
+    flex-direction: column;
+    width: var(--atlas-nav-width);
+    flex-shrink: 0;
+    border-top: none;
+    border-right: 1px solid var(--atlas-color-border);
+    padding: var(--atlas-space-4) var(--atlas-space-2) env(safe-area-inset-bottom);
+    gap: var(--atlas-space-1);
+  }
+
+  .atlas-shell__tab {
+    flex: none;
+    min-height: var(--atlas-touch-target);
+    text-align: left;
+    padding: 0 var(--atlas-space-3);
+    border-radius: var(--atlas-radius-sm);
+    font-size: 0.9rem;
+  }
+
+  .atlas-shell__tab[aria-current='page'] {
+    background: var(--atlas-color-sage-mist);
+  }
 }
 
 .atlas-empty-screen h1 {
@@ -334,7 +380,7 @@ button {
 }
 
 .atlas-exercise-progress__metric-picker button {
-  min-height: 36px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -561,6 +607,29 @@ button {
   color: var(--atlas-color-text-secondary);
 }
 
+.atlas-body__history-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-2);
+}
+
+.atlas-body__history-actions span {
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-body__history-actions button {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .atlas-body__log-button {
   width: 100%;
   min-height: 48px;
@@ -593,9 +662,13 @@ button {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--atlas-space-2);
+  display: grid;
+  /* Container-width-aware with zero media/container queries: naturally 1
+     column on a phone, more as its actual rendered width grows -- this
+     reacts to the list's own column width (which the sidebar and the
+     wide-mode max-width both affect), not just the raw viewport. */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--atlas-card-gap);
 }
 
 .atlas-program-screen__list li {
@@ -707,8 +780,8 @@ button {
 }
 
 .atlas-template-editor__exercise-actions button {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
@@ -729,7 +802,7 @@ button {
 
 .atlas-number-field input {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: var(--atlas-space-1) var(--atlas-space-2);
   margin-top: 2px;
   border: 1px solid var(--atlas-color-border);
@@ -783,7 +856,7 @@ button {
 }
 
 .atlas-program-editor__week-header button {
-  min-height: 36px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -810,7 +883,7 @@ button {
 .atlas-program-editor__day input {
   flex: 1;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -820,15 +893,15 @@ button {
 .atlas-program-editor__day select {
   flex: 2;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
   background: var(--atlas-color-background);
 }
 
 .atlas-program-editor__day button {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
@@ -1029,7 +1102,7 @@ button {
 }
 
 .atlas-gym-exercise__confirm button {
-  min-height: 36px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
   border-radius: var(--atlas-radius-sm);
   border: 1px solid var(--atlas-color-border);
@@ -1343,7 +1416,7 @@ button {
 }
 
 .atlas-rest-timer__actions button {
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-3);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -1362,7 +1435,7 @@ button {
 
 .atlas-timed-cell__idle input {
   width: 64px;
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: var(--atlas-space-1) var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -1373,7 +1446,7 @@ button {
 
 .atlas-timed-cell__idle button,
 .atlas-timed-cell__running button {
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-3);
   border: 1px solid var(--atlas-color-sage);
   border-radius: var(--atlas-radius-sm);
@@ -1405,7 +1478,7 @@ button {
 }
 
 .atlas-gym-exercise__secondary-actions button {
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-3);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -1491,7 +1564,7 @@ button {
 }
 
 .atlas-replace-panel__header button {
-  min-height: 36px;
+  min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -1611,7 +1684,7 @@ button {
 
 .atlas-settings__row input[type='number'] {
   width: 64px;
-  min-height: 40px;
+  min-height: var(--atlas-touch-target);
   padding: var(--atlas-space-1) var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -1624,6 +1697,16 @@ button {
   color: var(--atlas-color-text-secondary);
   font-size: 0.8rem;
   margin: var(--atlas-space-1) 0 0;
+}
+
+.atlas-milestone-form__warning {
+  color: var(--atlas-color-warning);
+  font-size: 0.8rem;
+  margin: var(--atlas-space-2) 0 0;
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-warning);
+  border-radius: var(--atlas-radius-sm);
+  background: color-mix(in srgb, var(--atlas-color-warning) 8%, var(--atlas-color-surface));
 }
 
 /* Progress screen */
@@ -1666,7 +1749,15 @@ button {
   color: var(--atlas-color-text-secondary);
 }
 
-.atlas-progress__recent-list,
+.atlas-progress__recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--atlas-card-gap);
+}
+
 .atlas-progress__trend-list {
   list-style: none;
   margin: 0;
@@ -1751,8 +1842,8 @@ button {
   list-style: none;
   margin: 0 0 var(--atlas-space-3);
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--atlas-space-2);
 }
 
@@ -1788,9 +1879,9 @@ button {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--atlas-space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--atlas-card-gap);
 }
 
 .atlas-progress__benchmark-list li {

@@ -178,13 +178,28 @@ export function ExerciseLogger({
 
   function handleComplete(index: number) {
     const draft = draftFor(index);
+    // Completing a timed set while its own exercise timer is still running
+    // (never hit "Stop" first) must not silently log a null duration -- fall
+    // back to the live elapsed time from the timer itself, same calculation
+    // "Stop" already does. A manually-entered/edited draft value still wins.
+    const runningTimer =
+      index === nextDraftIndex &&
+      activeTimer?.kind === 'exercise' &&
+      activeTimer.exercise_id === exercise.id
+        ? activeTimer
+        : null;
+    const durationFromTimer = runningTimer
+      ? runningTimer.duration_seconds - remainingSeconds(runningTimer)
+      : null;
+    const durationValue = draft.duration !== '' ? Number(draft.duration) : durationFromTimer;
+
     onCompleteSet({
       exerciseId: exercise.id,
       setIndex: index,
       setType: 'working',
       weight: showsWeight && draft.weight !== '' ? Number(draft.weight) : null,
       reps: showsReps && draft.reps !== '' ? Number(draft.reps) : null,
-      durationSeconds: showsDuration && draft.duration !== '' ? Number(draft.duration) : null,
+      durationSeconds: showsDuration ? durationValue : null,
       distanceMeters: showsDistance && draft.distance !== '' ? Number(draft.distance) : null,
       rpe: null,
       rir: null,
@@ -274,7 +289,27 @@ export function ExerciseLogger({
             }
 
             const draft = draftFor(index);
-            const isRemovableDraft = index === totalRows - 1 && index >= plannedRowCount;
+            const hasDraftData =
+              draft.weight !== '' ||
+              draft.reps !== '' ||
+              draft.duration !== '' ||
+              draft.distance !== '';
+            const hasRunningTimer =
+              index === nextDraftIndex &&
+              activeTimer?.kind === 'exercise' &&
+              activeTimer.exercise_id === exercise.id;
+            // An extra row beyond the plan (added via "+ Set") offers a quick
+            // "remove" undo only while it's genuinely untouched. The instant
+            // it has typed data or a running timer, it must become
+            // completable -- otherwise a bonus set can never be logged
+            // without adding yet another row first to push this one off the
+            // "last row" position, which is exactly the confirmed bug this
+            // fixes.
+            const isRemovableDraft =
+              index === totalRows - 1 &&
+              index >= plannedRowCount &&
+              !hasDraftData &&
+              !hasRunningTimer;
             return (
               <tr key={`draft-${index}`}>
                 <td>{index + 1}</td>

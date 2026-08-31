@@ -7,6 +7,11 @@ progress over time — offline-first, syncing later through CITADEL.
 ATLAS is a training app, not a general health platform. No nutrition tracking, no
 social features, no XP/levels. See [docs/ROADMAP.md](docs/ROADMAP.md) for scope.
 
+The same codebase adapts from phone to ultrawide desktop — bottom nav on a
+phone, a sidebar from tablet up, bounded content width so nothing stretches
+edge-to-edge on a large monitor. See [docs/ADAPTIVE_UI.md](docs/ADAPTIVE_UI.md)
+and [docs/MOBILE.md](docs/MOBILE.md).
+
 ## Structure
 
 ```
@@ -24,6 +29,9 @@ packages/
   substitution-engine/  Deterministic, offline exercise-substitution scoring
   pr-engine/            Personal-record eligibility, calculation, and recalculation
   progress-engine/      Exercise summaries and chart-series generation
+  milestone-engine/     Built-in + custom milestone evaluation
+  benchmark-engine/     Population-benchmark percentile interpolation + seeded dataset
+  body-composition/     Body-measurement chart series + bodyweight selection rule
 docs/          Architecture, data model, roadmap, security notes
 ```
 

@@ -4,6 +4,35 @@ import type { Exercise, Milestone, MilestoneDimension } from '@atlas/data-model'
 import type { AtlasStorage } from '@atlas/storage';
 import { ExercisePicker } from '../program/ExercisePicker';
 
+// Non-blocking guidance only -- an unusual combination is never prevented,
+// just flagged, per the explicit "prefer hints over inflexible validation"
+// instruction. Returns null when the dimension and the exercise's own
+// measurement_type are compatible.
+function dimensionMismatchHint(exercise: Exercise, dimension: MilestoneDimension): string | null {
+  const type = exercise.measurement_type;
+  const needsWeight =
+    dimension === 'weight' ||
+    dimension === 'weight_and_reps' ||
+    dimension === 'volume' ||
+    dimension === 'bodyweight_multiplier' ||
+    dimension === 'custom';
+  const needsReps = dimension === 'reps' || dimension === 'weight_and_reps';
+
+  if (needsWeight && type !== 'reps_weight') {
+    return `${exercise.name} doesn't log a weight, so this milestone may never be achievable. "Reps" is usually the better fit for a bodyweight exercise.`;
+  }
+  if (dimension === 'duration' && type !== 'time' && type !== 'distance_time') {
+    return `${exercise.name} doesn't log a duration, so this milestone may never be achievable.`;
+  }
+  if (dimension === 'distance' && type !== 'distance' && type !== 'distance_time') {
+    return `${exercise.name} doesn't log a distance, so this milestone may never be achievable.`;
+  }
+  if (needsReps && (type === 'time' || type === 'distance')) {
+    return `${exercise.name} is logged by ${type === 'time' ? 'duration' : 'distance'}, not reps, so this milestone may never be achievable.`;
+  }
+  return null;
+}
+
 interface MilestoneFormProps {
   storage: AtlasStorage;
   onCreated: (milestone: Milestone) => void;
@@ -44,6 +73,8 @@ export function MilestoneForm({ storage, onCreated, onCancel }: MilestoneFormPro
   if (!exercise) {
     return <ExercisePicker storage={storage} onPick={setExercise} onCancel={onCancel} />;
   }
+
+  const mismatchHint = dimensionMismatchHint(exercise, dimension);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -96,6 +127,8 @@ export function MilestoneForm({ storage, onCreated, onCancel }: MilestoneFormPro
           </option>
         ))}
       </select>
+
+      {mismatchHint && <p className="atlas-milestone-form__warning">{mismatchHint}</p>}
 
       {dimension === 'weight' && (
         <>

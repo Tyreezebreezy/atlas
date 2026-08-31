@@ -24,4 +24,26 @@
   --atlas-space-8: 32px;
 
   --atlas-font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /*
+   * Adaptive layout (v0.0.8 hardening/adaptive pass). See docs/ADAPTIVE_UI.md.
+   *
+   * Four approximate layout states, driven by available space, not device
+   * names or fixed monitor resolutions:
+   *   COMPACT  <48rem (768px)   -- phone, quarter-window, narrow half-window
+   *   MEDIUM   48rem–64rem      -- tablet, half-window, small laptop
+   *   EXPANDED 64rem–75rem      -- desktop, large tablet landscape
+   *   WIDE     >75rem (1200px)  -- large desktop, ultrawide
+   *
+   * CSS custom properties can't appear inside @media/@container feature
+   * queries, so these three transition points (48rem/64rem/75rem) are the
+   * literal values repeated at each query site -- keep this set closed
+   * rather than growing new ad hoc breakpoints elsewhere.
+   */
+  --atlas-touch-target: 44px;
+  --atlas-content-max-width: 40rem; /* single-column readable content: forms, one card */
+  --atlas-content-max-width-wide: 75rem; /* bounded width for multi-column layouts at WIDE, so ultrawide doesn't stretch content edge-to-edge */
+  --atlas-nav-width: 168px; /* persistent sidebar/rail width at MEDIUM and up */
+
+  --atlas-card-gap: var(--atlas-space-3);
 }

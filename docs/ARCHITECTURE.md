@@ -189,6 +189,30 @@ resolve a per-set target dynamically against logged bodyweight history,
 replacing the creation-time-snapshot stopgap v0.0.7 shipped before this UI
 existed. See docs/BODY_COMPOSITION.md and docs/MILESTONES.md.
 
+## Adaptive UI & platform readiness (v0.0.8 hardening pass)
+
+ATLAS responds to available space (phone through ultrawide, including
+snapped/quarter/half desktop windows) as one codebase, not a
+device-branched fork. The layout mechanism is almost entirely CSS Grid's
+own intrinsic sizing (`auto-fit`/`minmax()` on card-like lists) rather than
+a proliferation of breakpoints; the one real breakpoint that exists
+switches navigation from a bottom bar to a persistent sidebar via CSS
+`order` (no JSX/DOM change). Full detail, the verified viewport/window
+matrix, and what was simulated vs. physically validated live in
+docs/ADAPTIVE_UI.md. Platform-capability isolation (Tauri vs. browser,
+future Android) is covered in docs/MOBILE.md — confirmed by grep that no
+package under `packages/*` touches a platform-specific global at all; only
+two small, already-isolated call sites in `apps/web` touch one directly.
+
+This pass also found and fixed two real Gym Mode bugs unrelated to layout,
+during the mandated hardening regression: completing a timed set while its
+own exercise timer was still running (never hit "Stop" first) silently
+logged a null duration instead of the elapsed time; and a row added via
+"+ Set" beyond a plan's target count could get permanently stuck
+offering only a remove control, never a way to actually complete it. Both
+fixed in `apps/web/src/gym/ExerciseLogger.tsx` — see the commit and
+docs/ADAPTIVE_UI.md's bug list for the full detail.
+
 ## A real build/runtime gotcha found during v0.0.4 testing
 
 Building the desktop shell via plain `cargo build --release` (bypassing

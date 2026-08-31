@@ -35,6 +35,8 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
   const [loading, setLoading] = useState(true);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storage) return;
@@ -50,12 +52,28 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
   );
   const weightPoints = useMemo(() => weightSeries(measurements), [measurements]);
   const bodyFatPoints = useMemo(() => bodyFatSeries(measurements), [measurements]);
+  const editingMeasurement = editingId
+    ? (measurements.find((m) => m.id === editingId) ?? null)
+    : null;
 
-  async function handleCreated(measurement: BodyMeasurement) {
+  async function handleSaved(measurement: BodyMeasurement) {
     if (!storage) return;
     await storage.bodyMeasurements.put(measurement);
     setMeasurements(await storage.bodyMeasurements.getAll());
     setShowForm(false);
+    setEditingId(null);
+  }
+
+  async function handleDelete(id: string) {
+    if (!storage) return;
+    // Deleting or editing a measurement never touches Milestone rows --
+    // an already-achieved bodyweight_multiplier milestone's frozen
+    // target_weight/achieved_at are untouched by construction (evaluation
+    // skips any milestone with achieved_at set, regardless of what the
+    // BodyMeasurement history now says). See docs/BODY_COMPOSITION.md.
+    await storage.bodyMeasurements.softDelete(id);
+    setMeasurements(await storage.bodyMeasurements.getAll());
+    setConfirmDeleteId(null);
   }
 
   if (!storage || loading) {
@@ -67,11 +85,15 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
     );
   }
 
-  if (showForm) {
+  if (showForm || editingMeasurement) {
     return (
       <BodyMeasurementForm
-        onCreated={(m) => void handleCreated(m)}
-        onCancel={() => setShowForm(false)}
+        existing={editingMeasurement}
+        onSaved={(m) => void handleSaved(m)}
+        onCancel={() => {
+          setShowForm(false);
+          setEditingId(null);
+        }}
       />
     );
   }
@@ -126,6 +148,27 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
                     </p>
                   )}
                   {m.notes && <p className="atlas-body__history-notes">{m.notes}</p>}
+
+                  {confirmDeleteId === m.id ? (
+                    <div className="atlas-body__history-actions">
+                      <span>Delete this measurement?</span>
+                      <button type="button" onClick={() => void handleDelete(m.id)}>
+                        Delete
+                      </button>
+                      <button type="button" onClick={() => setConfirmDeleteId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="atlas-body__history-actions">
+                      <button type="button" onClick={() => setEditingId(m.id)}>
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => setConfirmDeleteId(m.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}

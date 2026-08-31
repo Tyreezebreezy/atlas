@@ -3,7 +3,9 @@ import { createBodyMeasurement } from '@atlas/body-composition';
 import type { BodyMeasurement } from '@atlas/data-model';
 
 interface BodyMeasurementFormProps {
-  onCreated: (measurement: BodyMeasurement) => void;
+  /** When set, the form edits this measurement in place instead of creating a new one. */
+  existing?: BodyMeasurement | null;
+  onSaved: (measurement: BodyMeasurement) => void;
   onCancel: () => void;
 }
 
@@ -17,42 +19,75 @@ function parseNum(value: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-export function BodyMeasurementForm({ onCreated, onCancel }: BodyMeasurementFormProps) {
-  const [date, setDate] = useState(today());
-  const [weight, setWeight] = useState('');
-  const [bodyFatPercentage, setBodyFatPercentage] = useState('');
-  const [muscleMass, setMuscleMass] = useState('');
-  const [waterPercentage, setWaterPercentage] = useState('');
-  const [fatMass, setFatMass] = useState('');
-  const [leanMass, setLeanMass] = useState('');
-  const [visceralFat, setVisceralFat] = useState('');
-  const [boneMass, setBoneMass] = useState('');
-  const [bmr, setBmr] = useState('');
-  const [notes, setNotes] = useState('');
+function numToStr(n: number | null): string {
+  return n != null ? String(n) : '';
+}
+
+export function BodyMeasurementForm({ existing, onSaved, onCancel }: BodyMeasurementFormProps) {
+  const [date, setDate] = useState(existing?.date ?? today());
+  const [weight, setWeight] = useState(numToStr(existing?.weight ?? null));
+  const [bodyFatPercentage, setBodyFatPercentage] = useState(
+    numToStr(existing?.body_fat_percentage ?? null),
+  );
+  const [muscleMass, setMuscleMass] = useState(numToStr(existing?.muscle_mass ?? null));
+  const [waterPercentage, setWaterPercentage] = useState(
+    numToStr(existing?.water_percentage ?? null),
+  );
+  const [fatMass, setFatMass] = useState(numToStr(existing?.fat_mass ?? null));
+  const [leanMass, setLeanMass] = useState(numToStr(existing?.lean_mass ?? null));
+  const [visceralFat, setVisceralFat] = useState(numToStr(existing?.visceral_fat ?? null));
+  const [boneMass, setBoneMass] = useState(numToStr(existing?.bone_mass ?? null));
+  const [bmr, setBmr] = useState(numToStr(existing?.bmr ?? null));
+  const [notes, setNotes] = useState(existing?.notes ?? '');
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!date) return;
-    onCreated(
+
+    const fields = {
+      date,
+      weight: parseNum(weight),
+      body_fat_percentage: parseNum(bodyFatPercentage),
+      muscle_mass: parseNum(muscleMass),
+      water_percentage: parseNum(waterPercentage),
+      fat_mass: parseNum(fatMass),
+      lean_mass: parseNum(leanMass),
+      visceral_fat: parseNum(visceralFat),
+      bone_mass: parseNum(boneMass),
+      bmr: parseNum(bmr),
+      notes: notes.trim() || null,
+    };
+
+    if (existing) {
+      onSaved({
+        ...existing,
+        ...fields,
+        updated_at: new Date().toISOString(),
+        version: existing.version + 1,
+      });
+      return;
+    }
+
+    onSaved(
       createBodyMeasurement({
-        date,
-        weight: parseNum(weight),
-        bodyFatPercentage: parseNum(bodyFatPercentage),
-        muscleMass: parseNum(muscleMass),
-        waterPercentage: parseNum(waterPercentage),
-        fatMass: parseNum(fatMass),
-        leanMass: parseNum(leanMass),
-        visceralFat: parseNum(visceralFat),
-        boneMass: parseNum(boneMass),
-        bmr: parseNum(bmr),
-        notes: notes.trim() || null,
+        date: fields.date,
+        weight: fields.weight,
+        bodyFatPercentage: fields.body_fat_percentage,
+        muscleMass: fields.muscle_mass,
+        waterPercentage: fields.water_percentage,
+        fatMass: fields.fat_mass,
+        leanMass: fields.lean_mass,
+        visceralFat: fields.visceral_fat,
+        boneMass: fields.bone_mass,
+        bmr: fields.bmr,
+        notes: fields.notes,
       }),
     );
   }
 
   return (
     <form className="atlas-body-form" onSubmit={handleSubmit}>
-      <h1>Log Measurement</h1>
+      <h1>{existing ? 'Edit Measurement' : 'Log Measurement'}</h1>
 
       <label htmlFor="bm-date">Date</label>
       <input
