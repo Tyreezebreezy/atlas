@@ -10,6 +10,7 @@ import type {
 } from '@atlas/data-model';
 import { describePR } from '../progress/formatPR';
 import { loadSettings } from '../settings/settings';
+import { ExerciseMedia } from '../library/ExerciseMedia';
 
 interface DraftValues {
   weight: string;
@@ -240,6 +241,7 @@ export function ExerciseLogger({
   return (
     <div className="atlas-gym-exercise">
       <h2>{exercise.name}</h2>
+      <ExerciseMedia exercise={exercise} compact />
 
       {(() => {
         const lastSet = previousSets[0];

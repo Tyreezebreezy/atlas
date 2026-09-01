@@ -267,15 +267,43 @@ button {
 .atlas-exercise-media img,
 .atlas-exercise-media video {
   width: 100%;
-  max-width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: var(--atlas-color-surface-alt);
   border-radius: var(--atlas-radius-sm);
   display: block;
+}
+
+.atlas-exercise-media video {
+  aspect-ratio: auto;
 }
 
 .atlas-exercise-media__attribution {
   color: var(--atlas-color-text-secondary);
   font-size: 0.7rem;
   margin-top: var(--atlas-space-1);
+  max-width: 320px;
+}
+
+.atlas-exercise-media__toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+}
+
+/* Gym Mode's tap-to-expand demonstration -- small by default so it never
+   dominates workout logging, matching the handoff's explicit instruction. */
+.atlas-exercise-media--compact img,
+.atlas-exercise-media--compact video {
+  max-width: 96px;
+}
+
+.atlas-exercise-media--compact.atlas-exercise-media--expanded img,
+.atlas-exercise-media--compact.atlas-exercise-media--expanded video {
+  max-width: 320px;
 }
 
 .atlas-exercise-detail__instructions li {

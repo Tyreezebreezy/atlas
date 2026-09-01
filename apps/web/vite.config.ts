@@ -31,6 +31,27 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Exercise animation frames (~32MB, apps/web/public/exercise-media)
+        // must not be eagerly precached on install/update -- every user
+        // would download the whole pack before the app shell even
+        // finished activating. Cached lazily instead, one exercise at a
+        // time as it's actually viewed, via the runtimeCaching rule below.
+        // See docs/EXERCISE_MEDIA.md.
+        globIgnores: ['exercise-media/**'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/exercise-media\/.*\.png$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'atlas-exercise-media',
+              expiration: {
+                maxEntries: 906,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

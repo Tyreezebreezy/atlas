@@ -33,15 +33,20 @@ export interface ExerciseEnrichment {
   avoid_if: string[];
 }
 
-export type ExerciseMediaKind = 'image' | 'gif' | 'video';
+export type ExerciseMediaKind = 'image' | 'gif' | 'video' | 'frame-sequence';
 
 /**
  * Added in v0.1.2 (Stage 5) as an abstraction only -- no exercise in the
- * seeded library has this populated. The source dataset's own media
- * (images/GIFs) is © Gym Visual under its own terms, not the MIT text data
- * ATLAS actually imported, and was deliberately never downloaded (see
- * docs/EXERCISE_DATA.md). `url`/`thumbnail_url` point into a local or
- * remote media pack, never an inlined data URI -- see docs/EXERCISE_MEDIA.md.
+ * seeded library had this populated at the time. `url`/`thumbnail_url`
+ * point into a local or remote media pack, never an inlined data URI --
+ * see docs/EXERCISE_MEDIA.md.
+ *
+ * `frame-sequence` (v0.1.3) is a lightweight demonstration loop over a
+ * handful of static frames (`frames`, ordered) instead of a single image
+ * or a real video -- see docs/EXERCISE_MEDIA.md's Workout Guide
+ * integration. `url` is still required for this kind too: it's the first
+ * frame, used as the reduced-motion-safe static fallback and before any
+ * animation logic has run.
  *
  * Optional (not required + null like most other whole-document additions)
  * because unlike `groups`/`progression_mode`, nothing derives a fallback
@@ -52,6 +57,8 @@ export type ExerciseMediaKind = 'image' | 'gif' | 'video';
 export interface ExerciseMedia {
   kind: ExerciseMediaKind;
   url: string;
+  /** `frame-sequence` only, ordered, `frames[0] === url`. */
+  frames?: string[];
   thumbnail_url: string | null;
   attribution: string | null;
 }
