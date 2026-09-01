@@ -253,6 +253,18 @@ a general `eligibleSets(sessions)` and `eligibleSetsForExercise` now just
 filters its result — existing callers and their behavior are unchanged, the
 rule now has exactly one implementation.
 
+## Exercise media (v0.1.2)
+
+`Exercise.media` and its display component landed directly in
+`data-model`/`apps/web` rather than a new `packages/exercise-media`
+package — there's no real logic yet to justify one (a type, a null check,
+and two JSX branches), matching the "package created on demand" philosophy
+this doc already documents. A local or remote media _pack_ — if one is
+ever sourced and licensed — would be the point a new package earns its
+keep: something that actually maps exercise ids/names to files and needs
+its own tests, not the thin abstraction this version adds. See
+docs/EXERCISE_MEDIA.md.
+
 ## A real build/runtime gotcha found during v0.0.4 testing
 
 Building the desktop shell via plain `cargo build --release` (bypassing

@@ -260,6 +260,24 @@ button {
   padding-left: 1.25rem;
 }
 
+.atlas-exercise-media {
+  margin: 0 0 var(--atlas-space-4);
+}
+
+.atlas-exercise-media img,
+.atlas-exercise-media video {
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--atlas-radius-sm);
+  display: block;
+}
+
+.atlas-exercise-media__attribution {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.7rem;
+  margin-top: var(--atlas-space-1);
+}
+
 .atlas-exercise-detail__instructions li {
   margin-bottom: var(--atlas-space-2);
 }

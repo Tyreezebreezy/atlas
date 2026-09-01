@@ -33,6 +33,29 @@ export interface ExerciseEnrichment {
   avoid_if: string[];
 }
 
+export type ExerciseMediaKind = 'image' | 'gif' | 'video';
+
+/**
+ * Added in v0.1.2 (Stage 5) as an abstraction only -- no exercise in the
+ * seeded library has this populated. The source dataset's own media
+ * (images/GIFs) is © Gym Visual under its own terms, not the MIT text data
+ * ATLAS actually imported, and was deliberately never downloaded (see
+ * docs/EXERCISE_DATA.md). `url`/`thumbnail_url` point into a local or
+ * remote media pack, never an inlined data URI -- see docs/EXERCISE_MEDIA.md.
+ *
+ * Optional (not required + null like most other whole-document additions)
+ * because unlike `groups`/`progression_mode`, nothing derives a fallback
+ * from its absence -- the one read site is a plain `exercise.media?.url`
+ * guard, so forcing every existing `Exercise` literal across the test
+ * suite to spell out `media: null` would be ripple with no real payoff.
+ */
+export interface ExerciseMedia {
+  kind: ExerciseMediaKind;
+  url: string;
+  thumbnail_url: string | null;
+  attribution: string | null;
+}
+
 export interface Exercise extends SyncMeta {
   name: string;
   aliases: string[];
@@ -50,4 +73,5 @@ export interface Exercise extends SyncMeta {
   source_id: string | null;
   user_notes: string | null;
   enrichment: ExerciseEnrichment | null;
+  media?: ExerciseMedia | null;
 }

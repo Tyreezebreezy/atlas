@@ -36,5 +36,6 @@ export function createCustomExercise(input: CustomExerciseInput): Exercise {
     source_id: null,
     user_notes: null,
     enrichment: null,
+    media: null,
   };
 }

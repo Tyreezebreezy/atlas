@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getOrCreateDeviceId, newId } from '@atlas/core';
 import type { Exercise, ExerciseNote, WorkoutSession } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
+import { ExerciseMedia } from './ExerciseMedia';
 import { ExerciseProgress } from './ExerciseProgress';
 
 interface ExerciseDetailProps {
@@ -87,6 +88,8 @@ export function ExerciseDetail({ exercise, storage, onBack }: ExerciseDetailProp
         <ExerciseProgress exercise={exercise} sessions={sessions} />
       ) : (
         <>
+          <ExerciseMedia exercise={exercise} />
+
           {exercise.target_muscle && (
             <p>
               <strong>Target:</strong> {exercise.target_muscle}
