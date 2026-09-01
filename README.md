@@ -24,11 +24,11 @@ packages/
   core/             Platform-independent domain logic (IDs, device identity, storage selection)
   ui/               Shared design tokens
   exercise-library/     Exercise search/seed/custom-exercise logic + curated enrichment
-  workout-engine/       Workout template authoring + session execution (Gym Mode), timers, skip, replace
-  program-engine/       Program authoring + active-program selection
+  workout-engine/       Workout template authoring + session execution (Gym Mode), timers, skip, replace, add exercise, supersets/circuits
+  program-engine/       Program authoring + active-program selection + sequential progression
   substitution-engine/  Deterministic, offline exercise-substitution scoring
   pr-engine/            Personal-record eligibility, calculation, and recalculation
-  progress-engine/      Exercise summaries and chart-series generation
+  progress-engine/      Exercise summaries, chart-series generation, training distribution
   milestone-engine/     Built-in + custom milestone evaluation
   benchmark-engine/     Population-benchmark percentile interpolation + seeded dataset
   body-composition/     Body-measurement chart series + bodyweight selection rule

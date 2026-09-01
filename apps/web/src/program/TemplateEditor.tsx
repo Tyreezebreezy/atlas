@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react';
+import { newId } from '@atlas/core';
 import {
+  buildGymSlots,
   createPlannedExercise,
   createWorkoutTemplate,
   duplicateWorkoutTemplate,
   reorder,
   withSequentialOrder,
 } from '@atlas/workout-engine';
-import type { Exercise, PlannedExercise, WorkoutTemplate } from '@atlas/data-model';
+import type {
+  Exercise,
+  ExerciseGroupType,
+  PlannedExercise,
+  WorkoutTemplate,
+} from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
 import { ExercisePicker } from './ExercisePicker';
 import { NumberField } from './NumberField';
@@ -18,6 +25,12 @@ interface TemplateEditorProps {
   onDone: () => void;
 }
 
+interface GroupingDraft {
+  type: ExerciseGroupType;
+  rounds: number;
+  restSeconds: number | null;
+}
+
 export function TemplateEditor({
   storage,
   templateId,
@@ -27,6 +40,8 @@ export function TemplateEditor({
   const [template, setTemplate] = useState<WorkoutTemplate | null>(null);
   const [exerciseNames, setExerciseNames] = useState<Map<string, string>>(new Map());
   const [picking, setPicking] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [groupingDraft, setGroupingDraft] = useState<GroupingDraft | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -46,31 +61,55 @@ export function TemplateEditor({
     );
   }
 
-  function updateExercise(index: number, patch: Partial<PlannedExercise>) {
+  /** Dissolves any group left with fewer than 2 members after a change --
+   * a "superset" of one exercise isn't a group anymore. */
+  function pruneEmptyGroups(exercises: PlannedExercise[], groups: WorkoutTemplate['groups']) {
+    const counts = new Map<string, number>();
+    for (const e of exercises) {
+      if (e.group_id) counts.set(e.group_id, (counts.get(e.group_id) ?? 0) + 1);
+    }
+    const dissolved = new Set([...counts.entries()].filter(([, n]) => n < 2).map(([id]) => id));
+    return {
+      exercises: exercises.map((e) =>
+        e.group_id && dissolved.has(e.group_id) ? { ...e, group_id: null } : e,
+      ),
+      groups: groups.filter((g) => !dissolved.has(g.id)),
+    };
+  }
+
+  function updateExercise(id: string, patch: Partial<PlannedExercise>) {
     setTemplate((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        exercises: prev.exercises.map((e, i) => (i === index ? { ...e, ...patch } : e)),
+        exercises: prev.exercises.map((e) => (e.id === id ? { ...e, ...patch } : e)),
       };
     });
   }
 
-  function removeExercise(index: number) {
+  function removeExercise(id: string) {
     setTemplate((prev) => {
       if (!prev) return prev;
-      return {
-        ...prev,
-        exercises: withSequentialOrder(prev.exercises.filter((_, i) => i !== index)),
-      };
+      const remaining = withSequentialOrder(prev.exercises.filter((e) => e.id !== id));
+      const pruned = pruneEmptyGroups(remaining, prev.groups);
+      return { ...prev, ...pruned };
     });
   }
 
+  /** Moving a grouped member is only allowed within its own group's
+   * contiguous block -- otherwise it would break the "members are
+   * consecutive" invariant buildGymSlots relies on. Repositioning a whole
+   * group relative to other exercises isn't supported yet; ungroup,
+   * reorder, and regroup instead (see docs/DATA_MODEL.md). */
   function moveExercise(index: number, direction: -1 | 1) {
     setTemplate((prev) => {
       if (!prev) return prev;
       const target = index + direction;
       if (target < 0 || target >= prev.exercises.length) return prev;
+      const current = prev.exercises[index];
+      const other = prev.exercises[target];
+      if (current?.group_id && current.group_id !== other?.group_id) return prev;
+      if (other?.group_id && other.group_id !== current?.group_id) return prev;
       return { ...prev, exercises: withSequentialOrder(reorder(prev.exercises, index, target)) };
     });
   }
@@ -85,6 +124,51 @@ export function TemplateEditor({
     });
     setExerciseNames((prev) => new Map(prev).set(exercise.id, exercise.name));
     setPicking(false);
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function confirmGrouping() {
+    if (!groupingDraft || selected.size < 2) return;
+    setTemplate((prev) => {
+      if (!prev) return prev;
+      const groupId = newId();
+      const exercises = prev.exercises.map((e) =>
+        selected.has(e.id) ? { ...e, group_id: groupId } : e,
+      );
+      const groups = [
+        ...prev.groups,
+        {
+          id: groupId,
+          type: groupingDraft.type,
+          rounds: groupingDraft.rounds,
+          rest_after_seconds: groupingDraft.restSeconds,
+        },
+      ];
+      return { ...prev, ...pruneEmptyGroups(exercises, groups) };
+    });
+    setSelected(new Set());
+    setGroupingDraft(null);
+  }
+
+  function ungroup(groupId: string) {
+    setTemplate((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        exercises: prev.exercises.map((e) =>
+          e.group_id === groupId ? { ...e, group_id: null } : e,
+        ),
+        groups: prev.groups.filter((g) => g.id !== groupId),
+      };
+    });
   }
 
   async function handleSave() {
@@ -121,6 +205,115 @@ export function TemplateEditor({
     );
   }
 
+  function exerciseRow(exercise: PlannedExercise, index: number, inGroup: boolean) {
+    const other = template!.exercises[index + 1];
+    const prevEx = template!.exercises[index - 1];
+    return (
+      <li key={exercise.id} className="atlas-template-editor__exercise">
+        <div className="atlas-template-editor__exercise-header">
+          <label className="atlas-template-editor__exercise-select">
+            <input
+              type="checkbox"
+              checked={selected.has(exercise.id)}
+              onChange={() => toggleSelected(exercise.id)}
+              aria-label={`Select ${exerciseNames.get(exercise.exercise_id) ?? 'exercise'} for grouping`}
+            />
+            <span>{exerciseNames.get(exercise.exercise_id) ?? 'Unknown exercise'}</span>
+          </label>
+          <div className="atlas-template-editor__exercise-actions">
+            <button
+              type="button"
+              aria-label="Move up"
+              disabled={index === 0 || (inGroup && prevEx?.group_id !== exercise.group_id)}
+              onClick={() => moveExercise(index, -1)}
+            >
+              &uarr;
+            </button>
+            <button
+              type="button"
+              aria-label="Move down"
+              disabled={
+                index === template!.exercises.length - 1 ||
+                (inGroup && other?.group_id !== exercise.group_id)
+              }
+              onClick={() => moveExercise(index, 1)}
+            >
+              &darr;
+            </button>
+            <button
+              type="button"
+              aria-label="Remove exercise"
+              onClick={() => removeExercise(exercise.id)}
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+        <div className="atlas-template-editor__exercise-fields">
+          <NumberField
+            label="Sets"
+            min={0}
+            value={exercise.target_sets}
+            onChange={(v) => updateExercise(exercise.id, { target_sets: v })}
+          />
+          <NumberField
+            label="Reps min"
+            min={0}
+            value={exercise.target_reps_min}
+            onChange={(v) => updateExercise(exercise.id, { target_reps_min: v })}
+          />
+          <NumberField
+            label="Reps max"
+            min={0}
+            value={exercise.target_reps_max}
+            onChange={(v) => updateExercise(exercise.id, { target_reps_max: v })}
+          />
+          <NumberField
+            label="Weight"
+            min={0}
+            value={exercise.target_weight}
+            onChange={(v) => updateExercise(exercise.id, { target_weight: v })}
+          />
+          <NumberField
+            label="RPE"
+            min={0}
+            max={10}
+            value={exercise.target_rpe}
+            onChange={(v) => updateExercise(exercise.id, { target_rpe: v })}
+          />
+          <NumberField
+            label="RIR"
+            min={0}
+            value={exercise.target_rir}
+            onChange={(v) => updateExercise(exercise.id, { target_rir: v })}
+          />
+          {!inGroup && (
+            <NumberField
+              label="Rest (sec)"
+              min={0}
+              value={exercise.rest_seconds}
+              onChange={(v) => updateExercise(exercise.id, { rest_seconds: v })}
+            />
+          )}
+          <NumberField
+            label="Duration (sec)"
+            min={0}
+            value={exercise.target_duration_seconds}
+            onChange={(v) => updateExercise(exercise.id, { target_duration_seconds: v })}
+          />
+          <NumberField
+            label="Distance (m)"
+            min={0}
+            value={exercise.target_distance_meters}
+            onChange={(v) => updateExercise(exercise.id, { target_distance_meters: v })}
+          />
+        </div>
+      </li>
+    );
+  }
+
+  const slots = buildGymSlots(template.exercises, template.groups);
+
   return (
     <div className="atlas-template-editor">
       <button type="button" className="atlas-template-editor__back" onClick={onDone}>
@@ -144,101 +337,83 @@ export function TemplateEditor({
         Show in Quick Workouts
       </label>
 
-      <ul className="atlas-template-editor__exercises">
-        {template.exercises.map((exercise, index) => (
-          <li key={exercise.id} className="atlas-template-editor__exercise">
-            <div className="atlas-template-editor__exercise-header">
-              <span>{exerciseNames.get(exercise.exercise_id) ?? 'Unknown exercise'}</span>
-              <div className="atlas-template-editor__exercise-actions">
-                <button
-                  type="button"
-                  aria-label="Move up"
-                  disabled={index === 0}
-                  onClick={() => moveExercise(index, -1)}
-                >
-                  &uarr;
-                </button>
-                <button
-                  type="button"
-                  aria-label="Move down"
-                  disabled={index === template.exercises.length - 1}
-                  onClick={() => moveExercise(index, 1)}
-                >
-                  &darr;
-                </button>
-                <button
-                  type="button"
-                  aria-label="Remove exercise"
-                  onClick={() => removeExercise(index)}
-                >
-                  &times;
-                </button>
-              </div>
+      {slots.map((slot) =>
+        slot.kind === 'single' ? (
+          <ul key={slot.planned.id} className="atlas-template-editor__exercises">
+            {exerciseRow(slot.planned, template.exercises.indexOf(slot.planned), false)}
+          </ul>
+        ) : (
+          <div key={slot.group.id} className="atlas-template-editor__group">
+            <div className="atlas-template-editor__group-header">
+              <span>
+                {slot.group.type === 'superset' ? 'Superset' : 'Circuit'} &middot;{' '}
+                {slot.group.rounds} rounds
+                {slot.group.rest_after_seconds != null &&
+                  ` · Rest ${slot.group.rest_after_seconds}s after`}
+              </span>
+              <button type="button" onClick={() => ungroup(slot.group.id)}>
+                Ungroup
+              </button>
             </div>
-            <div className="atlas-template-editor__exercise-fields">
-              <NumberField
-                label="Sets"
-                min={0}
-                value={exercise.target_sets}
-                onChange={(v) => updateExercise(index, { target_sets: v })}
-              />
-              <NumberField
-                label="Reps min"
-                min={0}
-                value={exercise.target_reps_min}
-                onChange={(v) => updateExercise(index, { target_reps_min: v })}
-              />
-              <NumberField
-                label="Reps max"
-                min={0}
-                value={exercise.target_reps_max}
-                onChange={(v) => updateExercise(index, { target_reps_max: v })}
-              />
-              <NumberField
-                label="Weight"
-                min={0}
-                value={exercise.target_weight}
-                onChange={(v) => updateExercise(index, { target_weight: v })}
-              />
-              <NumberField
-                label="RPE"
-                min={0}
-                max={10}
-                value={exercise.target_rpe}
-                onChange={(v) => updateExercise(index, { target_rpe: v })}
-              />
-              <NumberField
-                label="RIR"
-                min={0}
-                value={exercise.target_rir}
-                onChange={(v) => updateExercise(index, { target_rir: v })}
-              />
-              <NumberField
-                label="Rest (sec)"
-                min={0}
-                value={exercise.rest_seconds}
-                onChange={(v) => updateExercise(index, { rest_seconds: v })}
-              />
-              <NumberField
-                label="Duration (sec)"
-                min={0}
-                value={exercise.target_duration_seconds}
-                onChange={(v) => updateExercise(index, { target_duration_seconds: v })}
-              />
-              <NumberField
-                label="Distance (m)"
-                min={0}
-                value={exercise.target_distance_meters}
-                onChange={(v) => updateExercise(index, { target_distance_meters: v })}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
+            <ul className="atlas-template-editor__exercises">
+              {slot.members.map((member) =>
+                exerciseRow(member, template.exercises.indexOf(member), true),
+              )}
+            </ul>
+          </div>
+        ),
+      )}
 
-      <button type="button" className="atlas-library__create" onClick={() => setPicking(true)}>
-        + Add Exercise
-      </button>
+      <div className="atlas-template-editor__toolbar">
+        <button type="button" className="atlas-library__create" onClick={() => setPicking(true)}>
+          + Add Exercise
+        </button>
+        {selected.size >= 2 && !groupingDraft && (
+          <button
+            type="button"
+            onClick={() => setGroupingDraft({ type: 'superset', rounds: 3, restSeconds: 90 })}
+          >
+            Group Selected ({selected.size})
+          </button>
+        )}
+      </div>
+
+      {groupingDraft && (
+        <div className="atlas-template-editor__group-draft">
+          <label>
+            Type
+            <select
+              value={groupingDraft.type}
+              onChange={(e) =>
+                setGroupingDraft({ ...groupingDraft, type: e.target.value as ExerciseGroupType })
+              }
+            >
+              <option value="superset">Superset</option>
+              <option value="circuit">Circuit</option>
+            </select>
+          </label>
+          <NumberField
+            label="Rounds"
+            min={1}
+            value={groupingDraft.rounds}
+            onChange={(v) => setGroupingDraft({ ...groupingDraft, rounds: v ?? 1 })}
+          />
+          <NumberField
+            label="Rest after (sec)"
+            min={0}
+            value={groupingDraft.restSeconds}
+            onChange={(v) => setGroupingDraft({ ...groupingDraft, restSeconds: v })}
+          />
+          <div className="atlas-template-editor__group-draft-actions">
+            <button type="button" onClick={() => setGroupingDraft(null)}>
+              Cancel
+            </button>
+            <button type="button" onClick={confirmGrouping}>
+              Confirm Group
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="atlas-template-editor__actions">
         {templateId && (

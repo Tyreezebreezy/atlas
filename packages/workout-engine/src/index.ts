@@ -7,3 +7,5 @@ export * from './sessionSummary';
 export * from './timer';
 export * from './skip';
 export * from './replace';
+export * from './groups';
+export * from './addExercise';

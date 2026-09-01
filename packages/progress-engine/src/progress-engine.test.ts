@@ -6,7 +6,7 @@ import {
   startWorkoutSession,
   type LogSetInput,
 } from '@atlas/workout-engine';
-import type { WorkoutSession } from '@atlas/data-model';
+import type { Exercise, WorkoutSession } from '@atlas/data-model';
 import { summarizeExercise } from './exerciseSummary';
 import {
   bestWeightSeries,
@@ -15,6 +15,7 @@ import {
   repsSeries,
   volumeSeries,
 } from './chartSeries';
+import { trainingDistribution } from './trainingDistribution';
 
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
@@ -48,6 +49,33 @@ function completedSession(
   }
   session = completeWorkoutSession(session);
   return { ...session, completed_at: completedAt };
+}
+
+function exercise(overrides: Partial<Exercise> & { id: string }): Exercise {
+  return {
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    version: 1,
+    device_id: 'seed',
+    deleted_at: null,
+    name: 'Exercise',
+    aliases: [],
+    category: null,
+    equipment: [],
+    target_muscle: null,
+    secondary_muscles: [],
+    instructions: [],
+    movement_pattern: null,
+    is_unilateral: null,
+    measurement_type: 'reps_weight',
+    default_rest_seconds: null,
+    is_custom: false,
+    source: null,
+    source_id: null,
+    user_notes: null,
+    enrichment: null,
+    ...overrides,
+  };
 }
 
 describe('summarizeExercise', () => {
@@ -162,5 +190,96 @@ describe('chart series', () => {
     );
     expect(durationSeries([plankSession], 'plank')[0]?.value).toBe(90);
     expect(repsSeries([pushupSession], 'pushup')[0]?.value).toBe(40);
+  });
+});
+
+describe('trainingDistribution', () => {
+  // 'row' has no enrichment -- representative of the ~97% of the 1,324-exercise
+  // library that isn't hand-curated (see curatedEnrichment.ts).
+  const exercises = new Map<string, Exercise>([
+    [
+      'bench',
+      exercise({
+        id: 'bench',
+        category: 'chest',
+        enrichment: {
+          movement_pattern: 'horizontal_push',
+          movement_family: 'press',
+          is_unilateral: false,
+          is_axial_loading: false,
+          purpose: 'primary_compound',
+          difficulty: 'intermediate',
+          known_substitute_ids: [],
+          avoid_if: [],
+        },
+      }),
+    ],
+    ['row', exercise({ id: 'row', category: 'back' })],
+  ]);
+
+  it('tallies working sets by muscle group (category), sorted descending', () => {
+    const s1 = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench' }), set({ exerciseId: 'bench' })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    const s2 = completedSession('row', [set({ exerciseId: 'row' })], '2026-08-01T10:00:00.000Z');
+    const dist = trainingDistribution([s1, s2], exercises, 365);
+    expect(dist.byMuscleGroup).toEqual([
+      { label: 'chest', workingSets: 2 },
+      { label: 'back', workingSets: 1 },
+    ]);
+  });
+
+  it('tallies working sets by movement family only for curated exercises, bucketing the rest as uncategorized', () => {
+    const s1 = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench' })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    const s2 = completedSession('row', [set({ exerciseId: 'row' })], '2026-08-01T10:00:00.000Z');
+    const dist = trainingDistribution([s1, s2], exercises, 365);
+    expect(dist.byMovementFamily).toEqual([{ label: 'press', workingSets: 1 }]);
+    expect(dist.uncategorizedMovementFamilySets).toBe(1);
+  });
+
+  it('excludes warmup sets from every bucket, same rule as PR eligibility', () => {
+    const s1 = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench', setType: 'warmup' }), set({ exerciseId: 'bench' })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    const dist = trainingDistribution([s1], exercises, 365);
+    expect(dist.byMuscleGroup).toEqual([{ label: 'chest', workingSets: 1 }]);
+  });
+
+  it('excludes sets logged before the requested window', () => {
+    const old = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench' })],
+      '2020-01-01T00:00:00.000Z',
+    );
+    const dist = trainingDistribution([old], exercises, 7);
+    expect(dist.byMuscleGroup).toEqual([]);
+    expect(dist.byMovementFamily).toEqual([]);
+  });
+
+  it('falls back to Uncategorized for a set whose exercise is missing from the map', () => {
+    const s1 = completedSession(
+      'ghost',
+      [set({ exerciseId: 'ghost' })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    const dist = trainingDistribution([s1], exercises, 365);
+    expect(dist.byMuscleGroup).toEqual([{ label: 'Uncategorized', workingSets: 1 }]);
+  });
+
+  it('handles no sessions gracefully and reports the window it used', () => {
+    expect(trainingDistribution([], exercises)).toEqual({
+      windowDays: 7,
+      byMuscleGroup: [],
+      byMovementFamily: [],
+      uncategorizedMovementFamilySets: 0,
+    });
   });
 });

@@ -21,11 +21,15 @@ export function eligibleSetsForExercise(
   sessions: WorkoutSession[],
   exerciseId: string,
 ): EligibleSet[] {
+  return eligibleSets(sessions).filter((e) => e.set.exercise_id === exerciseId);
+}
+
+/** Same eligibility rules as eligibleSetsForExercise, across every exercise at once -- for aggregates (e.g. training-distribution totals) that don't start from one known exercise id. */
+export function eligibleSets(sessions: WorkoutSession[]): EligibleSet[] {
   const result: EligibleSet[] = [];
   for (const session of sessions) {
     if (session.status !== 'completed') continue;
     for (const set of session.performed_sets) {
-      if (set.exercise_id !== exerciseId) continue;
       if (set.set_type === 'warmup') continue;
       result.push({ set, session });
     }

@@ -4,6 +4,7 @@ import {
   createProgram,
   createProgramDay,
   createProgramWeek,
+  programProgressionMode,
   setActiveProgram,
 } from '@atlas/program-engine';
 import { reorder, withSequentialOrder } from '@atlas/workout-engine';
@@ -171,6 +172,29 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
         value={program.description ?? ''}
         onChange={(e) => setProgram({ ...program, description: e.target.value || null })}
       />
+
+      <fieldset className="atlas-program-editor__mode">
+        <legend>Progression</legend>
+        <label>
+          <input
+            type="radio"
+            name="progression-mode"
+            checked={programProgressionMode(program) === 'fixed'}
+            onChange={() => setProgram({ ...program, progression_mode: 'fixed' })}
+          />
+          Fixed Schedule &mdash; every day is always available to start
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="progression-mode"
+            checked={programProgressionMode(program) === 'sequential'}
+            onChange={() => setProgram({ ...program, progression_mode: 'sequential' })}
+          />
+          Sequential &mdash; Today shows only the next workout in order; a missed day stays next, it
+          isn&rsquo;t skipped
+        </label>
+      </fieldset>
 
       {program.weeks.map((week, weekIndex) => (
         <div key={week.id} className="atlas-program-editor__week">

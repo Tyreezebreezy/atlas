@@ -4,6 +4,11 @@ import {
   skipWorkoutSession,
   startWorkoutSession,
 } from '@atlas/workout-engine';
+import {
+  advanceProgramSequence,
+  currentSequentialDay,
+  programProgressionMode,
+} from '@atlas/program-engine';
 import type { Program, WorkoutSession, WorkoutTemplate } from '@atlas/data-model';
 import { useGymMode } from '../gym/GymModeContext';
 import { useStorage } from '../storage/StorageContext';
@@ -75,6 +80,7 @@ export function TodayScreen() {
       programId,
       programDayId,
       plannedSnapshot: template.exercises,
+      groups: template.groups,
     });
     await storage.workoutSessions.put(session);
     enterGymMode(session.id);
@@ -100,9 +106,16 @@ export function TodayScreen() {
       programId,
       programDayId,
       plannedSnapshot: template.exercises,
+      groups: template.groups,
       reason,
     });
     await storage.workoutSessions.put(session);
+    // An intentional skip still advances a sequential program -- only a
+    // missed day (never opened) stays "next." See sequentialProgress.ts.
+    if (programId && programDayId) {
+      const program = await storage.programs.get(programId);
+      if (program) await storage.programs.put(advanceProgramSequence(program, programDayId));
+    }
     setSkippingKey(null);
     await reload();
   }
@@ -173,60 +186,117 @@ export function TodayScreen() {
     <div className="atlas-today">
       <h1>Today</h1>
 
-      {activeProgram && (
+      {activeProgram && programProgressionMode(activeProgram) === 'sequential' ? (
         <section>
           <h2>{activeProgram.name}</h2>
-          {activeProgram.weeks.length === 0 && (
-            <p className="atlas-program-screen__empty">This program has no weeks yet.</p>
-          )}
-          {activeProgram.weeks.map((week, weekIndex) => (
-            <ul key={week.id} className="atlas-program-screen__list">
-              {week.days.map((day) => {
-                const template = templates.get(day.template_id);
-                if (skippingKey === day.id && template) {
+          {(() => {
+            const next = currentSequentialDay(activeProgram);
+            if (!next) {
+              return <p className="atlas-program-screen__empty">This program has no days yet.</p>;
+            }
+            const template = templates.get(next.day.template_id);
+            if (skippingKey === next.day.id && template) {
+              return (
+                <ul className="atlas-program-screen__list">
+                  <li>
+                    <SkipRow
+                      onCancel={() => setSkippingKey(null)}
+                      onConfirm={(reason) =>
+                        void handleSkip(template, activeProgram.id, next.day.id, reason)
+                      }
+                    />
+                  </li>
+                </ul>
+              );
+            }
+            return (
+              <ul className="atlas-program-screen__list">
+                <li>
+                  <button
+                    type="button"
+                    disabled={!template}
+                    onClick={() =>
+                      template && startFromTemplate(template, activeProgram.id, next.day.id)
+                    }
+                    aria-label={`Start next workout, ${next.day.label || 'Day'}${template ? `, ${template.name}` : ''}`}
+                  >
+                    <span className="atlas-library__item-name" aria-hidden="true">
+                      Next: {next.day.label || 'Day'}
+                    </span>
+                    <span className="atlas-library__item-meta" aria-hidden="true">
+                      {template ? template.name : 'Workout not found'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="atlas-program-screen__activate"
+                    disabled={!template}
+                    onClick={() => setSkippingKey(next.day.id)}
+                    aria-label={`Skip ${next.day.label || 'Day'}`}
+                  >
+                    Skip
+                  </button>
+                </li>
+              </ul>
+            );
+          })()}
+        </section>
+      ) : (
+        activeProgram && (
+          <section>
+            <h2>{activeProgram.name}</h2>
+            {activeProgram.weeks.length === 0 && (
+              <p className="atlas-program-screen__empty">This program has no weeks yet.</p>
+            )}
+            {activeProgram.weeks.map((week, weekIndex) => (
+              <ul key={week.id} className="atlas-program-screen__list">
+                {week.days.map((day) => {
+                  const template = templates.get(day.template_id);
+                  if (skippingKey === day.id && template) {
+                    return (
+                      <li key={day.id}>
+                        <SkipRow
+                          onCancel={() => setSkippingKey(null)}
+                          onConfirm={(reason) =>
+                            void handleSkip(template, activeProgram.id, day.id, reason)
+                          }
+                        />
+                      </li>
+                    );
+                  }
                   return (
                     <li key={day.id}>
-                      <SkipRow
-                        onCancel={() => setSkippingKey(null)}
-                        onConfirm={(reason) =>
-                          void handleSkip(template, activeProgram.id, day.id, reason)
+                      <button
+                        type="button"
+                        disabled={!template}
+                        onClick={() =>
+                          template && startFromTemplate(template, activeProgram.id, day.id)
                         }
-                      />
+                        aria-label={`Start ${day.label || 'Day'}, week ${weekIndex + 1}${template ? `, ${template.name}` : ''}`}
+                      >
+                        <span className="atlas-library__item-name" aria-hidden="true">
+                          Week {weekIndex + 1} &middot; {day.label || 'Day'}
+                        </span>
+                        <span className="atlas-library__item-meta" aria-hidden="true">
+                          {template ? template.name : 'Workout not found'}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="atlas-program-screen__activate"
+                        disabled={!template}
+                        onClick={() => setSkippingKey(day.id)}
+                        aria-label={`Skip ${day.label || 'Day'}, week ${weekIndex + 1}`}
+                      >
+                        Skip
+                      </button>
                     </li>
                   );
-                }
-                return (
-                  <li key={day.id}>
-                    <button
-                      type="button"
-                      disabled={!template}
-                      onClick={() =>
-                        template && startFromTemplate(template, activeProgram.id, day.id)
-                      }
-                      aria-label={`Start ${day.label || 'Day'}, week ${weekIndex + 1}${template ? `, ${template.name}` : ''}`}
-                    >
-                      <span className="atlas-library__item-name" aria-hidden="true">
-                        Week {weekIndex + 1} &middot; {day.label || 'Day'}
-                      </span>
-                      <span className="atlas-library__item-meta" aria-hidden="true">
-                        {template ? template.name : 'Workout not found'}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="atlas-program-screen__activate"
-                      disabled={!template}
-                      onClick={() => setSkippingKey(day.id)}
-                      aria-label={`Skip ${day.label || 'Day'}, week ${weekIndex + 1}`}
-                    >
-                      Skip
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ))}
-        </section>
+                })}
+              </ul>
+            ))}
+          </section>
+        )
       )}
 
       <section>

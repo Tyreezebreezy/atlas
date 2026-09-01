@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
+  addExerciseToSession,
+  addExerciseToTemplate,
   addPerformedSet,
   adjustActiveTimer,
+  buildGymSlots,
   clearActiveTimer,
   completeWorkoutSession,
   createPerformedSet,
+  isGroupComplete,
   previousPerformance,
   removePerformedSet,
   replaceExercise,
@@ -15,6 +19,7 @@ import {
   startExerciseTimer,
   startRestTimer,
   unskipExerciseInSession,
+  type GymSlot,
   type LogSetInput,
 } from '@atlas/workout-engine';
 import { newPRsFromSession } from '@atlas/pr-engine';
@@ -26,13 +31,16 @@ import type {
   PersonalRecord,
   WorkoutSession,
 } from '@atlas/data-model';
+import { advanceProgramSequence } from '@atlas/program-engine';
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
 import { useStorage } from '../storage/StorageContext';
+import { AddExercisePanel } from './AddExercisePanel';
 import { bestPRForExercise } from './bestPR';
 import { ExerciseLogger } from './ExerciseLogger';
 import { ReplaceExercisePanel } from './ReplaceExercisePanel';
 import { RestTimer } from './RestTimer';
+import { SupersetRound } from './SupersetRound';
 import { useWakeLock } from './useWakeLock';
 import { WorkoutSummary } from './WorkoutSummary';
 
@@ -41,11 +49,18 @@ interface GymModeScreenProps {
   onExit: () => void;
 }
 
-/** On resume, land on the first exercise that isn't fully logged yet, not always exercise 1. */
-function firstIncompleteExerciseIndex(session: WorkoutSession): number {
-  const index = session.planned_snapshot.findIndex((planned) => {
-    const done = session.performed_sets.filter((s) => s.exercise_id === planned.exercise_id).length;
-    const target = planned.target_sets ?? 1;
+/** On resume, land on the first slot that isn't fully logged yet, not
+ * always the first. A grouped slot (superset/circuit) counts as complete
+ * only once every member has finished every round. */
+function firstIncompleteSlotIndex(session: WorkoutSession, slots: GymSlot[]): number {
+  const index = slots.findIndex((slot) => {
+    if (slot.kind === 'group') {
+      return !isGroupComplete(slot.group, slot.members, session.performed_sets);
+    }
+    const done = session.performed_sets.filter(
+      (s) => s.exercise_id === slot.planned.exercise_id,
+    ).length;
+    const target = slot.planned.target_sets ?? 1;
     return done < target;
   });
   return index === -1 ? 0 : index;
@@ -64,6 +79,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [showSkipField, setShowSkipField] = useState(false);
   const [skipReasonDraft, setSkipReasonDraft] = useState('');
   const [showReplacePanel, setShowReplacePanel] = useState(false);
+  const [showAddPanel, setShowAddPanel] = useState(false);
   const [newPRs, setNewPRs] = useState<PersonalRecord[]>([]);
   const [newMilestones, setNewMilestones] = useState<Milestone[]>([]);
 
@@ -80,7 +96,12 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       if (existing) {
         setSession(existing);
         setNoteDraft(existing.session_note ?? '');
-        setExerciseIndex(firstIncompleteExerciseIndex(existing));
+        setExerciseIndex(
+          firstIncompleteSlotIndex(
+            existing,
+            buildGymSlots(existing.planned_snapshot, existing.groups),
+          ),
+        );
       }
       setExercises(new Map(allExercises.map((e) => [e.id, e])));
       setPriorSessions(allSessions);
@@ -102,7 +123,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   // after the guard above -- these consts capture the known-non-null values.
   const currentSession = session;
   const activeStorage = storage;
-  const currentPlanned = currentSession.planned_snapshot[exerciseIndex];
+  const slots = buildGymSlots(currentSession.planned_snapshot, currentSession.groups);
+  const currentSlot = slots[exerciseIndex];
+  const currentPlanned = currentSlot?.kind === 'single' ? currentSlot.planned : undefined;
 
   async function persist(updated: WorkoutSession) {
     await activeStorage.workoutSessions.put(updated);
@@ -127,6 +150,16 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   async function handleFinish() {
     const completed = completeWorkoutSession(currentSession);
     await persist(completed);
+
+    // Finishing the current day of a sequential program advances it to the
+    // next one; a no-op for a fixed-schedule program or a session that
+    // isn't tied to a program day at all (Quick Workout).
+    if (completed.program_id && completed.program_day_id) {
+      const program = await activeStorage.programs.get(completed.program_id);
+      if (program) {
+        await activeStorage.programs.put(advanceProgramSequence(program, completed.program_day_id));
+      }
+    }
 
     // PRs are recomputed (not incrementally patched) for every exercise this
     // session touched, then diffed against what's now stored to find which
@@ -200,6 +233,40 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     setShowReplacePanel(false);
   }
 
+  async function handleConfirmAdd(exerciseId: string, scope: ExerciseReplacement['scope']) {
+    const updated = addExerciseToSession(currentSession, exerciseId);
+
+    if (scope === 'program' && updated.template_id) {
+      const template = await activeStorage.workoutTemplates.get(updated.template_id);
+      if (template) {
+        await activeStorage.workoutTemplates.put(addExerciseToTemplate(template, exerciseId));
+      }
+    }
+
+    await persist(updated);
+    setShowAddPanel(false);
+  }
+
+  async function handleCompleteRound(
+    sets: LogSetInput[],
+    slot: Extract<GymSlot, { kind: 'group' }>,
+  ) {
+    let updated = currentSession;
+    for (const input of sets) {
+      updated = addPerformedSet(updated, createPerformedSet(input));
+    }
+    // Rest is after the group's round (after its last member), not
+    // between members within a round -- keyed to the last member so the
+    // rest timer's exercise_id still points at a real planned exercise.
+    if (slot.group.rest_after_seconds != null) {
+      const lastMember = slot.members[slot.members.length - 1];
+      if (lastMember) {
+        updated = startRestTimer(updated, lastMember.exercise_id, slot.group.rest_after_seconds);
+      }
+    }
+    await persist(updated);
+  }
+
   if (finished) {
     return (
       <WorkoutSummary
@@ -212,7 +279,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     );
   }
 
-  const exerciseCount = session.planned_snapshot.length;
+  const exerciseCount = slots.length;
   const skippedEntry = currentPlanned
     ? session.skipped_exercises.find((s) => s.exercise_id === currentPlanned.exercise_id)
     : undefined;
@@ -237,7 +304,15 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         />
       )}
 
-      {currentPlanned ? (
+      {currentSlot?.kind === 'group' ? (
+        <SupersetRound
+          group={currentSlot.group}
+          members={currentSlot.members}
+          exercises={exercises}
+          performedSets={session.performed_sets}
+          onCompleteRound={(sets) => void handleCompleteRound(sets, currentSlot)}
+        />
+      ) : currentPlanned ? (
         skippedEntry ? (
           <div className="atlas-gym-exercise atlas-gym-exercise--skipped">
             <h2>{exercises.get(currentPlanned.exercise_id)?.name ?? 'Exercise'}</h2>
@@ -343,7 +418,21 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         </button>
       </div>
 
+      {showAddPanel && (
+        <AddExercisePanel
+          allExercises={[...exercises.values()]}
+          excludeExerciseIds={session.planned_snapshot.map((p) => p.exercise_id)}
+          onCancel={() => setShowAddPanel(false)}
+          onConfirm={(exerciseId, scope) => void handleConfirmAdd(exerciseId, scope)}
+        />
+      )}
+
       <div className="atlas-gym-mode__footer">
+        {!showAddPanel && (
+          <button type="button" onClick={() => setShowAddPanel(true)}>
+            + Add Exercise
+          </button>
+        )}
         {showNoteField ? (
           <div className="atlas-gym-mode__note-editor">
             <label htmlFor="session-note">Workout note</label>

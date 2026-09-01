@@ -38,11 +38,13 @@ interface, not a rewrite.
 - **substitution-engine** — deterministic, offline exercise-substitution
   scoring (no LLM). Pure functions over `Exercise[]`; no storage or UI
   dependency, same division as `workout-engine`/`program-engine`.
-- **pr-engine** — eligibility rules and deterministic PR calculation over
-  `WorkoutSession[]`. No storage dependency; persistence and the
+- **pr-engine** — eligibility rules (`eligibleSets`/`eligibleSetsForExercise`:
+  completed sessions only, non-warmup sets) and deterministic PR calculation
+  over `WorkoutSession[]`. No storage dependency; persistence and the
   recalculate-on-finish trigger live in `apps/web`.
-- **progress-engine** — exercise summaries and chart-series generation,
-  built on `pr-engine`'s eligibility rules. No storage dependency.
+- **progress-engine** — exercise summaries, chart-series generation, and
+  training-distribution totals, built on `pr-engine`'s eligibility rules. No
+  storage dependency.
 - **milestone-engine** — built-in + custom milestone evaluation over
   `WorkoutSession[]`, built on `pr-engine`'s `eligibleSetsForExercise`. No
   storage dependency; persistence and the evaluate-on-finish trigger live in
@@ -219,6 +221,37 @@ logged a null duration instead of the elapsed time; and a row added via
 offering only a remove control, never a way to actually complete it. Both
 fixed in `apps/web/src/gym/ExerciseLogger.tsx` — see the commit and
 docs/ADAPTIVE_UI.md's bug list for the full detail.
+
+## Workout flexibility (v0.1.1)
+
+Sequential-program progression (`sequentialProgress.ts`), supersets/circuits
+(`groups.ts`), Add Exercise (`addExercise.ts`), and set-type flexibility all
+landed inside the existing `program-engine`/`workout-engine` packages, same
+reasoning as every version since v0.0.5: each is a `Program` or
+`WorkoutSession` lifecycle concern, not a new topic that earns its own
+package. Training distribution (`trainingDistribution.ts`) landed in
+`progress-engine` for the same reason — it's a third kind of derived view
+over logged sets, alongside the exercise summaries and chart series already
+there, not a new concept.
+
+**Gym Mode now navigates by slot, not by exercise index.** Before this
+version, `GymModeScreen` walked `planned_snapshot` one `PlannedExercise` at
+a time. A superset/circuit member is still a `PlannedExercise` in that same
+flat array (no parallel "grouped exercises" structure to keep in sync), so
+introducing groups meant changing the unit of navigation itself:
+`buildGymSlots` collapses the flat array into `GymSlot[]` first, and
+everything downstream (position counter, first-incomplete lookup, Previous/
+Next) walks slots instead. This is a wider-reaching change than a typical
+version's addition, which is why it touched `GymModeScreen.tsx` directly
+rather than staying contained in one new file.
+
+`pr-engine`'s eligibility rule (completed session, non-warmup set) needed
+to run across _all_ exercises at once for training distribution, not one
+exercise at a time like every existing caller. Rather than duplicate the
+two-condition filter in `progress-engine`, `eligibility.ts` was split into
+a general `eligibleSets(sessions)` and `eligibleSetsForExercise` now just
+filters its result — existing callers and their behavior are unchanged, the
+rule now has exactly one implementation.
 
 ## A real build/runtime gotcha found during v0.0.4 testing
 

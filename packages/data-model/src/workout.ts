@@ -33,7 +33,13 @@ export interface ExerciseReplacement {
   replaced_at: string;
 }
 
-/** The planned side: a target prescription, never a performed value. */
+/** The planned side: a target prescription, never a performed value.
+ * `group_id` is null for a normal, ungrouped exercise (every exercise ever
+ * planned before v0.1.1's Stage 4B, and the common case after it) or the
+ * id of an `ExerciseGroup` in the same template/session for a superset or
+ * circuit member. Members of one group are the consecutive
+ * PlannedExercise entries sharing a `group_id` -- there's no separate
+ * grouped-exercises array to keep in sync. */
 export interface PlannedExercise {
   id: string;
   exercise_id: string;
@@ -48,6 +54,22 @@ export interface PlannedExercise {
   target_distance_meters: number | null;
   rest_seconds: number | null;
   notes: string | null;
+  group_id: string | null;
+}
+
+export type ExerciseGroupType = 'superset' | 'circuit';
+
+/** A superset (2 exercises) or circuit (2+), executed round by round --
+ * one set of each member, in order, before repeating. `rest_after_seconds`
+ * is the rest after finishing a full round (after the group's last
+ * member), not between members within a round. Added in v0.1.1 (Stage
+ * 4B); a template/session from before has no `groups` array at runtime
+ * despite the required type -- see workoutGroups.ts's helpers. */
+export interface ExerciseGroup {
+  id: string;
+  type: ExerciseGroupType;
+  rounds: number;
+  rest_after_seconds: number | null;
 }
 
 /**
@@ -60,6 +82,7 @@ export interface WorkoutTemplate extends SyncMeta {
   name: string;
   exercises: PlannedExercise[];
   is_quick_workout: boolean;
+  groups: ExerciseGroup[];
 }
 
 export type WorkoutSessionStatus = 'in_progress' | 'completed' | 'discarded' | 'skipped';
@@ -79,6 +102,9 @@ export interface WorkoutSession extends SyncMeta {
    * of what was planned.
    */
   planned_snapshot: PlannedExercise[];
+  /** Snapshotted alongside planned_snapshot, same reason: editing the
+   * template's groups later must not rewrite this session's history. */
+  groups: ExerciseGroup[];
   performed_sets: PerformedSet[];
   /** 1:1 with the session, so it lives here rather than as a separate entity. */
   session_note: string | null;

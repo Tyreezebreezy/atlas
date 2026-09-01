@@ -16,5 +16,6 @@ export function createPlannedExercise(exerciseId: string, order: number): Planne
     target_distance_meters: null,
     rest_seconds: null,
     notes: null,
+    group_id: null,
   };
 }

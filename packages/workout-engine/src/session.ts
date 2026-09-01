@@ -1,5 +1,11 @@
 import { getOrCreateDeviceId, newId } from '@atlas/core';
-import type { PerformedSet, PlannedExercise, SetType, WorkoutSession } from '@atlas/data-model';
+import type {
+  ExerciseGroup,
+  PerformedSet,
+  PlannedExercise,
+  SetType,
+  WorkoutSession,
+} from '@atlas/data-model';
 
 export interface StartSessionInput {
   name: string;
@@ -7,6 +13,8 @@ export interface StartSessionInput {
   programId: string | null;
   programDayId: string | null;
   plannedSnapshot: PlannedExercise[];
+  /** Optional -- most workouts have no groups. Defaults to []. */
+  groups?: ExerciseGroup[];
 }
 
 /**
@@ -30,6 +38,7 @@ export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
     program_day_id: input.programDayId,
     template_id: input.templateId,
     planned_snapshot: input.plannedSnapshot.map((exercise) => ({ ...exercise })),
+    groups: (input.groups ?? []).map((group) => ({ ...group })),
     performed_sets: [],
     session_note: null,
     active_timer: null,

@@ -5,6 +5,7 @@ import type {
   PersonalRecord,
   PerformedSet,
   PlannedExercise,
+  SetType,
   TimerState,
 } from '@atlas/data-model';
 import { describePR } from '../progress/formatPR';
@@ -15,9 +16,24 @@ interface DraftValues {
   reps: string;
   duration: string;
   distance: string;
+  setType: SetType;
 }
 
-const EMPTY_DRAFT: DraftValues = { weight: '', reps: '', duration: '', distance: '' };
+const EMPTY_DRAFT: DraftValues = {
+  weight: '',
+  reps: '',
+  duration: '',
+  distance: '',
+  setType: 'working',
+};
+
+const SET_TYPE_LABELS: Record<SetType, string> = {
+  working: 'Working',
+  warmup: 'Warm-up',
+  drop: 'Drop',
+  amrap: 'AMRAP',
+  failure: 'Failure',
+};
 
 // ponytail: TimerState always needs a fixed duration/ends_at, so a timed
 // exercise with no target duration still needs *some* ceiling to start a
@@ -205,7 +221,7 @@ export function ExerciseLogger({
     onCompleteSet({
       exerciseId: exercise.id,
       setIndex: index,
-      setType: 'working',
+      setType: draft.setType,
       weight: showsWeight && draft.weight !== '' ? Number(draft.weight) : null,
       reps: showsReps && draft.reps !== '' ? Number(draft.reps) : null,
       durationSeconds: showsDuration ? durationValue : null,
@@ -281,7 +297,15 @@ export function ExerciseLogger({
             if (performed) {
               return (
                 <tr key={performed.id}>
-                  <td>{index + 1}</td>
+                  <td>
+                    {index + 1}
+                    {performed.set_type !== 'working' && (
+                      <span className="atlas-gym-exercise__set-type">
+                        {' '}
+                        {SET_TYPE_LABELS[performed.set_type]}
+                      </span>
+                    )}
+                  </td>
                   {showsWeight && <td>{performed.weight ?? '—'}</td>}
                   {showsReps && <td>{performed.reps ?? '—'}</td>}
                   {showsDuration && <td>{performed.duration_seconds ?? '—'}</td>}
@@ -341,7 +365,21 @@ export function ExerciseLogger({
               !hasRunningTimer;
             return (
               <tr key={`draft-${index}`}>
-                <td>{index + 1}</td>
+                <td>
+                  {index + 1}
+                  <select
+                    className="atlas-gym-exercise__set-type-select"
+                    aria-label={`Set ${index + 1} type`}
+                    value={draft.setType}
+                    onChange={(e) => updateDraft(index, { setType: e.target.value as SetType })}
+                  >
+                    {Object.entries(SET_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 {showsWeight && (
                   <td>
                     <input

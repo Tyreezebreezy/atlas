@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { estimated1RMSeries } from '@atlas/progress-engine';
+import {
+  estimated1RMSeries,
+  trainingDistribution,
+  type DistributionEntry,
+} from '@atlas/progress-engine';
 import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
 import {
   ensureBenchmarksSeeded,
@@ -31,6 +35,28 @@ function isThisMonth(iso: string): boolean {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** Plain proportional bar list -- no charting dependency for a handful of
+ * category totals. Assumes non-empty entries; callers gate on that. */
+function DistributionList({ entries }: { entries: DistributionEntry[] }) {
+  const max = Math.max(...entries.map((e) => e.workingSets));
+  return (
+    <ul className="atlas-progress__distribution-list">
+      {entries.map((e) => (
+        <li key={e.label} className="atlas-progress__distribution-item">
+          <span className="atlas-progress__distribution-label">{e.label}</span>
+          <span className="atlas-progress__distribution-bar-track">
+            <span
+              className="atlas-progress__distribution-bar"
+              style={{ width: `${(e.workingSets / max) * 100}%` }}
+            />
+          </span>
+          <span className="atlas-progress__distribution-count">{e.workingSets}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 // Which PR kind demonstrates a benchmark metric, e.g. "pushups" is measured
@@ -124,6 +150,11 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       }));
     return [...prItems, ...milestoneItems].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
   }, [prs, milestones, exercises]);
+
+  const distribution = useMemo(
+    () => trainingDistribution(sessions, exercises),
+    [sessions, exercises],
+  );
 
   const strengthTrends = useMemo(() => {
     const trends: { exerciseId: string; first: number; last: number }[] = [];
@@ -244,6 +275,28 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
           </ul>
         )}
       </section>
+
+      {distribution.byMuscleGroup.length > 0 && (
+        <section className="atlas-progress__distribution">
+          <h2>Training Distribution</h2>
+          <p className="atlas-progress__distribution-window">Last {distribution.windowDays} days</p>
+          <h3>By Muscle Group</h3>
+          <DistributionList entries={distribution.byMuscleGroup} />
+          {distribution.byMovementFamily.length > 0 && (
+            <>
+              <h3>By Movement Family</h3>
+              <DistributionList entries={distribution.byMovementFamily} />
+              {distribution.uncategorizedMovementFamilySets > 0 && (
+                <p className="atlas-progress__distribution-note">
+                  +{distribution.uncategorizedMovementFamilySets} working set
+                  {distribution.uncategorizedMovementFamilySets === 1 ? '' : 's'} not yet classified
+                  by movement family.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
 
       {strengthTrends.length > 0 && (
         <section>

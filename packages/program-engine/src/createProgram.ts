@@ -14,6 +14,8 @@ export function createProgram(name: string, description: string | null): Program
     description,
     is_active: false,
     weeks: [],
+    progression_mode: 'fixed',
+    sequence_position: 0,
   };
 }
 

@@ -231,3 +231,78 @@ cannot qualify a candidate on their own — a candidate needs at least one
 unrelated exercises that merely share `measurement_type: 'reps_weight'`
 (true for ~98% of the library) would "match" on nothing meaningful. See
 docs/SUBSTITUTIONS.md for the full model and worked examples.
+
+## Workout flexibility (v0.1.1, Stage 4)
+
+**Sequential programs (4A)**: `Program` gained `progression_mode: 'fixed' |
+'sequential'` and `sequence_position: number`. Fixed (the only mode through
+v0.1.0) shows every week/day and lets the user pick any of them. Sequential
+shows only the day at `sequence_position` on Today — a repeating rotation
+(e.g. Upper/Lower/Upper/Lower) that advances by one, wrapping back to 0
+after the last day, only when the day actually completed matches the
+current position (`advanceProgramSequence` in
+`packages/program-engine/src/sequentialProgress.ts`). Missing a day never
+auto-skips it. A program stored before v0.1.1 has neither field at runtime
+despite the required TypeScript type — every read site goes through
+`programProgressionMode()`/`programSequencePosition()` rather than reading
+the fields directly, same defaulting pattern as `body.ts`'s `notes` in
+v0.0.8.
+
+**Supersets and circuits (4B)**: `PlannedExercise` gained `group_id: string
+| null`; `WorkoutTemplate` and `WorkoutSession` both gained `groups:
+ExerciseGroup[]` (`{ id, type: 'superset' | 'circuit', rounds,
+rest_after_seconds }`). Members of one group are the consecutive
+`PlannedExercise` entries sharing a `group_id` — there's no separate
+grouped-exercises array to keep in sync. `WorkoutSession.groups` is
+snapshotted from the template at session start, same reason as
+`planned_snapshot`: editing the template's groups later must not rewrite an
+in-progress or completed session's history.
+
+Gym Mode navigates by **slot**, not by raw planned-exercise index:
+`buildGymSlots` (`packages/workout-engine/src/groups.ts`) collapses a flat
+`planned_snapshot` into `GymSlot[]`, where an ungrouped exercise is still
+its own slot and every member of one group collapses into a single slot at
+its first member's position. A group executes **round by round** — one set
+of every member, in order, before repeating — rendered by
+`apps/web/src/gym/SupersetRound.tsx`, never the per-exercise
+`ExerciseLogger` table (that shape would defeat the point of a superset:
+all N sets of member A before member B ever starts). Round completion is
+derived, not stored: `currentGroupRound` takes the _minimum_ per-member
+completed-set count, so the group stays on the round its slowest member
+hasn't finished, not the round its fastest member is on.
+`rest_after_seconds` fires after the group's last member finishes a round,
+not between members within one.
+
+**Add Exercise during an active workout (4C)**: mirrors Replace Exercise's
+scope model rather than inventing a new one. `addExerciseToSession`
+(`packages/workout-engine/src/addExercise.ts`) appends a fresh
+`PlannedExercise` to the _end_ of `planned_snapshot` only — no mid-workout
+reorder UX. `scope: 'today'` stops there; `scope: 'program'` additionally
+calls `addExerciseToTemplate` to append to the source `WorkoutTemplate`, so
+only future sessions pick up the change, matching how Replace's `'program'`
+scope only touches the template, never a session already in progress.
+
+**Set-type flexibility (4D)**: `SetType` (`working | warmup | drop | amrap |
+failure`) has existed on `PerformedSet` since v0.0.1, and PR eligibility
+(`packages/pr-engine/src/eligibility.ts`) has always excluded `warmup` while
+counting the rest — but until v0.1.1 nothing in the UI could actually
+produce anything other than `'working'`. `ExerciseLogger.tsx` now has a
+per-draft-row set-type select (default `working`); a completed row shows a
+small label next to its set number for any non-working type. No data-model
+change — this closed a UI gap against an already-complete schema.
+
+**Training distribution (4E)**: `packages/progress-engine/src/
+trainingDistribution.ts` tallies eligible (completed session, non-warmup)
+working sets logged within a rolling window (default 7 days) by two axes:
+**muscle group** (`Exercise.category` — always populated from the source
+dataset, e.g. "chest", "back") and **movement family**
+(`Exercise.enrichment.movement_family` — only populated for the ~33 curated
+exercises, see "Enrichment & substitution" above). Sets whose exercise has
+no curated movement family are counted separately as
+`uncategorizedMovementFamilySets` rather than silently dropped or forced
+into a guessed bucket. Deliberately _not_ built: any physiological
+recovery/readiness percentage — that would require modeling the body, which
+this stage's handoff explicitly excluded; this is a plain tally of what was
+actually logged, nothing inferred. No manual classification of the other
+~1,291 exercises was done to make this work, per the same handoff
+instruction.

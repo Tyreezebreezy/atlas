@@ -800,6 +800,86 @@ button {
   margin-top: var(--atlas-space-3);
 }
 
+.atlas-template-editor__exercise-select {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.atlas-template-editor__group {
+  margin-top: var(--atlas-space-4);
+  padding: var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-sage-mist);
+}
+
+.atlas-template-editor__group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--atlas-space-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--atlas-color-sage);
+}
+
+.atlas-template-editor__group-header button {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-sage);
+  cursor: pointer;
+}
+
+.atlas-template-editor__group .atlas-template-editor__exercises {
+  margin-top: var(--atlas-space-2);
+}
+
+.atlas-template-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+  margin-top: var(--atlas-space-4);
+}
+
+.atlas-template-editor__group-draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--atlas-space-3);
+  margin-top: var(--atlas-space-3);
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-template-editor__group-draft label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-template-editor__group-draft select {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  font: inherit;
+}
+
+.atlas-template-editor__group-draft-actions {
+  display: flex;
+  gap: var(--atlas-space-2);
+}
+
 .atlas-number-field input {
   width: 100%;
   min-height: var(--atlas-touch-target);
@@ -842,6 +922,31 @@ button {
   padding: var(--atlas-space-3);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-md);
+}
+
+.atlas-program-editor__mode {
+  margin: var(--atlas-space-4) 0;
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-program-editor__mode legend {
+  padding: 0 var(--atlas-space-1);
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-program-editor__mode label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--atlas-space-2);
+  padding: var(--atlas-space-2) 0;
+  font-size: 0.9rem;
+}
+
+.atlas-program-editor__mode input {
+  margin-top: 4px;
 }
 
 .atlas-program-editor__week-header {
@@ -1015,6 +1120,82 @@ button {
   flex: 1;
 }
 
+/* Superset / circuit round view -- all of a group's members' next set,
+   shown together, instead of the single-exercise ExerciseLogger table.
+   See docs/DATA_MODEL.md Stage 4B. */
+.atlas-superset {
+  flex: 1;
+}
+
+.atlas-superset h2 {
+  font-size: 1.2rem;
+  margin: 0 0 var(--atlas-space-3);
+  color: var(--atlas-color-sage);
+}
+
+.atlas-superset__members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-superset__member {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-3);
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-superset__member-label {
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 50%;
+  background: var(--atlas-color-sage-mist);
+  color: var(--atlas-color-sage);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.atlas-superset__member-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.atlas-superset__member-fields {
+  display: flex;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-superset__member-fields input {
+  width: 4.5rem;
+  min-height: var(--atlas-touch-target);
+  padding: var(--atlas-space-1) var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-canvas);
+  font-size: 1rem;
+}
+
+.atlas-superset__complete {
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  margin-top: var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-sage);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-sage);
+  color: var(--atlas-color-surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .atlas-gym-exercise h2 {
   font-size: 1.4rem;
   margin: 0 0 var(--atlas-space-2);
@@ -1070,7 +1251,22 @@ button {
 
 .atlas-gym-exercise__sets td:first-child {
   color: var(--atlas-color-text-secondary);
-  width: 24px;
+  min-width: 24px;
+}
+
+.atlas-gym-exercise__set-type {
+  font-size: 0.7rem;
+}
+
+.atlas-gym-exercise__set-type-select {
+  display: block;
+  margin-top: 2px;
+  max-width: 72px;
+  font-size: 0.65rem;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-secondary);
 }
 
 .atlas-gym-exercise__sets input {
@@ -1819,6 +2015,68 @@ button {
 .atlas-progress__trend-value {
   font-variant-numeric: tabular-nums;
   color: var(--atlas-color-timer);
+}
+
+.atlas-progress__distribution h3 {
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+  margin: var(--atlas-space-4) 0 var(--atlas-space-2);
+}
+
+.atlas-progress__distribution-window {
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+  margin: 0;
+}
+
+.atlas-progress__distribution-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-progress__distribution-item {
+  display: grid;
+  grid-template-columns: 96px 1fr 28px;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-progress__distribution-label {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-progress__distribution-bar-track {
+  display: block;
+  height: 8px;
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-border);
+}
+
+.atlas-progress__distribution-bar {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-timer);
+}
+
+.atlas-progress__distribution-count {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-progress__distribution-note {
+  font-size: 0.75rem;
+  color: var(--atlas-color-text-secondary);
+  margin-top: var(--atlas-space-2);
 }
 
 .atlas-progress__view-exercises {

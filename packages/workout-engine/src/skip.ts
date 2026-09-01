@@ -64,6 +64,7 @@ export function skipWorkoutSession(input: SkipWorkoutInput): WorkoutSession {
     program_day_id: input.programDayId,
     template_id: input.templateId,
     planned_snapshot: input.plannedSnapshot.map((exercise) => ({ ...exercise })),
+    groups: (input.groups ?? []).map((group) => ({ ...group })),
     performed_sets: [],
     session_note: null,
     active_timer: null,
