@@ -7,7 +7,7 @@ import { TodayScreen } from '../today/TodayScreen';
 import { BodyScreen } from '../body/BodyScreen';
 import { NAV_TABS, NAV_TAB_LABELS, type NavTab } from './tabs';
 
-// Lazy: both pull in the exercise library (and its ~1.3MB seed data), so they
+// Lazy: all pull in the exercise library (and its ~1.3MB seed data), so they
 // should only load once someone actually opens that tab, not on every boot.
 const LibraryScreen = lazy(() =>
   import('../library/LibraryScreen').then((m) => ({ default: m.LibraryScreen })),
@@ -21,14 +21,23 @@ const GymModeScreen = lazy(() =>
 const ProgressScreen = lazy(() =>
   import('../progress/ProgressScreen').then((m) => ({ default: m.ProgressScreen })),
 );
+const ImportExportScreen = lazy(() =>
+  import('../importexport/ImportExportScreen').then((m) => ({ default: m.ImportExportScreen })),
+);
 
-type MoreView = 'menu' | 'history' | 'settings' | 'body';
+type MoreView = 'menu' | 'history' | 'settings' | 'body' | 'import-export';
 
 function MoreTab() {
   const [view, setView] = useState<MoreView>('menu');
   if (view === 'history') return <HistoryScreen />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
   if (view === 'body') return <BodyScreen onBack={() => setView('menu')} />;
+  if (view === 'import-export')
+    return (
+      <Suspense fallback={<EmptyScreen title="Import / Export" description="Loading…" />}>
+        <ImportExportScreen onBack={() => setView('menu')} />
+      </Suspense>
+    );
   return (
     <div className="atlas-more-menu">
       <h1>More</h1>
@@ -44,6 +53,17 @@ function MoreTab() {
           <button type="button" onClick={() => setView('body')} aria-label="Body">
             <span className="atlas-library__item-name" aria-hidden="true">
               Body
+            </span>
+          </button>
+        </li>
+        <li>
+          <button
+            type="button"
+            onClick={() => setView('import-export')}
+            aria-label="Import / Export"
+          >
+            <span className="atlas-library__item-name" aria-hidden="true">
+              Import / Export
             </span>
           </button>
         </li>

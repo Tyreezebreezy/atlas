@@ -1,0 +1,22 @@
+{
+  "name": "@atlas/import-export",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atlas/core": "*",
+    "@atlas/data-model": "*",
+    "@atlas/exercise-library": "*",
+    "@atlas/program-engine": "*",
+    "@atlas/storage": "*",
+    "@atlas/workout-engine": "*"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.0.0"
+  }
+}

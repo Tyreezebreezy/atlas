@@ -32,6 +32,7 @@ packages/
   milestone-engine/     Built-in + custom milestone evaluation
   benchmark-engine/     Population-benchmark percentile interpolation + seeded dataset
   body-composition/     Body-measurement chart series + bodyweight selection rule
+  import-export/        atlas-plan-v1 format, paste-text parsing, exercise matching, preview/apply, full backup/restore
 docs/          Architecture, data model, roadmap, security notes
 ```
 

@@ -15,6 +15,7 @@
     "@atlas/core": "*",
     "@atlas/data-model": "*",
     "@atlas/exercise-library": "*",
+    "@atlas/import-export": "*",
     "@atlas/milestone-engine": "*",
     "@atlas/pr-engine": "*",
     "@atlas/program-engine": "*",
