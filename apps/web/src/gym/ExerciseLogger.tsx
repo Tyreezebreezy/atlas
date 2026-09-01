@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { type LogSetInput, remainingSeconds } from '@atlas/workout-engine';
-import type { Exercise, PerformedSet, PlannedExercise, TimerState } from '@atlas/data-model';
+import type {
+  Exercise,
+  PersonalRecord,
+  PerformedSet,
+  PlannedExercise,
+  TimerState,
+} from '@atlas/data-model';
+import { describePR } from '../progress/formatPR';
 import { loadSettings } from '../settings/settings';
 
 interface DraftValues {
@@ -108,6 +115,7 @@ interface ExerciseLoggerProps {
   planned: PlannedExercise;
   performedSets: PerformedSet[];
   previousSets: PerformedSet[];
+  bestPR: PersonalRecord | null;
   activeTimer: TimerState | null;
   onCompleteSet: (input: LogSetInput) => void;
   onRemoveCompletedSet: (setId: string) => void;
@@ -128,6 +136,7 @@ export function ExerciseLogger({
   planned,
   performedSets,
   previousSets,
+  bestPR,
   activeTimer,
   onCompleteSet,
   onRemoveCompletedSet,
@@ -216,22 +225,42 @@ export function ExerciseLogger({
     <div className="atlas-gym-exercise">
       <h2>{exercise.name}</h2>
 
-      {previousSets.length > 0 && (
-        <div className="atlas-gym-exercise__previous">
-          <h3>Previous</h3>
-          <p>{previousSets.map(formatSet).join(' · ')}</p>
-        </div>
-      )}
-
-      {(planned.target_sets ?? planned.target_reps_min ?? planned.target_weight) != null && (
-        <p className="atlas-gym-exercise__planned">
-          Planned: {planned.target_sets ?? '?'} &times; {planned.target_reps_min ?? '?'}
-          {planned.target_reps_max && planned.target_reps_max !== planned.target_reps_min
-            ? `–${planned.target_reps_max}`
-            : ''}
-          {planned.target_weight ? ` @ ${planned.target_weight} lb` : ''}
-        </p>
-      )}
+      {(() => {
+        const lastSet = previousSets[0];
+        const targetSummary =
+          (planned.target_sets ?? planned.target_reps_min ?? planned.target_weight) != null
+            ? `${planned.target_sets ?? '?'} × ${planned.target_reps_min ?? '?'}${
+                planned.target_reps_max && planned.target_reps_max !== planned.target_reps_min
+                  ? `–${planned.target_reps_max}`
+                  : ''
+              }${planned.target_weight ? ` @ ${planned.target_weight} lb` : ''}`
+            : null;
+        if (!lastSet && !bestPR && !targetSummary) return null;
+        // One compact row, not three separate blocks -- phone readability
+        // over showing every possible metric at once (handoff sec. 3.6).
+        return (
+          <div className="atlas-gym-stats">
+            {lastSet && (
+              <div className="atlas-gym-stats__cell">
+                <span className="atlas-gym-stats__label">Last</span>
+                <span className="atlas-gym-stats__value">{formatSet(lastSet)}</span>
+              </div>
+            )}
+            {bestPR && (
+              <div className="atlas-gym-stats__cell">
+                <span className="atlas-gym-stats__label">Best</span>
+                <span className="atlas-gym-stats__value">{describePR(bestPR).value}</span>
+              </div>
+            )}
+            {targetSummary && (
+              <div className="atlas-gym-stats__cell">
+                <span className="atlas-gym-stats__label">Target</span>
+                <span className="atlas-gym-stats__value">{targetSummary}</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <table className="atlas-gym-exercise__sets">
         <thead>

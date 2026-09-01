@@ -1020,27 +1020,34 @@ button {
   margin: 0 0 var(--atlas-space-2);
 }
 
-.atlas-gym-exercise__previous {
-  color: var(--atlas-color-text-secondary);
-  font-size: 0.85rem;
-  margin-bottom: var(--atlas-space-2);
+/* Last / Best / Target -- one compact row, not three separate blocks.
+   "Current" is understood as the input row directly below; it isn't
+   repeated here to keep this from turning into a wall of numbers on a
+   phone screen (handoff sec. 3.6). */
+.atlas-gym-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-4);
+  margin-bottom: var(--atlas-space-3);
 }
 
-.atlas-gym-exercise__previous h3 {
-  font-size: 0.75rem;
+.atlas-gym-stats__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.atlas-gym-stats__label {
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0 0 2px;
+  letter-spacing: 0.05em;
+  color: var(--atlas-color-text-secondary);
 }
 
-.atlas-gym-exercise__previous p {
-  margin: 0;
-}
-
-.atlas-gym-exercise__planned {
-  font-size: 0.9rem;
+.atlas-gym-stats__value {
+  font-size: 0.95rem;
+  font-weight: 600;
   color: var(--atlas-color-timer);
-  margin: 0 0 var(--atlas-space-4);
 }
 
 .atlas-gym-exercise__sets {

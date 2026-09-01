@@ -29,6 +29,7 @@ import type {
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
 import { useStorage } from '../storage/StorageContext';
+import { bestPRForExercise } from './bestPR';
 import { ExerciseLogger } from './ExerciseLogger';
 import { ReplaceExercisePanel } from './ReplaceExercisePanel';
 import { RestTimer } from './RestTimer';
@@ -56,6 +57,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
   const [priorSessions, setPriorSessions] = useState<WorkoutSession[]>([]);
+  const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [finished, setFinished] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
@@ -69,10 +71,11 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     if (!storage) return;
     void (async () => {
       await ensureBuiltInMilestonesSeeded(storage);
-      const [existing, allExercises, allSessions] = await Promise.all([
+      const [existing, allExercises, allSessions, allPRs] = await Promise.all([
         storage.workoutSessions.get(sessionId),
         storage.exercises.getAll(),
         storage.workoutSessions.getAll(),
+        storage.personalRecords.getAll(),
       ]);
       if (existing) {
         setSession(existing);
@@ -81,6 +84,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       }
       setExercises(new Map(allExercises.map((e) => [e.id, e])));
       setPriorSessions(allSessions);
+      setPersonalRecords(allPRs);
     })();
   }, [storage, sessionId]);
 
@@ -256,6 +260,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
             const previousSets = exercise
               ? previousPerformance(priorSessions, exercise.id, session.id)
               : [];
+            const bestPR = exercise ? bestPRForExercise(personalRecords, exercise) : null;
             return exercise ? (
               <>
                 <ExerciseLogger
@@ -263,6 +268,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                   planned={currentPlanned}
                   performedSets={performedForExercise}
                   previousSets={previousSets}
+                  bestPR={bestPR}
                   activeTimer={session.active_timer}
                   onCompleteSet={(input) => void handleCompleteSet(input)}
                   onRemoveCompletedSet={(id) => void handleRemoveSet(id)}

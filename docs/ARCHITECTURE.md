@@ -52,6 +52,11 @@ interface, not a rewrite.
 - **body-composition** — body-measurement chart series and the
   date-aware bodyweight selection rule `milestone-engine` uses for
   `bodyweight_multiplier` evaluation. No storage dependency.
+- **import-export** — the `atlas-plan-v1` portable format, its strict
+  validator, the deterministic paste-text parser, tiered exercise matching,
+  the preview-before-save pipeline, and export/restore. Storage-accepting
+  where persistence is the whole point (backup export/restore, same
+  pattern as `ensureExercisesSeeded`/`setActiveProgram`), otherwise pure.
 - **ui** — design tokens (Stone & Sage) shared by every screen.
 - **apps/web** — screens, navigation, PWA manifest/service worker.
 - **apps/desktop** — `src-tauri/` only: Rust entry point, Tauri config, SQL
@@ -72,7 +77,9 @@ simplification, not a scope cut — every concept in section 9 of the handoff
 still gets its own module, just introduced on demand. `substitution-engine`
 was created this way in v0.0.5; `pr-engine`/`progress-engine` in v0.0.6;
 `milestone-engine`/`benchmark-engine` in v0.0.7; `body-composition` in
-v0.0.8 — each the first version that gave that concept real logic.
+v0.0.8; `import-export` in v0.0.9 — each the first version that gave that
+concept real logic. That's every package the original proposal named;
+none remain to introduce on demand.
 
 `workout-engine`/`program-engine` hold pure data-transform functions (create,
 duplicate, reorder, activate-one-of-many) — storage reads/writes happen in
