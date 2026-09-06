@@ -81,6 +81,9 @@ export function LibraryScreen() {
   return (
     <div className="atlas-library">
       <h1>Library</h1>
+      <p className="atlas-library__subtitle">
+        Browse every exercise, with a how-to demonstration wherever one exists.
+      </p>
       <input
         type="search"
         placeholder="Search exercises"
@@ -122,12 +125,22 @@ export function LibraryScreen() {
             <button
               type="button"
               onClick={() => setSelectedId(exercise.id)}
-              aria-label={[exercise.name, exercise.category, exercise.equipment.join(', ')]
+              aria-label={[
+                exercise.name,
+                exercise.category,
+                exercise.equipment.join(', '),
+                exercise.media ? 'has a demonstration' : null,
+              ]
                 .filter(Boolean)
                 .join(', ')}
             >
               <span className="atlas-library__item-name" aria-hidden="true">
                 {exercise.name}
+                {exercise.media && (
+                  <span className="atlas-library__demo-badge" title="Has a demonstration">
+                    ●
+                  </span>
+                )}
               </span>
               <span className="atlas-library__item-meta" aria-hidden="true">
                 {[exercise.category, exercise.equipment.join(', ')].filter(Boolean).join(' · ')}

@@ -1,16 +1,18 @@
 /** Mirrors tokens.css for JS-side consumers (charts, canvas, inline styles). */
 export const atlasColors = {
-  background: '#F2F0EA',
-  surface: '#FAF9F6',
-  textPrimary: '#252A2D',
-  textSecondary: '#626B70',
-  sage: '#557568',
-  sageMist: '#DCE6E0',
-  bronze: '#B77A3F',
-  success: '#477058',
-  timer: '#526F91',
-  warning: '#B6664B',
-  border: '#D8D5CD',
+  background: '#0B0D10',
+  surface: '#15191E',
+  surfaceRaised: '#242B33',
+  textPrimary: '#F2F4F7',
+  textSecondary: '#9AA5B1',
+  accent: '#3B9EFF',
+  accentMist: '#193049',
+  success: '#3DDC84',
+  timer: '#22D3EE',
+  warning: '#F5A524',
+  danger: '#FF6B6B',
+  milestone: '#D9A441',
+  border: '#626D79',
 } as const;
 
 export type AtlasColor = keyof typeof atlasColors;

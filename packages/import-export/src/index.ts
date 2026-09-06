@@ -2,6 +2,7 @@ export * from './types';
 export * from './validateAtlasPlan';
 export * from './matchExercise';
 export * from './parsePasteText';
+export * from './parseHtmlPlan';
 export * from './buildImportPreview';
 export * from './applyImport';
 export * from './exportWorkout';

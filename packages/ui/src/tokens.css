@@ -1,16 +1,31 @@
-/* ATLAS — Stone & Sage. Temporary direction, pending Figma review (handoff sec. 39). */
+/* ATLAS — Sport-Tech (v0.1.4). Dark performance palette: near-black base,
+ * high-contrast text, electric-blue primary accent. Replaces "Stone &
+ * Sage" (rejected by the owner: too bland/spa-like for a gym-use app,
+ * insufficient contrast on a phone in bright gym lighting). Contrast
+ * validated against WCAG AA (4.5:1 text, 3:1 UI/large) -- see
+ * docs/DESIGN_SYSTEM.md for the full validation table.
+ *
+ * `--atlas-color-surface`/`--atlas-color-surface-raised` are deliberately
+ * low-contrast against each other and against `--atlas-color-background`
+ * (~1.1-1.2:1) -- that's an intentional subtle elevation step (the same
+ * approach most dark-theme systems use), not a WCAG target; the elements
+ * that must actually be distinguishable (borders, text, icons) are
+ * checked against 3:1/4.5:1 instead.
+ */
 :root {
-  --atlas-color-background: #f2f0ea;
-  --atlas-color-surface: #faf9f6;
-  --atlas-color-text-primary: #252a2d;
-  --atlas-color-text-secondary: #626b70;
-  --atlas-color-sage: #557568;
-  --atlas-color-sage-mist: #dce6e0;
-  --atlas-color-bronze: #b77a3f;
-  --atlas-color-success: #477058;
-  --atlas-color-timer: #526f91;
-  --atlas-color-warning: #b6664b;
-  --atlas-color-border: #d8d5cd;
+  --atlas-color-background: #0b0d10;
+  --atlas-color-surface: #15191e;
+  --atlas-color-surface-raised: #242b33;
+  --atlas-color-text-primary: #f2f4f7;
+  --atlas-color-text-secondary: #9aa5b1;
+  --atlas-color-accent: #3b9eff;
+  --atlas-color-accent-mist: #193049;
+  --atlas-color-success: #3ddc84;
+  --atlas-color-timer: #22d3ee;
+  --atlas-color-warning: #f5a524;
+  --atlas-color-danger: #ff6b6b;
+  --atlas-color-milestone: #d9a441;
+  --atlas-color-border: #626d79;
 
   --atlas-radius-sm: 6px;
   --atlas-radius-md: 12px;

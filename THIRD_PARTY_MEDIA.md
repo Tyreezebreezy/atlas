@@ -34,14 +34,16 @@ split the upstream project itself uses.
   `packages/exercise-library/src/data/workoutGuideManifest.json` — all 302
   entries, so it stays available for future deterministic matching. Of
   `packages/workout-guide/assets/**` (906 PNG files — 302 exercises × 3
-  frames each, ~32MB raw), only the 64 exercises that actually matched an
+  frames each, ~32MB raw), only the exercises that actually matched an
   ATLAS exercise (`packages/exercise-library/src/matchWorkoutGuideMedia.ts`,
   see docs/EXERCISE_MEDIA.md's mapping report) were kept, at
-  `apps/web/public/exercise-media/<slug>/frame-{1,2,3}.png` (192 files,
-  ~6.4MB) — the other 238 exercises' frames are never referenced by any
-  ATLAS URL, so shipping them would only inflate the app's download/install
-  size for nothing. All 906 remain retrievable by re-running the sparse
-  clone above against the same pinned commit if a future explicit-mapping
+  `apps/web/public/exercise-media/<slug>/frame-{1,2,3}.png` — 64 exercises
+  (192 files, ~6.4MB) as of v0.1.3, deepened to 97 exercises (291 files,
+  ~9.3MB) in v0.1.4 as the matching pass covered more of the source set —
+  the remaining 205 exercises' frames are never referenced by any ATLAS
+  URL, so shipping them would only inflate the app's download/install size
+  for nothing. All 906 remain retrievable by re-running the sparse clone
+  above against the same pinned commit if a future explicit-mapping
   addition resolves more of them.
 - **What was deliberately not imported**: the upstream package's own
   source code, tests, build config, and website — ATLAS only ever needed

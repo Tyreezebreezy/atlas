@@ -239,7 +239,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
             <span className="atlas-progress__month-label">{thisMonthPRs === 1 ? 'PR' : 'PRs'}</span>
           </div>
           <div className="atlas-progress__month-stat">
-            <span className="atlas-progress__month-count atlas-progress__month-count--bronze">
+            <span className="atlas-progress__month-count atlas-progress__month-count--milestone">
               {thisMonthMilestones}
             </span>
             <span className="atlas-progress__month-label">

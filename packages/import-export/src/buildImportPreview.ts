@@ -97,6 +97,7 @@ function previewWorkout(
     is_quick_workout: workout.is_quick_workout,
     exercises: previewExercises,
     warnings: workoutWarnings,
+    groups: workout.groups,
   };
 }
 

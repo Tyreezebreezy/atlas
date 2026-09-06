@@ -6,7 +6,12 @@ import {
   type WorkoutGuideEntry,
 } from './matchWorkoutGuideMedia';
 
-function makeExercise(id: string, name: string, aliases: string[] = []): Exercise {
+function makeExercise(
+  id: string,
+  name: string,
+  aliases: string[] = [],
+  overrides: Partial<Pick<Exercise, 'equipment' | 'target_muscle'>> = {},
+): Exercise {
   return {
     id,
     created_at: '2026-08-27T00:00:00.000Z',
@@ -17,8 +22,8 @@ function makeExercise(id: string, name: string, aliases: string[] = []): Exercis
     name,
     aliases,
     category: null,
-    equipment: [],
-    target_muscle: null,
+    equipment: overrides.equipment ?? [],
+    target_muscle: overrides.target_muscle ?? null,
     secondary_muscles: [],
     instructions: [],
     movement_pattern: null,
@@ -33,14 +38,18 @@ function makeExercise(id: string, name: string, aliases: string[] = []): Exercis
   };
 }
 
-function makeEntry(slug: string, name: string): WorkoutGuideEntry {
+function makeEntry(
+  slug: string,
+  name: string,
+  overrides: Partial<Pick<WorkoutGuideEntry, 'equipment' | 'primaryMuscle'>> = {},
+): WorkoutGuideEntry {
   return {
     id: `exercise-${slug}`,
     slug,
     name,
     exerciseType: 'weight_reps',
-    equipment: 'Barbell',
-    primaryMuscle: 'Chest',
+    equipment: overrides.equipment ?? 'Barbell',
+    primaryMuscle: overrides.primaryMuscle ?? 'Chest',
     secondaryMuscles: [],
     isStretch: false,
     frames: [1, 2, 3].map((index) => ({
@@ -137,5 +146,78 @@ describe('matchWorkoutGuideMedia', () => {
     );
     expect(report.atlasWithoutMediaCount).toBe(1);
     expect(report.sourceExerciseCount).toBe(1);
+  });
+
+  it('falls back to the fuzzy tier for word-order and plural differences', () => {
+    const row = makeExercise('e-1', 'Lateral Raises Dumbbell');
+    const report = matchWorkoutGuideMedia([row], [makeEntry('dlr', 'Dumbbell Lateral Raise')]);
+    expect(report.matched).toEqual([
+      { workoutGuideSlug: 'dlr', atlasExerciseId: 'e-1', tier: 'fuzzy' },
+    ]);
+  });
+
+  it('folds DB/BB equipment shorthand at the fuzzy tier', () => {
+    const row = makeExercise('e-1', 'Dumbbell Row');
+    const report = matchWorkoutGuideMedia([row], [makeEntry('db-row', 'DB Row')]);
+    expect(report.matched).toEqual([
+      { workoutGuideSlug: 'db-row', atlasExerciseId: 'e-1', tier: 'fuzzy' },
+    ]);
+  });
+
+  it('drops the stray possessive token so "World\'s X" fuzzy-matches "World X"', () => {
+    const stretch = makeExercise('e-1', 'World Greatest Stretch');
+    const report = matchWorkoutGuideMedia(
+      [stretch],
+      [makeEntry('wgs', "World's Greatest Stretch")],
+    );
+    expect(report.matched).toEqual([
+      { workoutGuideSlug: 'wgs', atlasExerciseId: 'e-1', tier: 'fuzzy' },
+    ]);
+  });
+
+  it('disambiguates a fuzzy-ambiguous match using workout-guide equipment metadata', () => {
+    // Same word-order-reordered name (both fuzzy-key-equal to the entry, so
+    // neither hits 'exact'/'normalized'), differing only by equipment.
+    const dumbbellPress = makeExercise('e-1', 'Press Shoulder', [], { equipment: ['dumbbell'] });
+    const barbellPress = makeExercise('e-2', 'Press Shoulder', [], { equipment: ['barbell'] });
+    const report = matchWorkoutGuideMedia(
+      [dumbbellPress, barbellPress],
+      [makeEntry('shoulder-press', 'Shoulder Press', { equipment: 'Dumbbell' })],
+    );
+    expect(report.matched).toEqual([
+      { workoutGuideSlug: 'shoulder-press', atlasExerciseId: 'e-1', tier: 'metadata' },
+    ]);
+    expect(report.ambiguous).toEqual([]);
+  });
+
+  it('stays ambiguous at the fuzzy tier when metadata cannot narrow to one candidate', () => {
+    const a = makeExercise('e-1', 'Press Shoulder', [], { equipment: ['cable'] });
+    const b = makeExercise('e-2', 'Press Shoulder', [], { equipment: ['machine'] });
+    const report = matchWorkoutGuideMedia(
+      [a, b],
+      [makeEntry('shoulder-press', 'Shoulder Press', { equipment: 'Dumbbell' })],
+    );
+    expect(report.matched).toEqual([]);
+    expect(report.ambiguous).toEqual([
+      {
+        workoutGuideSlug: 'shoulder-press',
+        workoutGuideName: 'Shoulder Press',
+        atlasExerciseIds: ['e-1', 'e-2'],
+      },
+    ]);
+  });
+
+  it('never uses equipment metadata as a primary match signal on its own', () => {
+    // Same equipment, but the fuzzy tier already found zero candidates --
+    // metadata must never manufacture a match the name doesn't support.
+    const bench = makeExercise('e-1', 'Bench Press', [], { equipment: ['barbell'] });
+    const report = matchWorkoutGuideMedia(
+      [bench],
+      [makeEntry('zercher-squat', 'Zercher Squat', { equipment: 'Barbell' })],
+    );
+    expect(report.matched).toEqual([]);
+    expect(report.unresolved).toEqual([
+      { workoutGuideSlug: 'zercher-squat', workoutGuideName: 'Zercher Squat' },
+    ]);
   });
 });

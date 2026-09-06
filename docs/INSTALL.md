@@ -1,10 +1,10 @@
 # Installing ATLAS on iPhone / iPad
 
-**URL**: <https://atlas-pwa.grand-dormouse.workers.dev>
+**URL**: <https://atlas-pwa-7eq.pages.dev>
 
-(A temporary Cloudflare deployment — see docs/DEPLOY.md for what that means
-and how to move to permanent hosting later. The install steps below don't
-change either way.)
+(A persistent Cloudflare Pages deployment — see docs/DEPLOY.md for details
+and the redeploy command. The install steps below don't change if the
+hosting ever moves to the owner's own infrastructure later.)
 
 ## iPhone
 

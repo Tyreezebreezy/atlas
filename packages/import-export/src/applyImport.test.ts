@@ -51,6 +51,7 @@ async function seededStorage() {
     enrichment: null,
   };
   await storage.exercises.put(benchPress);
+  await storage.exercises.put({ ...benchPress, id: 'ex-row', name: 'Cable Row' });
   return storage;
 }
 
@@ -192,5 +193,55 @@ describe('applyImport', () => {
     // Workout.
     expect(day1Template?.is_quick_workout).toBe(false);
     expect(day2Template?.is_quick_workout).toBe(false);
+  });
+
+  it('turns a PlanExerciseGroup into a real ExerciseGroup once both members resolve', async () => {
+    const storage = await seededStorage();
+    const workout: PlanWorkout = {
+      name: 'Pump',
+      is_quick_workout: false,
+      exercises: [
+        target({ order: 1, exercise_name: 'Bench Press', target_sets: 3, group_key: 'ss1' }),
+        target({ order: 2, exercise_name: 'Cable Row', target_sets: 3, group_key: 'ss1' }),
+      ],
+      groups: [{ key: 'ss1', type: 'superset', rounds: 3, rest_after_seconds: 45 }],
+    };
+    const preview = buildImportPreview(
+      { kind: 'workout', workout },
+      await storage.exercises.getAll(),
+    );
+
+    const result = await applyImport(preview, {}, storage);
+
+    expect(result.workout_template?.groups).toHaveLength(1);
+    const group = result.workout_template!.groups[0]!;
+    expect(group).toMatchObject({ type: 'superset', rounds: 3, rest_after_seconds: 45 });
+    const members = result.workout_template!.exercises.filter((e) => e.group_id === group.id);
+    expect(members).toHaveLength(2);
+  });
+
+  it('ungroups a superset that loses a member to skip, rather than shipping a one-member group', async () => {
+    const storage = await seededStorage();
+    const workout: PlanWorkout = {
+      name: 'Pump',
+      is_quick_workout: false,
+      exercises: [
+        target({ order: 1, exercise_name: 'Bench Press', target_sets: 3, group_key: 'ss1' }),
+        target({ order: 2, exercise_name: 'Totally Unknown Move', group_key: 'ss1' }),
+      ],
+      groups: [{ key: 'ss1', type: 'superset', rounds: 3, rest_after_seconds: null }],
+    };
+    const preview = buildImportPreview(
+      { kind: 'workout', workout },
+      await storage.exercises.getAll(),
+    );
+    if (preview.kind !== 'workout') throw new Error('expected workout');
+    const unresolvedKey = preview.workout.exercises[1]!.key;
+
+    const result = await applyImport(preview, { [unresolvedKey]: { action: 'skip' } }, storage);
+
+    expect(result.workout_template?.exercises).toHaveLength(1);
+    expect(result.workout_template?.groups).toEqual([]);
+    expect(result.workout_template?.exercises[0]?.group_id).toBeNull();
   });
 });

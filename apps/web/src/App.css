@@ -58,7 +58,7 @@ button {
 }
 
 .atlas-shell__tab[aria-current='page'] {
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
 }
 
@@ -97,7 +97,7 @@ button {
   }
 
   .atlas-shell__tab[aria-current='page'] {
-    background: var(--atlas-color-sage-mist);
+    background: var(--atlas-color-accent-mist);
   }
 }
 
@@ -147,6 +147,19 @@ button {
 }
 
 /* Library */
+
+.atlas-library__subtitle {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+  margin: var(--atlas-space-1) 0 var(--atlas-space-4);
+}
+
+.atlas-library__demo-badge {
+  color: var(--atlas-color-accent);
+  font-size: 0.5rem;
+  margin-left: var(--atlas-space-1);
+  vertical-align: middle;
+}
 
 .atlas-library__search,
 .atlas-library__filters select,
@@ -230,10 +243,10 @@ button {
   width: 100%;
   min-height: 48px;
   margin-top: var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
 }
@@ -243,7 +256,7 @@ button {
 .atlas-exercise-detail__back {
   border: none;
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   padding: 0;
   margin-bottom: var(--atlas-space-3);
   min-height: 44px;
@@ -270,7 +283,7 @@ button {
   max-width: 320px;
   aspect-ratio: 1;
   object-fit: contain;
-  background: var(--atlas-color-surface-alt);
+  background: var(--atlas-color-surface-raised);
   border-radius: var(--atlas-radius-sm);
   display: block;
 }
@@ -330,9 +343,9 @@ button {
   min-height: 44px;
   margin-top: var(--atlas-space-2);
   padding: 0 var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
-  background: var(--atlas-color-sage);
+  background: var(--atlas-color-accent);
   color: var(--atlas-color-surface);
   cursor: pointer;
 }
@@ -364,8 +377,8 @@ button {
 }
 
 .atlas-exercise-detail__tab--active {
-  color: var(--atlas-color-sage) !important;
-  border-bottom-color: var(--atlas-color-sage) !important;
+  color: var(--atlas-color-accent) !important;
+  border-bottom-color: var(--atlas-color-accent) !important;
   font-weight: 600;
 }
 
@@ -436,9 +449,9 @@ button {
 }
 
 .atlas-exercise-progress__metric--active {
-  border-color: var(--atlas-color-sage) !important;
-  background: var(--atlas-color-sage-mist) !important;
-  color: var(--atlas-color-sage) !important;
+  border-color: var(--atlas-color-accent) !important;
+  background: var(--atlas-color-accent-mist) !important;
+  color: var(--atlas-color-accent) !important;
   font-weight: 600;
 }
 
@@ -492,8 +505,8 @@ button {
 }
 
 .atlas-custom-exercise-form__actions button[type='submit'] {
-  border: 1px solid var(--atlas-color-sage);
-  background: var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
+  background: var(--atlas-color-accent);
   color: var(--atlas-color-surface);
   font-weight: 600;
 }
@@ -532,7 +545,7 @@ button {
 .atlas-milestone-form__exercise button {
   border: none;
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
 }
@@ -551,8 +564,8 @@ button {
 }
 
 .atlas-milestone-form__actions button[type='submit'] {
-  border: 1px solid var(--atlas-color-sage);
-  background: var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
+  background: var(--atlas-color-accent);
   color: var(--atlas-color-surface);
   font-weight: 600;
 }
@@ -590,8 +603,8 @@ button {
 }
 
 .atlas-body-form__actions button[type='submit'] {
-  border: 1px solid var(--atlas-color-sage);
-  background: var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
+  background: var(--atlas-color-accent);
   color: var(--atlas-color-surface);
   font-weight: 600;
 }
@@ -642,7 +655,7 @@ button {
 
 .atlas-body__history-values {
   font-variant-numeric: tabular-nums;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 700;
 }
 
@@ -680,10 +693,10 @@ button {
   width: 100%;
   min-height: 48px;
   margin-top: var(--atlas-space-6);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
 }
@@ -742,10 +755,10 @@ button {
 .atlas-program-screen__activate {
   min-height: 44px;
   padding: 0 var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -755,7 +768,7 @@ button {
 .atlas-template-editor__back {
   border: none;
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   padding: 0;
   margin-bottom: var(--atlas-space-3);
   min-height: 44px;
@@ -857,9 +870,9 @@ button {
 .atlas-template-editor__group {
   margin-top: var(--atlas-space-4);
   padding: var(--atlas-space-2);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-md);
-  background: var(--atlas-color-sage-mist);
+  background: var(--atlas-color-accent-mist);
 }
 
 .atlas-template-editor__group-header {
@@ -869,16 +882,16 @@ button {
   padding: 0 var(--atlas-space-2);
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
 }
 
 .atlas-template-editor__group-header button {
   min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   cursor: pointer;
 }
 
@@ -955,8 +968,8 @@ button {
 }
 
 .atlas-template-editor__save {
-  border-color: var(--atlas-color-sage) !important;
-  background: var(--atlas-color-sage) !important;
+  border-color: var(--atlas-color-accent) !important;
+  background: var(--atlas-color-accent) !important;
   color: var(--atlas-color-surface) !important;
   font-weight: 600;
 }
@@ -1092,9 +1105,9 @@ button {
 .atlas-resume-card {
   margin-top: var(--atlas-space-4);
   padding: var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-md);
-  background: var(--atlas-color-sage-mist);
+  background: var(--atlas-color-accent-mist);
 }
 
 .atlas-resume-card h2 {
@@ -1131,8 +1144,8 @@ button {
 }
 
 .atlas-resume-card__resume {
-  border-color: var(--atlas-color-sage) !important;
-  background: var(--atlas-color-sage) !important;
+  border-color: var(--atlas-color-accent) !important;
+  background: var(--atlas-color-accent) !important;
   color: var(--atlas-color-surface) !important;
   font-weight: 600;
 }
@@ -1176,7 +1189,7 @@ button {
 .atlas-superset h2 {
   font-size: 1.2rem;
   margin: 0 0 var(--atlas-space-3);
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
 }
 
 .atlas-superset__members {
@@ -1204,8 +1217,8 @@ button {
   min-width: 28px;
   min-height: 28px;
   border-radius: 50%;
-  background: var(--atlas-color-sage-mist);
-  color: var(--atlas-color-sage);
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-accent);
   font-weight: 700;
   font-size: 0.8rem;
 }
@@ -1226,7 +1239,7 @@ button {
   padding: var(--atlas-space-1) var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
-  background: var(--atlas-color-canvas);
+  background: var(--atlas-color-surface-raised);
   font-size: 1rem;
 }
 
@@ -1234,9 +1247,9 @@ button {
   width: 100%;
   min-height: var(--atlas-touch-target);
   margin-top: var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
-  background: var(--atlas-color-sage);
+  background: var(--atlas-color-accent);
   color: var(--atlas-color-surface);
   font-weight: 600;
   cursor: pointer;
@@ -1397,8 +1410,8 @@ button {
 }
 
 .atlas-gym-mode__finish {
-  border-color: var(--atlas-color-sage) !important;
-  background: var(--atlas-color-sage) !important;
+  border-color: var(--atlas-color-accent) !important;
+  background: var(--atlas-color-accent) !important;
   color: var(--atlas-color-surface) !important;
   font-weight: 600;
 }
@@ -1474,7 +1487,7 @@ button {
   padding: var(--atlas-space-4);
   border: 1px solid var(--atlas-color-success);
   border-radius: var(--atlas-radius-md);
-  background: var(--atlas-color-sage-mist);
+  background: var(--atlas-color-accent-mist);
 }
 
 .atlas-workout-summary__prs h2 {
@@ -1522,7 +1535,7 @@ button {
   text-align: left;
   margin: var(--atlas-space-6) 0;
   padding: var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-bronze);
+  border: 1px solid var(--atlas-color-milestone);
   border-radius: var(--atlas-radius-md);
   background: var(--atlas-color-surface);
 }
@@ -1548,7 +1561,7 @@ button {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--atlas-color-bronze);
+  color: var(--atlas-color-milestone);
   margin: 0 0 var(--atlas-space-3);
 }
 
@@ -1573,7 +1586,7 @@ button {
 
 .atlas-workout-summary__milestone-title {
   font-weight: 600;
-  color: var(--atlas-color-bronze);
+  color: var(--atlas-color-milestone);
 }
 
 /* Trend chart */
@@ -1585,13 +1598,13 @@ button {
 }
 
 .atlas-trend-chart__line {
-  stroke: var(--atlas-color-sage);
+  stroke: var(--atlas-color-accent);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
 
 .atlas-trend-chart__point {
-  fill: var(--atlas-color-sage);
+  fill: var(--atlas-color-accent);
   stroke: var(--atlas-color-surface);
   stroke-width: 1.5;
   cursor: pointer;
@@ -1623,7 +1636,7 @@ button {
 .atlas-trend-chart__single-value {
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
 }
 
 .atlas-trend-chart__single-date {
@@ -1697,10 +1710,10 @@ button {
 .atlas-timed-cell__running button {
   min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1782,10 +1795,10 @@ button {
 .atlas-gym-exercise--skipped button {
   min-height: 44px;
   padding: 0 var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1989,8 +2002,8 @@ button {
   color: var(--atlas-color-success);
 }
 
-.atlas-progress__month-count--bronze {
-  color: var(--atlas-color-bronze);
+.atlas-progress__month-count--milestone {
+  color: var(--atlas-color-milestone);
 }
 
 .atlas-progress__month-label {
@@ -2044,11 +2057,11 @@ button {
 }
 
 .atlas-progress__recent-item--milestone {
-  border-left: 3px solid var(--atlas-color-bronze) !important;
+  border-left: 3px solid var(--atlas-color-milestone) !important;
 }
 
 .atlas-progress__recent-item--milestone .atlas-progress__recent-meta {
-  color: var(--atlas-color-bronze);
+  color: var(--atlas-color-milestone);
 }
 
 .atlas-progress__trend-list li {
@@ -2129,10 +2142,10 @@ button {
   width: 100%;
   min-height: 48px;
   margin-top: var(--atlas-space-6);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
 }
@@ -2141,10 +2154,10 @@ button {
   width: 100%;
   min-height: 44px;
   margin-top: var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-bronze);
+  border: 1px solid var(--atlas-color-milestone);
   border-radius: var(--atlas-radius-sm);
   background: transparent;
-  color: var(--atlas-color-bronze);
+  color: var(--atlas-color-milestone);
   font-weight: 600;
   cursor: pointer;
 }
@@ -2169,7 +2182,7 @@ button {
 }
 
 .atlas-progress__milestone-list--achieved li {
-  border-color: var(--atlas-color-bronze);
+  border-color: var(--atlas-color-milestone);
 }
 
 .atlas-progress__milestone-title {
@@ -2177,7 +2190,7 @@ button {
 }
 
 .atlas-progress__milestone-list--achieved .atlas-progress__milestone-title {
-  color: var(--atlas-color-bronze);
+  color: var(--atlas-color-milestone);
 }
 
 .atlas-progress__milestone-date,
@@ -2211,7 +2224,7 @@ button {
   display: block;
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
   margin-top: var(--atlas-space-1);
 }
 
@@ -2223,7 +2236,7 @@ button {
 
 .atlas-progress__benchmark-details summary {
   cursor: pointer;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
 }
 
 .atlas-progress__benchmark-details p {
@@ -2285,9 +2298,9 @@ button {
   min-height: var(--atlas-touch-target);
   margin-top: var(--atlas-space-3);
   padding: 0 var(--atlas-space-4);
-  border: 1px solid var(--atlas-color-sage);
+  border: 1px solid var(--atlas-color-accent);
   border-radius: var(--atlas-radius-sm);
-  background: var(--atlas-color-sage);
+  background: var(--atlas-color-accent);
   color: var(--atlas-color-surface);
   font-weight: 600;
   cursor: pointer;
@@ -2377,7 +2390,7 @@ button {
   display: block;
   margin-top: var(--atlas-space-2);
   font-size: 0.85rem;
-  color: var(--atlas-color-sage);
+  color: var(--atlas-color-accent);
 }
 
 .atlas-importexport__row-resolve {
@@ -2405,9 +2418,9 @@ button {
 }
 
 .atlas-importexport__candidates button[aria-pressed='true'] {
-  border-color: var(--atlas-color-sage);
-  background: var(--atlas-color-sage-mist);
-  color: var(--atlas-color-sage);
+  border-color: var(--atlas-color-accent);
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-accent);
   font-weight: 600;
 }
 

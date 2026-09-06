@@ -30,12 +30,34 @@ export interface PlanExerciseTarget {
   target_distance_meters: number | null;
   rest_seconds: number | null;
   notes: string | null;
+  /** Which of `PlanWorkout.groups` (by `key`) this exercise belongs to, if
+   * any -- an arbitrary caller-assigned string rather than an array index,
+   * since a skipped/unresolved exercise is dropped entirely in
+   * `applyImport` and an index would drift once that happens; a string key
+   * survives that unaffected. Optional (not required-plus-null) because,
+   * same reasoning as `Exercise.media`, nothing derives a fallback from its
+   * absence and the overwhelming majority of exercises -- every existing
+   * `atlas-plan-v1` document, paste-text, and most HTML rows -- have no
+   * group at all. */
+  group_key?: string | null;
+}
+
+/** A superset/circuit grouping for one workout's exercises, matching
+ * `ExerciseGroup` (`@atlas/data-model`) in shape minus the real id (assigned
+ * at `applyImport` time, once it's known which members actually survived
+ * exercise-matching/resolution). See docs/IMPORT_FORMAT.md "Supersets." */
+export interface PlanExerciseGroup {
+  key: string;
+  type: 'superset' | 'circuit';
+  rounds: number;
+  rest_after_seconds: number | null;
 }
 
 export interface PlanWorkout {
   name: string;
   is_quick_workout: boolean;
   exercises: PlanExerciseTarget[];
+  groups?: PlanExerciseGroup[];
 }
 
 export interface PlanProgramDay {
@@ -129,6 +151,7 @@ export interface ImportPreviewWorkout {
   is_quick_workout: boolean;
   exercises: ImportPreviewExercise[];
   warnings: ImportWarning[];
+  groups?: PlanExerciseGroup[];
 }
 
 export interface ImportPreviewProgramDay {

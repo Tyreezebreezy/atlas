@@ -14,8 +14,8 @@ export default defineConfig({
         name: 'ATLAS',
         short_name: 'ATLAS',
         description: 'Local-first fitness and training tracker',
-        theme_color: '#F2F0EA',
-        background_color: '#F2F0EA',
+        theme_color: '#0B0D10',
+        background_color: '#0B0D10',
         display: 'standalone',
         start_url: '/',
         icons: [

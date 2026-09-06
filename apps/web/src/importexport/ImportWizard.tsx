@@ -2,8 +2,11 @@ import { useState } from 'react';
 import {
   applyImport,
   buildImportPreview,
+  parseHtmlPlan,
   parsePasteText,
+  toHtmlImportOptions,
   validateAtlasPlan,
+  type HtmlImportOption,
   type ImportPreview,
   type ImportResolutions,
 } from '@atlas/import-export';
@@ -16,9 +19,17 @@ const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 
 type Step =
   | { step: 'source'; error: string | null }
+  | { step: 'choose-html-workout'; options: HtmlImportOption[]; unparsedText: string[] }
   | { step: 'preview'; preview: ImportPreview; unparsedLines: string[] }
   | { step: 'saving' }
   | { step: 'done'; summary: string };
+
+function htmlFileTitle(html: string, fileName: string): string {
+  const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+  const title = titleMatch?.[1]?.trim();
+  if (title) return title;
+  return fileName.replace(/\.html?$/i, '').replace(/[-_]+/g, ' ');
+}
 
 interface ImportWizardProps {
   mode: 'paste' | 'file';
@@ -31,9 +42,29 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
   const [state, setState] = useState<Step>({ step: 'source', error: null });
   const [resolutions, setResolutions] = useState<ImportResolutions>({});
 
-  async function parseAndPreview(kind: 'text' | 'json', text: string) {
+  async function parseAndPreview(kind: 'text' | 'json' | 'html', text: string, fileName = '') {
     if (!storage) return;
     const library = await storage.exercises.getAll();
+
+    if (kind === 'html') {
+      const parsed = parseHtmlPlan(text);
+      const options = toHtmlImportOptions(parsed, htmlFileTitle(text, fileName));
+      if (options.length === 0) {
+        setState({
+          step: 'source',
+          error: 'No checkbox-tracked exercises were recognized in that file.',
+        });
+        return;
+      }
+      if (options.length === 1 && options[0]) {
+        const preview = buildImportPreview(options[0].input, library);
+        setResolutions({});
+        setState({ step: 'preview', preview, unparsedLines: parsed.unparsedText });
+        return;
+      }
+      setState({ step: 'choose-html-workout', options, unparsedText: parsed.unparsedText });
+      return;
+    }
 
     if (kind === 'json') {
       let raw: unknown;
@@ -89,8 +120,21 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
       setState({ step: 'source', error: 'That file is too large (limit 5 MB).' });
       return;
     }
-    const isJson = file.name.toLowerCase().endsWith('.json');
-    void file.text().then((text) => parseAndPreview(isJson ? 'json' : 'text', text));
+    const lowerName = file.name.toLowerCase();
+    const kind = lowerName.endsWith('.json')
+      ? 'json'
+      : lowerName.endsWith('.html')
+        ? 'html'
+        : 'text';
+    void file.text().then((text) => parseAndPreview(kind, text, file.name));
+  }
+
+  async function chooseHtmlOption(option: HtmlImportOption, unparsedText: string[]) {
+    if (!storage) return;
+    const library = await storage.exercises.getAll();
+    const preview = buildImportPreview(option.input, library);
+    setResolutions({});
+    setState({ step: 'preview', preview, unparsedLines: unparsedText });
   }
 
   async function handleApprove() {
@@ -111,6 +155,36 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
         <button type="button" onClick={onBack}>
           Done
         </button>
+      </div>
+    );
+  }
+
+  if (state.step === 'choose-html-workout') {
+    return (
+      <div className="atlas-importexport">
+        <button type="button" className="atlas-template-editor__back" onClick={onBack}>
+          &larr; Back
+        </button>
+        <h1>Choose What to Import</h1>
+        <p className="atlas-importexport__hint">
+          This file contains {state.options.length} separate routines. Import one now -- you can
+          come back and import the others the same way.
+        </p>
+        <ul className="atlas-importexport__row-list">
+          {state.options.map((option) => (
+            <li key={option.label} className="atlas-importexport__row">
+              <span className="atlas-importexport__row-name">{option.label}</span>
+              <div className="atlas-importexport__actions">
+                <button
+                  type="button"
+                  onClick={() => void chooseHtmlOption(option, state.unparsedText)}
+                >
+                  Import
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     );
   }
@@ -178,11 +252,12 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
       ) : (
         <>
           <p className="atlas-importexport__hint">
-            Import an ATLAS plan file (.json), or a plain text/Markdown workout (.txt, .md).
+            Import an ATLAS plan file (.json), a plain text/Markdown workout (.txt, .md), or a
+            checkbox-tracked workout page (.html) exported from a browser-based tracker.
           </p>
           <input
             type="file"
-            accept=".json,.txt,.md,application/json,text/plain,text/markdown"
+            accept=".json,.txt,.md,.html,application/json,text/plain,text/markdown,text/html"
             onChange={handleFileChange}
             aria-label="Choose a file to import"
           />
