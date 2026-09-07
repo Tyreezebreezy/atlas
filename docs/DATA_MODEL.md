@@ -306,3 +306,101 @@ this stage's handoff explicitly excluded; this is a plain tally of what was
 actually logged, nothing inferred. No manual classification of the other
 ~1,291 exercises was done to make this work, per the same handoff
 instruction.
+
+## Training engine (v0.2.0)
+
+Progression policies, target provenance, set-phase semantics, deload, and
+the full rest hierarchy are documented separately in **docs/PROGRESSION.md**
+rather than here — it's substantial enough to warrant its own file.
+
+**Freestyle workout**: `startWorkoutSession()` already accepted an
+arbitrary caller-supplied `plannedSnapshot`/`groups` with nullable
+`templateId`/`programId` since v0.1.1 — "Start Freestyle Workout"
+(`TodayScreen.tsx`) needed no new engine code, just a new entry point
+calling it with `plannedSnapshot: []`. Exercises are added the same way
+Gym Mode already adds one mid-session (`addExerciseToSession`, v0.1.1
+Stage 4C).
+
+**Scheduling**: `WorkoutOccurrence` (`packages/data-model/src/occurrence.ts`,
+new store, Dexie version 2 / SQLite migration `0002`) layers calendar-date
+deviations on top of `Program`, which stays a pure template exactly as
+before — see that type's own doc comment for why rows are created lazily
+rather than one per future date. `packages/program-engine/src/workoutOccurrence.ts`
+holds the four actions (`moveOccurrence`, `skipOccurrence`,
+`replaceOccurrence`, `completeOccurrence`); callers look up any existing
+row via `findOccurrence`/`findOccurrenceByEffectiveDate` first so a slot
+never gets two rows for the same original date.
+
+**Historical entries**: "Log Past Workout" (`LogPastWorkoutScreen.tsx`)
+reuses `startWorkoutSession`'s new `startedAt`/`plannedCompletedAt`
+parameters (backdating both timestamps) and the exact same Gym Mode
+UI/engine as any other session — no second logging system. A same-date
+collision offers Keep Both / Replace Existing (a `discardWorkoutSession`
+status change, not a delete) / Cancel, never a silent merge. See
+docs/PROGRESSION.md "Chronology safety" for how backdated entries resolve
+progression correctly regardless of save order.
+
+**Plate calculator** (`packages/workout-engine/src/plateCalculator.ts`):
+greedy largest-plate-first per side, common bar/plate presets with simple
+customization. Never rounds up past the requested load — an unreachable
+exact target (e.g. 187.5 lb with 2.5 lb plates) resolves to the nearest
+achievable total at or below it, flagged `exact: false` rather than
+silently substituted.
+
+**Equipment profiles**: device-local (`AtlasSettings.equipmentProfiles`,
+same localStorage mechanism as the rest of Settings — which gym someone's
+at isn't shared history). Reuses the existing substitution engine's
+`availableEquipment` filter unchanged (`suggestSubstitutes` already
+accepted this option before v0.2.0) rather than building new filtering
+logic — `ExerciseContextSheet.tsx`'s "Equipment unavailable" entry only
+appears when the active profile excludes a planned exercise's equipment,
+and only ever suggests; it never mutates the plan.
+
+**Import idempotency**: `computeImportFingerprint()`
+(`packages/import-export/src/importFingerprint.ts`) hashes a source
+document's stable content (excluding `exported_at`, which differs on
+every export of the same source) with a small dependency-free string hash
+— not cryptographic, just enough to catch "this looks like the same
+source re-imported." Stamped onto the created `Program`/`WorkoutTemplate`
+as `import_fingerprint`; the import preview step checks
+`findExistingImportByFingerprint` against existing rows and warns before
+the owner approves, rather than silently duplicating.
+
+**Favorites**: `Exercise.is_favorite?: boolean`, optional like `media`.
+`searchExercises()` (`packages/exercise-library/src/search.ts`) sorts
+favorites first with a stable sort — the one function every exercise
+list/picker in the app already filters through, so favorites rising
+everywhere (Library, Add Exercise, Replace, the Program builder's picker)
+falls out of one change rather than four.
+
+**Wake lock** (existing since earlier, extended in v0.2.0): now requests
+for the whole active session (`session.status === 'in_progress'`), not
+only while a rest/exercise timer is running — typing weight/reps between
+sets with no timer active must not let the screen lock either.
+
+**Muscle map**: the polished anatomical body-map visualization was
+deliberately not built (explicit handoff permission: "do not block the
+entire release" over this). What did ship is the three data modes the
+handoff asked for, as text/list views: Training Distribution (working
+sets by muscle group, pre-existing since v0.1.1 Stage 4E),
+**Training Recency** (new — `packages/progress-engine/src/trainingRecency.ts`,
+days since a muscle group was last meaningfully trained, only for groups
+with real history, no invented recovery percentage), and Strength Trend
+(pre-existing, estimated-1RM series already on the Progress screen).
+
+**Activity heatmap**: `computeActivityHeatmap()`
+(`packages/progress-engine/src/activityHeatmap.ts`) — one value per
+calendar day (workout count, minutes, or sets) over a trailing window,
+keyed by the owner's local calendar date, not UTC. Every day in the
+window is present (including zero-activity days) so the grid UI never
+backfills gaps itself.
+
+**Unit conversion (deferred)**: no unit system exists in ATLAS at all as
+of v0.2.0 — every weight is implicitly lb, throughout history, targets,
+increments, bodyweight, and now the plate calculator. Adding kg/lb
+support properly (including the "convert values" vs. "keep the number,
+relabel the unit" choice the handoff calls out) touches every one of
+those surfaces at once; per the handoff's own instruction ("if this
+requires a major unrelated migration, document it for the next phase
+rather than destabilizing v0.2.0"), this is deferred rather than
+half-built. See docs/ROADMAP.md.

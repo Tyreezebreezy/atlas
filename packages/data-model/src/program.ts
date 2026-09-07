@@ -1,4 +1,5 @@
 import type { SyncMeta } from './sync';
+import type { ProgressionPolicy } from './progression';
 
 export interface ProgramDay {
   id: string;
@@ -33,4 +34,22 @@ export interface Program extends SyncMeta {
    * when it was added in v0.0.8. */
   progression_mode: ProgramProgressionMode;
   sequence_position: number;
+  /** v0.2.0. Weakest tier of the progression-policy hierarchy -- a
+   * PlannedExercise's own `progression_policy` always wins when set. Null
+   * (and absent, for programs from before this field existed) means "no
+   * program-level default"; `effectiveProgressionPolicy()` then falls
+   * through to `NO_PROGRESSION`. See docs/PROGRESSION.md. */
+  default_progression_policy?: ProgressionPolicy | null;
+  /** v0.2.0. Second-weakest tier of the rest hierarchy (below a
+   * session/group/exercise-specific value, above the exercise library's
+   * own `default_rest_seconds`) -- see docs/DATA_MODEL.md "Rest
+   * hierarchy." */
+  default_rest_seconds?: number | null;
+  /** v0.2.0. Set only when this Program was created by importing a
+   * structured document -- a stable hash of that document's content (see
+   * `computeImportFingerprint` in packages/import-export), used to detect
+   * "this looks like the same source re-imported" without a full
+   * source-fingerprint/transaction ledger. Null for a program authored
+   * directly in ATLAS. */
+  import_fingerprint?: string | null;
 }

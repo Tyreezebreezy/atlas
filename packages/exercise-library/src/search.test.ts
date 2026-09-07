@@ -57,6 +57,16 @@ describe('searchExercises', () => {
   it('returns everything with no filter', () => {
     expect(searchExercises(all, {})).toEqual(all);
   });
+
+  it('sorts favorites first, preserving relative order within each group', () => {
+    const squatFav = { ...squat, is_favorite: true };
+    const result = searchExercises([bench, squatFav, pushup], {});
+    expect(result).toEqual([squatFav, bench, pushup]);
+  });
+
+  it('treats a missing is_favorite the same as false (pre-v0.2.0 exercises)', () => {
+    expect(searchExercises(all, {})).toEqual(all); // none set is_favorite at all
+  });
 });
 
 describe('listBodyParts / listEquipment', () => {

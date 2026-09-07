@@ -25,6 +25,7 @@ export async function exportBackup(storage: AtlasStorage): Promise<AtlasBackupDo
     personalRecords,
     milestones,
     bodyMeasurements,
+    workoutOccurrences,
   ] = await Promise.all([
     storage.exercises.getAll(),
     storage.programs.getAll(),
@@ -35,6 +36,7 @@ export async function exportBackup(storage: AtlasStorage): Promise<AtlasBackupDo
     storage.personalRecords.getAll(),
     storage.milestones.getAll(),
     storage.bodyMeasurements.getAll(),
+    storage.workoutOccurrences.getAll(),
   ]);
 
   return {
@@ -52,6 +54,7 @@ export async function exportBackup(storage: AtlasStorage): Promise<AtlasBackupDo
       personal_records: personalRecords,
       milestones,
       body_measurements: bodyMeasurements,
+      workout_occurrences: workoutOccurrences,
     },
   };
 }

@@ -20,7 +20,7 @@ function completedSessionWithSet(exerciseId: string, weight: number, completedAt
     ...createPerformedSet({
       exerciseId,
       setIndex: 0,
-      setType: 'working',
+      setType: 'normal',
       weight,
       reps: 8,
       durationSeconds: null,

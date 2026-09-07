@@ -5,6 +5,7 @@ export * from './parsePasteText';
 export * from './parseHtmlPlan';
 export * from './buildImportPreview';
 export * from './applyImport';
+export * from './importFingerprint';
 export * from './exportWorkout';
 export * from './exportProgram';
 export * from './exportBackup';

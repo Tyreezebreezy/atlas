@@ -1,40 +1,68 @@
 import { useEffect, useState } from 'react';
-import { type LogSetInput, remainingSeconds } from '@atlas/workout-engine';
+import { type LogSetInput, remainingSeconds, setPhaseOf, setTypeOf } from '@atlas/workout-engine';
 import type {
   Exercise,
   PersonalRecord,
   PerformedSet,
   PlannedExercise,
+  SetPhase,
   SetType,
   TimerState,
+  WorkoutSession,
 } from '@atlas/data-model';
 import { describePR } from '../progress/formatPR';
 import { loadSettings } from '../settings/settings';
 import { ExerciseMedia } from '../library/ExerciseMedia';
+import { ExerciseContextSheet } from './ExerciseContextSheet';
+
+/** One user-facing choice per row, covering both the phase (warmup/work)
+ * and sub-type (normal/amrap/drop/failure/rest_pause) dimensions the
+ * v0.2.0 data model splits apart -- kept as a single dropdown since the
+ * owner never needs to pick phase and type independently in practice: a
+ * warm-up set is never also an AMRAP or drop set. See
+ * docs/PROGRESSION.md "Set phase migration." */
+type DraftSetKind = 'warmup' | 'normal' | 'amrap' | 'drop' | 'failure' | 'rest_pause';
 
 interface DraftValues {
   weight: string;
+  /** v0.2.0. Added load for a weighted bodyweight movement -- see
+   * `PerformedSet.external_load`'s doc comment. Only shown/read for a
+   * `reps_bodyweight` exercise, never alongside `weight`. */
+  externalLoad: string;
   reps: string;
   duration: string;
   distance: string;
-  setType: SetType;
+  kind: DraftSetKind;
 }
 
 const EMPTY_DRAFT: DraftValues = {
   weight: '',
+  externalLoad: '',
   reps: '',
   duration: '',
   distance: '',
-  setType: 'working',
+  kind: 'normal',
 };
 
-const SET_TYPE_LABELS: Record<SetType, string> = {
-  working: 'Working',
+const DRAFT_KIND_LABELS: Record<DraftSetKind, string> = {
+  normal: 'Working',
   warmup: 'Warm-up',
   drop: 'Drop',
   amrap: 'AMRAP',
   failure: 'Failure',
+  rest_pause: 'Rest-Pause',
 };
+
+function phaseAndTypeForKind(kind: DraftSetKind): { phase: SetPhase; setType: SetType } {
+  if (kind === 'warmup') return { phase: 'warmup', setType: 'normal' };
+  return { phase: 'work', setType: kind };
+}
+
+/** Inverse of `phaseAndTypeForKind`, for displaying an already-completed set. */
+function draftKindOf(set: PerformedSet): DraftSetKind {
+  if (setPhaseOf(set) === 'warmup') return 'warmup';
+  return setTypeOf(set) as DraftSetKind;
+}
 
 // ponytail: TimerState always needs a fixed duration/ends_at, so a timed
 // exercise with no target duration still needs *some* ceiling to start a
@@ -134,6 +162,10 @@ interface ExerciseLoggerProps {
   previousSets: PerformedSet[];
   bestPR: PersonalRecord | null;
   activeTimer: TimerState | null;
+  allSessions: WorkoutSession[];
+  library: Exercise[];
+  canGroupWithNext?: boolean;
+  onGroupWithNext?: () => void;
   onCompleteSet: (input: LogSetInput) => void;
   onRemoveCompletedSet: (setId: string) => void;
   onStartExerciseTimer: (durationSeconds: number) => void;
@@ -155,6 +187,10 @@ export function ExerciseLogger({
   previousSets,
   bestPR,
   activeTimer,
+  allSessions,
+  library,
+  canGroupWithNext,
+  onGroupWithNext,
   onCompleteSet,
   onRemoveCompletedSet,
   onStartExerciseTimer,
@@ -162,6 +198,7 @@ export function ExerciseLogger({
 }: ExerciseLoggerProps) {
   const plannedRowCount = planned.target_sets ?? Math.max(performedSets.length, 1);
   const [extraRows, setExtraRows] = useState(0);
+  const [showContextSheet, setShowContextSheet] = useState(false);
   const totalRows = Math.max(plannedRowCount, performedSets.length) + extraRows;
   // Only one timer can run at a time (session.active_timer is a single slot),
   // so only the next not-yet-completed row ever offers Start/Stop; any extra
@@ -172,6 +209,7 @@ export function ExerciseLogger({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const showsWeight = exercise.measurement_type === 'reps_weight';
+  const showsExternalLoad = exercise.measurement_type === 'reps_bodyweight';
   const showsReps =
     exercise.measurement_type === 'reps_weight' ||
     exercise.measurement_type === 'reps' ||
@@ -187,9 +225,12 @@ export function ExerciseLogger({
     const lastCompleted = performedSets[performedSets.length - 1];
     const lastPrevious = previousSets[previousSets.length - 1];
     const weight = lastCompleted?.weight ?? lastPrevious?.weight ?? planned.target_weight;
+    const externalLoad =
+      lastCompleted?.external_load ?? lastPrevious?.external_load ?? planned.target_external_load;
     return {
       ...EMPTY_DRAFT,
       weight: weight != null ? String(weight) : '',
+      externalLoad: externalLoad != null ? String(externalLoad) : '',
       reps: planned.target_reps_min != null ? String(planned.target_reps_min) : '',
       duration:
         planned.target_duration_seconds != null ? String(planned.target_duration_seconds) : '',
@@ -218,12 +259,16 @@ export function ExerciseLogger({
       ? runningTimer.duration_seconds - remainingSeconds(runningTimer)
       : null;
     const durationValue = draft.duration !== '' ? Number(draft.duration) : durationFromTimer;
+    const { phase, setType } = phaseAndTypeForKind(draft.kind);
 
     onCompleteSet({
       exerciseId: exercise.id,
       setIndex: index,
-      setType: draft.setType,
+      phase,
+      setType,
       weight: showsWeight && draft.weight !== '' ? Number(draft.weight) : null,
+      externalLoad:
+        showsExternalLoad && draft.externalLoad !== '' ? Number(draft.externalLoad) : null,
       reps: showsReps && draft.reps !== '' ? Number(draft.reps) : null,
       durationSeconds: showsDuration ? durationValue : null,
       distanceMeters: showsDistance && draft.distance !== '' ? Number(draft.distance) : null,
@@ -240,7 +285,35 @@ export function ExerciseLogger({
 
   return (
     <div className="atlas-gym-exercise">
-      <h2>{exercise.name}</h2>
+      <div className="atlas-gym-exercise__header">
+        <h2>{exercise.name}</h2>
+        <button
+          type="button"
+          className="atlas-gym-exercise__menu-button"
+          aria-label={`${exercise.name} options`}
+          onClick={() => setShowContextSheet(true)}
+        >
+          &hellip;
+        </button>
+      </div>
+      {showContextSheet && (
+        <ExerciseContextSheet
+          exercise={exercise}
+          planned={planned}
+          allSessions={allSessions}
+          library={library}
+          canGroupWithNext={canGroupWithNext}
+          onGroupWithNext={
+            onGroupWithNext
+              ? () => {
+                  onGroupWithNext();
+                  setShowContextSheet(false);
+                }
+              : undefined
+          }
+          onClose={() => setShowContextSheet(false)}
+        />
+      )}
       <ExerciseMedia exercise={exercise} compact />
 
       {(() => {
@@ -285,6 +358,7 @@ export function ExerciseLogger({
           <tr>
             <th scope="col">Set</th>
             {showsWeight && <th scope="col">Weight</th>}
+            {showsExternalLoad && <th scope="col">Added lb</th>}
             {showsReps && <th scope="col">Reps</th>}
             {showsDuration && <th scope="col">Sec</th>}
             {showsDistance && <th scope="col">Meters</th>}
@@ -301,14 +375,17 @@ export function ExerciseLogger({
                 <tr key={performed.id}>
                   <td>
                     {index + 1}
-                    {performed.set_type !== 'working' && (
+                    {draftKindOf(performed) !== 'normal' && (
                       <span className="atlas-gym-exercise__set-type">
                         {' '}
-                        {SET_TYPE_LABELS[performed.set_type]}
+                        {DRAFT_KIND_LABELS[draftKindOf(performed)]}
                       </span>
                     )}
                   </td>
                   {showsWeight && <td>{performed.weight ?? '—'}</td>}
+                  {showsExternalLoad && (
+                    <td>{performed.external_load != null ? `+${performed.external_load}` : '—'}</td>
+                  )}
                   {showsReps && <td>{performed.reps ?? '—'}</td>}
                   {showsDuration && <td>{performed.duration_seconds ?? '—'}</td>}
                   {showsDistance && <td>{performed.distance_meters ?? '—'}</td>}
@@ -372,10 +449,10 @@ export function ExerciseLogger({
                   <select
                     className="atlas-gym-exercise__set-type-select"
                     aria-label={`Set ${index + 1} type`}
-                    value={draft.setType}
-                    onChange={(e) => updateDraft(index, { setType: e.target.value as SetType })}
+                    value={draft.kind}
+                    onChange={(e) => updateDraft(index, { kind: e.target.value as DraftSetKind })}
                   >
-                    {Object.entries(SET_TYPE_LABELS).map(([value, label]) => (
+                    {Object.entries(DRAFT_KIND_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -390,6 +467,19 @@ export function ExerciseLogger({
                       aria-label={`Set ${index + 1} weight`}
                       value={draft.weight}
                       onChange={(e) => updateDraft(index, { weight: e.target.value })}
+                      onFocus={(e) => e.target.select()}
+                    />
+                  </td>
+                )}
+                {showsExternalLoad && (
+                  <td>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0"
+                      aria-label={`Set ${index + 1} added load`}
+                      value={draft.externalLoad}
+                      onChange={(e) => updateDraft(index, { externalLoad: e.target.value })}
                       onFocus={(e) => e.target.select()}
                     />
                   </td>

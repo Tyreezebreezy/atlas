@@ -8,6 +8,7 @@ import type {
   PersonalRecord,
   Program,
   ProgramNote,
+  WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
 } from '@atlas/data-model';
@@ -23,6 +24,7 @@ export class AtlasDexie extends Dexie {
   milestones!: Table<Milestone, string>;
   benchmarks!: Table<Benchmark, string>;
   bodyMeasurements!: Table<BodyMeasurement, string>;
+  workoutOccurrences!: Table<WorkoutOccurrence, string>;
 
   constructor(name: string) {
     super(name);
@@ -40,6 +42,12 @@ export class AtlasDexie extends Dexie {
       milestones: 'id, exercise_id, deleted_at',
       benchmarks: 'id, metric, deleted_at',
       bodyMeasurements: 'id, date, deleted_at',
+    });
+    // v0.2.0: only the new store needs declaring -- every table from
+    // version(1) that isn't listed here carries over unchanged, per Dexie's
+    // own versioning model.
+    this.version(2).stores({
+      workoutOccurrences: 'id, program_id, effective_date, original_date, deleted_at',
     });
   }
 }

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { useGymMode } from '../gym/GymModeContext';
 import { HistoryScreen } from '../history/HistoryScreen';
+import { LogPastWorkoutScreen } from '../history/LogPastWorkoutScreen';
 import { EmptyScreen } from '../screens/EmptyScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { TodayScreen } from '../today/TodayScreen';
@@ -25,11 +26,12 @@ const ImportExportScreen = lazy(() =>
   import('../importexport/ImportExportScreen').then((m) => ({ default: m.ImportExportScreen })),
 );
 
-type MoreView = 'menu' | 'history' | 'settings' | 'body' | 'import-export';
+type MoreView = 'menu' | 'history' | 'log-past' | 'settings' | 'body' | 'import-export';
 
 function MoreTab() {
   const [view, setView] = useState<MoreView>('menu');
   if (view === 'history') return <HistoryScreen />;
+  if (view === 'log-past') return <LogPastWorkoutScreen onBack={() => setView('menu')} />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
   if (view === 'body') return <BodyScreen onBack={() => setView('menu')} />;
   if (view === 'import-export')
@@ -46,6 +48,13 @@ function MoreTab() {
           <button type="button" onClick={() => setView('history')} aria-label="History">
             <span className="atlas-library__item-name" aria-hidden="true">
               History
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" onClick={() => setView('log-past')} aria-label="Log Past Workout">
+            <span className="atlas-library__item-name" aria-hidden="true">
+              Log Past Workout
             </span>
           </button>
         </li>

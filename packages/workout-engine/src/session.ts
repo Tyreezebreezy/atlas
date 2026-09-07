@@ -3,6 +3,7 @@ import type {
   ExerciseGroup,
   PerformedSet,
   PlannedExercise,
+  SetPhase,
   SetType,
   WorkoutSession,
 } from '@atlas/data-model';
@@ -15,6 +16,13 @@ export interface StartSessionInput {
   plannedSnapshot: PlannedExercise[];
   /** Optional -- most workouts have no groups. Defaults to []. */
   groups?: ExerciseGroup[];
+  /** v0.2.0. Backdates the session for "Log Past Workout" -- omit for a
+   * normal session starting now. When set, pass `plannedCompletedAt` too
+   * so the eventual `completeWorkoutSession` call also lands on the
+   * correct historical date rather than the moment Finish happens to be
+   * tapped. */
+  startedAt?: string;
+  plannedCompletedAt?: string | null;
 }
 
 /**
@@ -32,8 +40,9 @@ export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
     deleted_at: null,
     name: input.name,
     status: 'in_progress',
-    started_at: now,
+    started_at: input.startedAt ?? now,
     completed_at: null,
+    planned_completed_at: input.plannedCompletedAt ?? null,
     program_id: input.programId,
     program_day_id: input.programDayId,
     template_id: input.templateId,
@@ -51,6 +60,9 @@ export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
 export interface LogSetInput {
   exerciseId: string;
   setIndex: number;
+  /** Defaults to 'work' when omitted -- only a handful of pre-v0.2.0
+   * callers (tests, mainly) construct this without an opinion on phase. */
+  phase?: SetPhase;
   setType: SetType;
   weight: number | null;
   reps: number | null;
@@ -59,6 +71,14 @@ export interface LogSetInput {
   rpe: number | null;
   rir: number | null;
   notes: string | null;
+  /** v0.2.0. Weighted-bodyweight added load -- see PerformedSet's doc comment. */
+  externalLoad?: number | null;
+  /** v0.2.0. Overrides the real-time "now" stamp -- pass the session's
+   * `planned_completed_at` for a Log Past Workout session so this set's
+   * chronology (PR attribution, cross-session ordering) reflects the
+   * backdated date instead of the moment it was actually typed in. Unset
+   * for every live session, so this is a no-op for normal logging. */
+  completedAt?: string;
 }
 
 /**
@@ -70,6 +90,7 @@ export function createPerformedSet(input: LogSetInput): PerformedSet {
     id: newId(),
     exercise_id: input.exerciseId,
     set_index: input.setIndex,
+    phase: input.phase ?? 'work',
     set_type: input.setType,
     weight: input.weight,
     reps: input.reps,
@@ -77,8 +98,9 @@ export function createPerformedSet(input: LogSetInput): PerformedSet {
     distance_meters: input.distanceMeters,
     rpe: input.rpe,
     rir: input.rir,
-    completed_at: new Date().toISOString(),
+    completed_at: input.completedAt ?? new Date().toISOString(),
     notes: input.notes,
+    external_load: input.externalLoad ?? null,
   };
 }
 
@@ -103,12 +125,17 @@ export function setSessionNote(session: WorkoutSession, note: string): WorkoutSe
   return { ...session, session_note: note || null, ...touch(session) };
 }
 
+/** Uses `session.planned_completed_at` (a historical entry's intended
+ * completion date, see `StartSessionInput`) when present, instead of the
+ * moment Finish happens to be tapped -- unset for every normal session, so
+ * this is a no-op change for the pre-v0.2.0 behavior. */
 export function completeWorkoutSession(session: WorkoutSession): WorkoutSession {
   const now = new Date().toISOString();
   return {
     ...session,
     status: 'completed',
-    completed_at: now,
+    completed_at: session.planned_completed_at ?? now,
+    planned_completed_at: null,
     active_timer: null,
     updated_at: now,
     version: session.version + 1,

@@ -6,6 +6,8 @@ import type {
   PersonalRecord,
   Program,
   ProgramNote,
+  ProgressionPolicy,
+  WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
 } from '@atlas/data-model';
@@ -24,12 +26,18 @@ export interface PlanExerciseTarget {
   target_reps_min: number | null;
   target_reps_max: number | null;
   target_weight: number | null;
+  /** v0.2.0. See `PlannedExercise.target_external_load`'s doc comment. */
+  target_external_load?: number | null;
   target_rpe: number | null;
   target_rir: number | null;
   target_duration_seconds: number | null;
   target_distance_meters: number | null;
   rest_seconds: number | null;
   notes: string | null;
+  /** v0.2.0. A Plan Export deliberately includes progression configuration
+   * (it's reusable training setup, not personal history) -- see
+   * docs/IMPORT_FORMAT.md "Plan export vs. full backup." */
+  progression_policy?: ProgressionPolicy | null;
   /** Which of `PlanWorkout.groups` (by `key`) this exercise belongs to, if
    * any -- an arbitrary caller-assigned string rather than an array index,
    * since a skipped/unresolved exercise is dropped entirely in
@@ -108,6 +116,11 @@ export interface AtlasBackupDocument {
     personal_records: PersonalRecord[];
     milestones: Milestone[];
     body_measurements: BodyMeasurement[];
+    /** v0.2.0. Optional: absent on a backup exported before this field
+     * existed. Restoring such a file simply has no occurrences to bring
+     * back (see restoreBackup.ts's `?? []`), same as any other pre-v0.2.0
+     * backup restored onto a v0.2.0+ install. */
+    workout_occurrences?: WorkoutOccurrence[];
   };
 }
 

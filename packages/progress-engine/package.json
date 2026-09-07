@@ -10,9 +10,7 @@
   },
   "dependencies": {
     "@atlas/data-model": "*",
-    "@atlas/pr-engine": "*"
-  },
-  "devDependencies": {
+    "@atlas/pr-engine": "*",
     "@atlas/workout-engine": "*"
   }
 }

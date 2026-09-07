@@ -5,6 +5,11 @@ import { useEffect, useRef } from 'react';
  * Wake Lock API is unsupported, denied, or the page isn't visible yet --
  * there's no meaningful fallback UI for that, the workout just proceeds
  * without it.
+ *
+ * v0.2.0: the caller passes the whole active-session condition, not just
+ * "a timer is running" -- a workout is still "in progress" between sets
+ * while the owner is typing weight/reps with no timer active, and the
+ * screen must not lock then either.
  */
 export function useWakeLock(active: boolean): void {
   const lockRef = useRef<WakeLockSentinel | null>(null);

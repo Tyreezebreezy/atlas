@@ -1,6 +1,25 @@
 import type { SyncMeta } from './sync';
+import type { ProgressionDecision, ProgressionPolicy } from './progression';
 
-export type SetType = 'working' | 'warmup' | 'drop' | 'amrap' | 'failure';
+/**
+ * v0.2.0. Split out of the old overloaded `SetType` (which conflated
+ * "warmup vs. work" with "normal vs. amrap/drop/etc." into one enum -- see
+ * docs/DATA_MODEL.md's v0.1.1 "Set-type flexibility" note for the prior
+ * shape). A set from before this field existed has no `phase` at runtime
+ * despite the required type; every read site goes through `setPhaseOf()`
+ * (`packages/workout-engine/src/setClassification.ts`), which falls back
+ * to the old `set_type === 'warmup'` convention, rather than reading
+ * `.phase` directly. See docs/PROGRESSION.md "Set phase migration."
+ */
+export type SetPhase = 'warmup' | 'work';
+
+/** v0.2.0: 'working' and 'warmup' (the phase, mixed into this enum before
+ * the split above) are no longer produced by new code -- 'working' maps to
+ * 'normal' via `setTypeOf()`, and warmup-ness now lives on `phase`. New:
+ * 'rest_pause'. Old stored values are never rewritten in place; read sites
+ * normalize through `setTypeOf()`, never this literal union, for the same
+ * reason as `setPhaseOf()` above. */
+export type SetType = 'normal' | 'amrap' | 'failure' | 'drop' | 'rest_pause';
 
 /**
  * Timestamp-based, not decrement-based: `ends_at` is always the source of
@@ -48,6 +67,11 @@ export interface PlannedExercise {
   target_reps_min: number | null;
   target_reps_max: number | null;
   target_weight: number | null;
+  /** v0.2.0. Target added load for a weighted bodyweight movement -- the
+   * planned-side counterpart to `PerformedSet.external_load`, kept
+   * separate from `target_weight` for the same reason. Optional, same
+   * reasoning as `progression_policy` below. */
+  target_external_load?: number | null;
   target_rpe: number | null;
   target_rir: number | null;
   target_duration_seconds: number | null;
@@ -55,6 +79,21 @@ export interface PlannedExercise {
   rest_seconds: number | null;
   notes: string | null;
   group_id: string | null;
+  /** v0.2.0. Exercise-level progression override -- wins over
+   * `Program.default_progression_policy` when set. Optional (not
+   * required + null like most fields here) for the same reason as
+   * `ExerciseMedia.provider`: a PlannedExercise from before this field
+   * existed has no opinion, and nothing derives a required fallback from
+   * its absence -- `effectiveProgressionPolicy()` in
+   * `packages/program-engine/src/progressionPolicy.ts` already treats
+   * missing and `null` identically. */
+  progression_policy?: ProgressionPolicy | null;
+  /** v0.2.0. Populated only on the copy inside
+   * `WorkoutSession.planned_snapshot` at session-start time -- never on a
+   * WorkoutTemplate's own `exercises[]`, since provenance describes a
+   * specific session's target, not a reusable plan. See
+   * docs/PROGRESSION.md. */
+  progression_decision?: ProgressionDecision | null;
 }
 
 export type ExerciseGroupType = 'superset' | 'circuit';
@@ -70,6 +109,13 @@ export interface ExerciseGroup {
   type: ExerciseGroupType;
   rounds: number;
   rest_after_seconds: number | null;
+  /** v0.2.0. Rest inserted after EACH member's set, before the next member
+   * in the round -- distinct from `rest_after_seconds` (after the whole
+   * round). Null/absent (the pre-v0.2.0 and default behavior): no rest
+   * between members, matching the owner's Pre-Going-Out Pump guide's
+   * "Exercise A -> Exercise B -> end round -> rest" structure. See
+   * docs/DATA_MODEL.md "Rest hierarchy." */
+  member_rest_seconds?: number | null;
 }
 
 /**
@@ -83,6 +129,9 @@ export interface WorkoutTemplate extends SyncMeta {
   exercises: PlannedExercise[];
   is_quick_workout: boolean;
   groups: ExerciseGroup[];
+  /** v0.2.0. See `Program.import_fingerprint`'s doc comment -- same
+   * mechanism, for a standalone/Quick Workout import. */
+  import_fingerprint?: string | null;
 }
 
 export type WorkoutSessionStatus = 'in_progress' | 'completed' | 'discarded' | 'skipped';
@@ -92,6 +141,13 @@ export interface WorkoutSession extends SyncMeta {
   status: WorkoutSessionStatus;
   started_at: string;
   completed_at: string | null;
+  /** v0.2.0. Set only for a historical ("Log Past Workout") entry, where
+   * `started_at` is backdated and the real elapsed time isn't being lived
+   * through in real time -- `completeWorkoutSession` uses this as
+   * `completed_at` when present (and clears it), falling back to the
+   * actual current time for every normal session, exactly the pre-v0.2.0
+   * behavior. See docs/DATA_MODEL.md "Historical workouts." */
+  planned_completed_at?: string | null;
   program_id: string | null;
   program_day_id: string | null;
   template_id: string | null;
@@ -115,6 +171,17 @@ export interface WorkoutSession extends SyncMeta {
   /** Only set when status is 'skipped' -- the whole workout was declined, not started. */
   skip_reason: string | null;
   replacements: ExerciseReplacement[];
+  /** v0.2.0. Fully logged, fully eligible for PRs -- this only tells
+   * progression-baseline lookup to skip this session when finding "the
+   * last normal session to progress from" (see
+   * `packages/program-engine/src/progressionDecision.ts`). Absent/false
+   * on every session before this field existed and on every normal
+   * session going forward. */
+  is_deload?: boolean;
+  /** v0.2.0. Most-specific tier of the rest hierarchy -- set for the
+   * remainder of this one session only, never written back to the
+   * template/program. See docs/DATA_MODEL.md "Rest hierarchy." */
+  rest_override_seconds?: number | null;
 }
 
 export interface PerformedSet {
@@ -130,4 +197,15 @@ export interface PerformedSet {
   rir: number | null;
   completed_at: string;
   notes: string | null;
+  /** v0.2.0. See the `SetPhase` doc comment above for the migration story.
+   * Read via `setPhaseOf()`, never this field directly, so a pre-v0.2.0
+   * set (which has none) is classified correctly. */
+  phase?: SetPhase;
+  /** v0.2.0. Added load for a weighted bodyweight movement (e.g. a dip
+   * belt on a weighted pull-up) -- kept separate from `weight`, which
+   * means something different (a barbell/dumbbell/machine load for a
+   * `reps_weight` exercise) and must never be conflated with it. Null for
+   * every `reps_weight` set and for an unweighted `reps_bodyweight` set.
+   * See docs/PROGRESSION.md "Bodyweight." */
+  external_load?: number | null;
 }

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import {
   applyImport,
   buildImportPreview,
+  computeImportFingerprint,
+  findExistingImportByFingerprint,
   parseHtmlPlan,
   parsePasteText,
   toHtmlImportOptions,
@@ -9,6 +11,7 @@ import {
   type HtmlImportOption,
   type ImportPreview,
   type ImportResolutions,
+  type ParsedPlanInput,
 } from '@atlas/import-export';
 import { useStorage } from '../storage/StorageContext';
 import { ImportPreviewPanel } from './ImportPreviewPanel';
@@ -20,7 +23,13 @@ const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 type Step =
   | { step: 'source'; error: string | null }
   | { step: 'choose-html-workout'; options: HtmlImportOption[]; unparsedText: string[] }
-  | { step: 'preview'; preview: ImportPreview; unparsedLines: string[] }
+  | {
+      step: 'preview';
+      preview: ImportPreview;
+      unparsedLines: string[];
+      fingerprint: string;
+      duplicateOf: string | null;
+    }
   | { step: 'saving' }
   | { step: 'done'; summary: string };
 
@@ -42,9 +51,32 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
   const [state, setState] = useState<Step>({ step: 'source', error: null });
   const [resolutions, setResolutions] = useState<ImportResolutions>({});
 
+  /** Builds the preview AND checks whether this exact source content has
+   * already been imported before (see docs/IMPORT_FORMAT.md "Import
+   * idempotency") -- the one place every input path (paste, .json, .html)
+   * converges before showing the approve/reject screen. */
+  async function goToPreview(source: ParsedPlanInput, unparsedLines: string[]) {
+    if (!storage) return;
+    const [library, programs, templates] = await Promise.all([
+      storage.exercises.getAll(),
+      storage.programs.getAll(),
+      storage.workoutTemplates.getAll(),
+    ]);
+    const preview = buildImportPreview(source, library);
+    const fingerprint = computeImportFingerprint(source);
+    const duplicate = findExistingImportByFingerprint(fingerprint, programs, templates);
+    setResolutions({});
+    setState({
+      step: 'preview',
+      preview,
+      unparsedLines,
+      fingerprint,
+      duplicateOf: duplicate?.name ?? null,
+    });
+  }
+
   async function parseAndPreview(kind: 'text' | 'json' | 'html', text: string, fileName = '') {
     if (!storage) return;
-    const library = await storage.exercises.getAll();
 
     if (kind === 'html') {
       const parsed = parseHtmlPlan(text);
@@ -57,9 +89,7 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
         return;
       }
       if (options.length === 1 && options[0]) {
-        const preview = buildImportPreview(options[0].input, library);
-        setResolutions({});
-        setState({ step: 'preview', preview, unparsedLines: parsed.unparsedText });
+        await goToPreview(options[0].input, parsed.unparsedText);
         return;
       }
       setState({ step: 'choose-html-workout', options, unparsedText: parsed.unparsedText });
@@ -93,16 +123,12 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
         });
         return;
       }
-      const preview = buildImportPreview(validated.value, library);
-      setResolutions({});
-      setState({ step: 'preview', preview, unparsedLines: [] });
+      await goToPreview(validated.value, []);
       return;
     }
 
     const { result, unparsedLines } = parsePasteText(text);
-    const preview = buildImportPreview(result, library);
-    setResolutions({});
-    setState({ step: 'preview', preview, unparsedLines });
+    await goToPreview(result, unparsedLines);
   }
 
   function handlePasteSubmit() {
@@ -130,17 +156,13 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
   }
 
   async function chooseHtmlOption(option: HtmlImportOption, unparsedText: string[]) {
-    if (!storage) return;
-    const library = await storage.exercises.getAll();
-    const preview = buildImportPreview(option.input, library);
-    setResolutions({});
-    setState({ step: 'preview', preview, unparsedLines: unparsedText });
+    await goToPreview(option.input, unparsedText);
   }
 
   async function handleApprove() {
     if (!storage || state.step !== 'preview') return;
     setState({ step: 'saving' });
-    const result = await applyImport(state.preview, resolutions, storage);
+    const result = await applyImport(state.preview, resolutions, storage, state.fingerprint);
     const savedName = result.workout_template?.name ?? result.program?.name ?? 'Import';
     const createdCount = result.created_exercises.length;
     const summary = `Saved "${savedName}".${createdCount > 0 ? ` Created ${createdCount} custom exercise${createdCount === 1 ? '' : 's'}.` : ''}`;
@@ -192,6 +214,15 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
   if (state.step === 'preview') {
     return (
       <>
+        {state.duplicateOf && (
+          <div className="atlas-importexport__unparsed">
+            <p>
+              This looks like the same content as an existing "{state.duplicateOf}" -- approving
+              will create a separate duplicate, not update it. Go back and use the existing one
+              instead if that's not what you want.
+            </p>
+          </div>
+        )}
         {state.unparsedLines.length > 0 && (
           <div className="atlas-importexport__unparsed">
             <p>These lines weren&rsquo;t recognized and were skipped:</p>

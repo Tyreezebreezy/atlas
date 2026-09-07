@@ -11,7 +11,8 @@
   "dependencies": {
     "@atlas/core": "*",
     "@atlas/data-model": "*",
-    "@atlas/storage": "*"
+    "@atlas/storage": "*",
+    "@atlas/workout-engine": "*"
   },
   "devDependencies": {
     "fake-indexeddb": "^6.0.0"

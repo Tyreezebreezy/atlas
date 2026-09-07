@@ -35,7 +35,7 @@ describe('replaceExercise', () => {
     const set = createPerformedSet({
       exerciseId: 'ex-1',
       setIndex: 0,
-      setType: 'working',
+      setType: 'normal',
       weight: 100,
       reps: 8,
       durationSeconds: null,

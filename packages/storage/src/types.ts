@@ -8,6 +8,7 @@ import type {
   Program,
   ProgramNote,
   SyncMeta,
+  WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
 } from '@atlas/data-model';
@@ -37,4 +38,6 @@ export interface AtlasStorage {
   milestones: Repository<Milestone>;
   benchmarks: Repository<Benchmark>;
   bodyMeasurements: Repository<BodyMeasurement>;
+  /** v0.2.0. See `WorkoutOccurrence`'s doc comment -- most days never get a row here. */
+  workoutOccurrences: Repository<WorkoutOccurrence>;
 }

@@ -1,19 +1,72 @@
-import type { Exercise, PlannedExercise, TimerState, WorkoutSession } from '@atlas/data-model';
+import type {
+  Exercise,
+  ExerciseGroup,
+  PlannedExercise,
+  Program,
+  TimerState,
+  WorkoutSession,
+} from '@atlas/data-model';
 
-/** Tier 3 of the rest-duration hierarchy: used only when neither the workout nor the exercise specifies one. */
+/** Weakest tier of the rest-duration hierarchy: used only when nothing more specific applies anywhere. */
 export const DEFAULT_REST_SECONDS = 90;
 
+export interface RestContext {
+  /** Most specific tier -- set for the remainder of one session only. */
+  session?: Pick<WorkoutSession, 'rest_override_seconds'> | null;
+  planned: PlannedExercise;
+  /** When resolving rest for a member mid-round (not after the round ends,
+   * which uses `resolveGroupRestSeconds` instead), pass the group so its
+   * `member_rest_seconds` tier applies between the exercise tier and the
+   * program/library tiers. Omit for an ungrouped exercise. */
+  group?: Pick<ExerciseGroup, 'member_rest_seconds'> | null;
+  exercise?: Pick<Exercise, 'default_rest_seconds'> | null;
+  program?: Pick<Program, 'default_rest_seconds'> | null;
+}
+
 /**
- * Rest-duration priority: workout-specific override (this template's planned
- * rest for this slot) -> exercise library default -> global fallback. Higher
- * tiers win outright rather than blending, so the source of a given rest
- * duration is always unambiguous.
+ * Rest-duration priority, most specific wins outright (no blending): a
+ * session-only override for right now -> this plan slot's own rest ->
+ * (mid-round only) the group's intra-round member rest -> the exercise
+ * library's default -> the active program's default -> a global fallback.
+ * See docs/DATA_MODEL.md "Rest hierarchy."
  */
-export function resolveRestSeconds(
-  planned: PlannedExercise,
-  exercise: Exercise | undefined,
+export function resolveRestSeconds(ctx: RestContext): number {
+  return (
+    ctx.session?.rest_override_seconds ??
+    ctx.planned.rest_seconds ??
+    ctx.group?.member_rest_seconds ??
+    ctx.exercise?.default_rest_seconds ??
+    ctx.program?.default_rest_seconds ??
+    DEFAULT_REST_SECONDS
+  );
+}
+
+/**
+ * Rest after a superset/circuit's full round (after its last member), not
+ * between members within one -- see `ExerciseGroup.rest_after_seconds`'s
+ * doc comment. When the group itself has no explicit value, falls back to
+ * the longest of its members' own `rest_seconds` rather than picking
+ * arbitrarily or defaulting to none -- the deterministic rule the v0.2.0
+ * handoff asks for when members disagree ("preferred default: longest
+ * relevant member rest"). Falls through the same session/exercise/program
+ * tiers as `resolveRestSeconds` only once no group-level or member-level
+ * value exists at all.
+ */
+export function resolveGroupRestSeconds(
+  ctx: Omit<RestContext, 'planned' | 'group'> & {
+    group: Pick<ExerciseGroup, 'rest_after_seconds'>;
+    members: PlannedExercise[];
+  },
 ): number {
-  return planned.rest_seconds ?? exercise?.default_rest_seconds ?? DEFAULT_REST_SECONDS;
+  if (ctx.group.rest_after_seconds != null) return ctx.group.rest_after_seconds;
+  const memberRests = ctx.members.map((m) => m.rest_seconds).filter((r): r is number => r != null);
+  if (memberRests.length > 0) return Math.max(...memberRests);
+  return (
+    ctx.session?.rest_override_seconds ??
+    ctx.exercise?.default_rest_seconds ??
+    ctx.program?.default_rest_seconds ??
+    DEFAULT_REST_SECONDS
+  );
 }
 
 function timerFrom(

@@ -12,6 +12,8 @@ import {
   previousPerformance,
   removePerformedSet,
   replaceExercise,
+  groupExercisesInSession,
+  resolveGroupRestSeconds,
   resolveRestSeconds,
   applyExerciseReplacementToTemplate,
   setSessionNote,
@@ -29,16 +31,20 @@ import type {
   ExerciseReplacement,
   Milestone,
   PersonalRecord,
+  Program,
+  WorkoutOccurrence,
   WorkoutSession,
 } from '@atlas/data-model';
-import { advanceProgramSequence } from '@atlas/program-engine';
+import { advanceProgramSequence, completeOccurrence, findOccurrence } from '@atlas/program-engine';
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
+import { loadSettings } from '../settings/settings';
 import { useStorage } from '../storage/StorageContext';
 import { AddExercisePanel } from './AddExercisePanel';
 import { bestPRForExercise } from './bestPR';
 import { ExerciseLogger } from './ExerciseLogger';
 import { ReplaceExercisePanel } from './ReplaceExercisePanel';
+import { fireTimerCompletionSignal } from './timerSignal';
 import { RestTimer } from './RestTimer';
 import { SupersetRound } from './SupersetRound';
 import { useWakeLock } from './useWakeLock';
@@ -72,6 +78,8 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
   const [priorSessions, setPriorSessions] = useState<WorkoutSession[]>([]);
+  const [activeProgram, setActiveProgram] = useState<Program | null>(null);
+  const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
   const [finished, setFinished] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
@@ -87,12 +95,19 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     if (!storage) return;
     void (async () => {
       await ensureBuiltInMilestonesSeeded(storage);
-      const [existing, allExercises, allSessions, allPRs] = await Promise.all([
-        storage.workoutSessions.get(sessionId),
-        storage.exercises.getAll(),
-        storage.workoutSessions.getAll(),
-        storage.personalRecords.getAll(),
-      ]);
+      const [existing, allExercises, allSessions, allPRs, allPrograms, allOccurrences] =
+        await Promise.all([
+          storage.workoutSessions.get(sessionId),
+          storage.exercises.getAll(),
+          storage.workoutSessions.getAll(),
+          storage.personalRecords.getAll(),
+          storage.programs.getAll(),
+          storage.workoutOccurrences.getAll(),
+        ]);
+      setActiveProgram(
+        (existing?.program_id && allPrograms.find((p) => p.id === existing.program_id)) || null,
+      );
+      setOccurrences(allOccurrences);
       if (existing) {
         setSession(existing);
         setNoteDraft(existing.session_note ?? '');
@@ -109,7 +124,10 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     })();
   }, [storage, sessionId]);
 
-  useWakeLock(session?.active_timer != null);
+  // v0.2.0: the whole active session, not just while a timer is running --
+  // a user typing weight/reps between sets with no timer active must not
+  // have the screen lock mid-workout either. See useWakeLock's doc comment.
+  useWakeLock(session?.status === 'in_progress');
 
   if (!storage || !session) {
     return (
@@ -134,10 +152,18 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
 
   async function handleCompleteSet(input: LogSetInput) {
     // Immediate autosave: every completed set is written the instant it's marked done.
-    let updated = addPerformedSet(currentSession, createPerformedSet(input));
+    let updated = addPerformedSet(
+      currentSession,
+      createPerformedSet({ ...input, completedAt: currentSession.planned_completed_at ?? undefined }),
+    );
     const planned = currentSession.planned_snapshot.find((p) => p.exercise_id === input.exerciseId);
     if (planned) {
-      const rest = resolveRestSeconds(planned, exercises.get(input.exerciseId));
+      const rest = resolveRestSeconds({
+        planned,
+        session: currentSession,
+        exercise: exercises.get(input.exerciseId),
+        program: activeProgram,
+      });
       updated = startRestTimer(updated, input.exerciseId, rest);
     }
     await persist(updated);
@@ -158,6 +184,23 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       const program = await activeStorage.programs.get(completed.program_id);
       if (program) {
         await activeStorage.programs.put(advanceProgramSequence(program, completed.program_day_id));
+      }
+      // Only touches a slot that already has an occurrence row (moved,
+      // skipped-then-reconsidered, or replaced) -- the ordinary unmoved
+      // case intentionally never gets one at all (see WorkoutOccurrence's
+      // doc comment), so most completions are correctly a no-op here.
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const existingOccurrence = findOccurrence(occurrences, completed.program_day_id, todayIso);
+      if (existingOccurrence) {
+        await activeStorage.workoutOccurrences.put(
+          completeOccurrence(
+            existingOccurrence,
+            completed.program_id,
+            completed.program_day_id,
+            todayIso,
+            completed.id,
+          ),
+        );
       }
     }
 
@@ -247,22 +290,46 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     setShowAddPanel(false);
   }
 
+  /** Live superset/circuit creation (v0.2.0 item 28) -- Freestyle has no
+   * template to pre-author a group in, so this is the only way to group
+   * exercises there; works the same for any session. Silently a no-op via
+   * groupExercisesInSession's own guards if the next slot is already
+   * grouped or either exercise already has a logged set. */
+  async function handleGroupWithNext() {
+    if (!currentPlanned) return;
+    const nextSlot = slots[exerciseIndex + 1];
+    if (!nextSlot || nextSlot.kind !== 'single') return;
+    const updated = groupExercisesInSession(currentSession, [
+      currentPlanned.exercise_id,
+      nextSlot.planned.exercise_id,
+    ]);
+    await persist(updated);
+  }
+
   async function handleCompleteRound(
     sets: LogSetInput[],
     slot: Extract<GymSlot, { kind: 'group' }>,
   ) {
     let updated = currentSession;
     for (const input of sets) {
-      updated = addPerformedSet(updated, createPerformedSet(input));
+      updated = addPerformedSet(
+        updated,
+        createPerformedSet({ ...input, completedAt: currentSession.planned_completed_at ?? undefined }),
+      );
     }
     // Rest is after the group's round (after its last member), not
     // between members within a round -- keyed to the last member so the
     // rest timer's exercise_id still points at a real planned exercise.
-    if (slot.group.rest_after_seconds != null) {
-      const lastMember = slot.members[slot.members.length - 1];
-      if (lastMember) {
-        updated = startRestTimer(updated, lastMember.exercise_id, slot.group.rest_after_seconds);
-      }
+    const lastMember = slot.members[slot.members.length - 1];
+    if (lastMember) {
+      const rest = resolveGroupRestSeconds({
+        group: slot.group,
+        members: slot.members,
+        session: currentSession,
+        exercise: exercises.get(lastMember.exercise_id),
+        program: activeProgram,
+      });
+      updated = startRestTimer(updated, lastMember.exercise_id, rest);
     }
     await persist(updated);
   }
@@ -300,7 +367,11 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
           timer={session.active_timer}
           onAdjust={(delta) => void handleAdjustRest(delta)}
           onSkip={() => void handleClearTimer()}
-          onComplete={() => void handleClearTimer()}
+          onComplete={() => {
+            fireTimerCompletionSignal(loadSettings());
+            void handleClearTimer();
+          }}
+          flashEnabled={loadSettings().timerFlashEnabled}
         />
       )}
 
@@ -345,6 +416,13 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                   previousSets={previousSets}
                   bestPR={bestPR}
                   activeTimer={session.active_timer}
+                  allSessions={priorSessions}
+                  library={[...exercises.values()]}
+                  canGroupWithNext={
+                    slots[exerciseIndex + 1]?.kind === 'single' &&
+                    performedForExercise.length === 0
+                  }
+                  onGroupWithNext={() => void handleGroupWithNext()}
                   onCompleteSet={(input) => void handleCompleteSet(input)}
                   onRemoveCompletedSet={(id) => void handleRemoveSet(id)}
                   onStartExerciseTimer={(duration) => void handleStartExerciseTimer(duration)}

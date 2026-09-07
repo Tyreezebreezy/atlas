@@ -9,3 +9,5 @@ export * from './skip';
 export * from './replace';
 export * from './groups';
 export * from './addExercise';
+export * from './setClassification';
+export * from './plateCalculator';

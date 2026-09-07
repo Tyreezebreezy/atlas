@@ -18,6 +18,13 @@ export function ExerciseDetail({ exercise, storage, onBack }: ExerciseDetailProp
   const [notes, setNotes] = useState<ExerciseNote[]>([]);
   const [draft, setDraft] = useState('');
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
+  const [isFavorite, setIsFavorite] = useState(exercise.is_favorite ?? false);
+
+  async function toggleFavorite() {
+    const next = !isFavorite;
+    setIsFavorite(next);
+    await storage.exercises.put({ ...exercise, is_favorite: next });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +63,18 @@ export function ExerciseDetail({ exercise, storage, onBack }: ExerciseDetailProp
       <button type="button" className="atlas-exercise-detail__back" onClick={onBack}>
         &larr; Back
       </button>
-      <h1>{exercise.name}</h1>
+      <div className="atlas-exercise-detail__title-row">
+        <h1>{exercise.name}</h1>
+        <button
+          type="button"
+          className="atlas-exercise-detail__favorite"
+          aria-pressed={isFavorite}
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          onClick={() => void toggleFavorite()}
+        >
+          {isFavorite ? '★' : '☆'}
+        </button>
+      </div>
       <p className="atlas-exercise-detail__meta">
         {[exercise.category, exercise.equipment.join(', '), exercise.is_custom ? 'custom' : null]
           .filter(Boolean)

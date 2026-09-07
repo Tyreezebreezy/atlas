@@ -6,12 +6,25 @@ import {
 } from '@atlas/workout-engine';
 import {
   advanceProgramSequence,
+  applyProgressionToSession,
   currentSequentialDay,
+  findOccurrence,
+  moveOccurrence,
   programProgressionMode,
 } from '@atlas/program-engine';
-import type { Program, WorkoutSession, WorkoutTemplate } from '@atlas/data-model';
+import type {
+  Exercise,
+  Program,
+  WorkoutOccurrence,
+  WorkoutSession,
+  WorkoutTemplate,
+} from '@atlas/data-model';
 import { useGymMode } from '../gym/GymModeContext';
 import { useStorage } from '../storage/StorageContext';
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 interface SkipRowProps {
   onCancel: () => void;
@@ -40,6 +53,34 @@ function SkipRow({ onCancel, onConfirm }: SkipRowProps) {
   );
 }
 
+interface MoveRowProps {
+  onCancel: () => void;
+  onConfirm: (newDate: string) => void;
+}
+
+/** Move never rewrites the Program template -- it records a
+ * WorkoutOccurrence with the original date preserved and a new effective
+ * date. See docs/DATA_MODEL.md "Scheduling." */
+function MoveRow({ onCancel, onConfirm }: MoveRowProps) {
+  const [date, setDate] = useState(todayIso());
+  return (
+    <div className="atlas-today__skip-row">
+      <input
+        type="date"
+        aria-label="Move to date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+      />
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+      <button type="button" onClick={() => onConfirm(date)} disabled={!date}>
+        Confirm Move
+      </button>
+    </div>
+  );
+}
+
 export function TodayScreen() {
   const storage = useStorage();
   const { enterGymMode } = useGymMode();
@@ -49,17 +90,26 @@ export function TodayScreen() {
   const [templates, setTemplates] = useState<Map<string, WorkoutTemplate>>(new Map());
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [skippingKey, setSkippingKey] = useState<string | null>(null);
+  const [movingKey, setMovingKey] = useState<string | null>(null);
+  const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
+  const [exercisesById, setExercisesById] = useState<Map<string, Exercise>>(new Map());
+  const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
 
   async function reload() {
     if (!storage) return;
-    const [sessions, programs, allTemplates] = await Promise.all([
+    const [sessions, programs, allTemplates, exercises, allOccurrences] = await Promise.all([
       storage.workoutSessions.getAll(),
       storage.programs.getAll(),
       storage.workoutTemplates.getAll(),
+      storage.exercises.getAll(),
+      storage.workoutOccurrences.getAll(),
     ]);
     setActiveSession(sessions.find((s) => s.status === 'in_progress') ?? null);
     setActiveProgram(programs.find((p) => p.is_active) ?? null);
     setTemplates(new Map(allTemplates.map((t) => [t.id, t])));
+    setAllSessions(sessions);
+    setExercisesById(new Map(exercises.map((e) => [e.id, e])));
+    setOccurrences(allOccurrences);
     setLoading(false);
   }
 
@@ -72,15 +122,43 @@ export function TodayScreen() {
     template: WorkoutTemplate,
     programId: string | null,
     programDayId: string | null,
+    isDeload = false,
   ) {
     if (!storage) return;
+    // Deload sessions are fully logged like any other -- they only need to
+    // be excluded from future progression baselines (see
+    // findPreviousNormalSession), never from progression itself: a deload
+    // day's own target still resolves from the last *normal* session, same
+    // as any other day.
+    const plannedSnapshot = applyProgressionToSession(
+      template.exercises,
+      activeProgram,
+      exercisesById,
+      allSessions,
+    );
     const session = startWorkoutSession({
       name: template.name,
       templateId: template.id,
       programId,
       programDayId,
-      plannedSnapshot: template.exercises,
+      plannedSnapshot,
       groups: template.groups,
+    });
+    await storage.workoutSessions.put(isDeload ? { ...session, is_deload: true } : session);
+    enterGymMode(session.id);
+  }
+
+  /** Start with an empty workout -- no Program or template required. Uses
+   * the exact same session-lifecycle engine as every other workout; only
+   * the entry point differs (see docs/DATA_MODEL.md "Freestyle"). */
+  async function startFreestyle() {
+    if (!storage) return;
+    const session = startWorkoutSession({
+      name: 'Freestyle Workout',
+      templateId: null,
+      programId: null,
+      programDayId: null,
+      plannedSnapshot: [],
     });
     await storage.workoutSessions.put(session);
     enterGymMode(session.id);
@@ -117,6 +195,19 @@ export function TodayScreen() {
       if (program) await storage.programs.put(advanceProgramSequence(program, programDayId));
     }
     setSkippingKey(null);
+    await reload();
+  }
+
+  /** Records a WorkoutOccurrence for today's slot rather than editing the
+   * Program -- the template/day this occurrence points at is unchanged;
+   * only where it's scheduled moves. See docs/DATA_MODEL.md "Scheduling." */
+  async function handleMove(programId: string, programDayId: string, newDate: string) {
+    if (!storage) return;
+    const originalDate = todayIso();
+    const existing = findOccurrence(occurrences, programDayId, originalDate);
+    const occurrence = moveOccurrence(existing, programId, programDayId, originalDate, newDate);
+    await storage.workoutOccurrences.put(occurrence);
+    setMovingKey(null);
     await reload();
   }
 
@@ -186,6 +277,14 @@ export function TodayScreen() {
     <div className="atlas-today">
       <h1>Today</h1>
 
+      <button
+        type="button"
+        className="atlas-today__freestyle"
+        onClick={() => void startFreestyle()}
+      >
+        Start Freestyle Workout
+      </button>
+
       {activeProgram && programProgressionMode(activeProgram) === 'sequential' ? (
         <section>
           <h2>{activeProgram.name}</h2>
@@ -195,6 +294,7 @@ export function TodayScreen() {
               return <p className="atlas-program-screen__empty">This program has no days yet.</p>;
             }
             const template = templates.get(next.day.template_id);
+            const todaysOccurrence = findOccurrence(occurrences, next.day.id, todayIso());
             if (skippingKey === next.day.id && template) {
               return (
                 <ul className="atlas-program-screen__list">
@@ -203,6 +303,20 @@ export function TodayScreen() {
                       onCancel={() => setSkippingKey(null)}
                       onConfirm={(reason) =>
                         void handleSkip(template, activeProgram.id, next.day.id, reason)
+                      }
+                    />
+                  </li>
+                </ul>
+              );
+            }
+            if (movingKey === next.day.id) {
+              return (
+                <ul className="atlas-program-screen__list">
+                  <li>
+                    <MoveRow
+                      onCancel={() => setMovingKey(null)}
+                      onConfirm={(newDate) =>
+                        void handleMove(activeProgram.id, next.day.id, newDate)
                       }
                     />
                   </li>
@@ -225,6 +339,8 @@ export function TodayScreen() {
                     </span>
                     <span className="atlas-library__item-meta" aria-hidden="true">
                       {template ? template.name : 'Workout not found'}
+                      {todaysOccurrence?.status === 'moved' &&
+                        ` — moved to ${todaysOccurrence.effective_date}`}
                     </span>
                   </button>
                   <button
@@ -235,6 +351,27 @@ export function TodayScreen() {
                     aria-label={`Skip ${next.day.label || 'Day'}`}
                   >
                     Skip
+                  </button>
+                  <button
+                    type="button"
+                    className="atlas-program-screen__activate"
+                    disabled={!template}
+                    onClick={() => setMovingKey(next.day.id)}
+                    aria-label={`Move ${next.day.label || 'Day'}`}
+                  >
+                    Move
+                  </button>
+                  <button
+                    type="button"
+                    className="atlas-program-screen__activate"
+                    disabled={!template}
+                    onClick={() =>
+                      template && startFromTemplate(template, activeProgram.id, next.day.id, true)
+                    }
+                    aria-label={`Start ${next.day.label || 'Day'} as a deload`}
+                    title="Fully logged, but won't become the baseline for future progression"
+                  >
+                    Start as Deload
                   </button>
                 </li>
               </ul>
@@ -252,6 +389,7 @@ export function TodayScreen() {
               <ul key={week.id} className="atlas-program-screen__list">
                 {week.days.map((day) => {
                   const template = templates.get(day.template_id);
+                  const todaysOccurrence = findOccurrence(occurrences, day.id, todayIso());
                   if (skippingKey === day.id && template) {
                     return (
                       <li key={day.id}>
@@ -259,6 +397,18 @@ export function TodayScreen() {
                           onCancel={() => setSkippingKey(null)}
                           onConfirm={(reason) =>
                             void handleSkip(template, activeProgram.id, day.id, reason)
+                          }
+                        />
+                      </li>
+                    );
+                  }
+                  if (movingKey === day.id) {
+                    return (
+                      <li key={day.id}>
+                        <MoveRow
+                          onCancel={() => setMovingKey(null)}
+                          onConfirm={(newDate) =>
+                            void handleMove(activeProgram.id, day.id, newDate)
                           }
                         />
                       </li>
@@ -279,7 +429,30 @@ export function TodayScreen() {
                         </span>
                         <span className="atlas-library__item-meta" aria-hidden="true">
                           {template ? template.name : 'Workout not found'}
+                          {todaysOccurrence?.status === 'moved' &&
+                            ` — moved to ${todaysOccurrence.effective_date}`}
                         </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="atlas-program-screen__activate"
+                        disabled={!template}
+                        onClick={() => setMovingKey(day.id)}
+                        aria-label={`Move ${day.label || 'Day'}, week ${weekIndex + 1}`}
+                      >
+                        Move
+                      </button>
+                      <button
+                        type="button"
+                        className="atlas-program-screen__activate"
+                        disabled={!template}
+                        onClick={() =>
+                          template && startFromTemplate(template, activeProgram.id, day.id, true)
+                        }
+                        aria-label={`Start ${day.label || 'Day'}, week ${weekIndex + 1} as a deload`}
+                        title="Fully logged, but won't become the baseline for future progression"
+                      >
+                        Start as Deload
                       </button>
                       <button
                         type="button"

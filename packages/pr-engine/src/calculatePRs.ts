@@ -131,6 +131,23 @@ export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): Pe
   if (isBodyweightOnly) {
     const bestBw = pickBest(sorted, (e) => e.set.reps);
     if (bestBw) records.push(makePR(exercise.id, 'bodyweight', bestBw.value, null, bestBw.item));
+
+    // v0.2.0. Only ever computed when at least one eligible set actually
+    // used added load -- most reps_bodyweight history never does, and a
+    // pure-bodyweight exercise should never grow a weighted-bodyweight PR
+    // out of nowhere. The bodyweight analogue of max_load, reading
+    // external_load instead of weight.
+    const bestWeighted = pickBest(sorted, (e) => e.set.external_load ?? null);
+    if (bestWeighted)
+      records.push(
+        makePR(
+          exercise.id,
+          'weighted_bodyweight',
+          bestWeighted.value,
+          bestWeighted.item.set.reps,
+          bestWeighted.item,
+        ),
+      );
   }
 
   if (hasDuration) {

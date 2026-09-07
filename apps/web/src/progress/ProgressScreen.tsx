@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   estimated1RMSeries,
   trainingDistribution,
+  trainingRecency,
   type DistributionEntry,
 } from '@atlas/progress-engine';
 import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
@@ -20,6 +21,7 @@ import type {
   WorkoutSession,
 } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
+import { ActivityHeatmap } from './ActivityHeatmap';
 import { describePR } from './formatPR';
 import { MilestoneForm } from './MilestoneForm';
 
@@ -156,6 +158,8 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     [sessions, exercises],
   );
 
+  const recency = useMemo(() => trainingRecency(sessions, exercises), [sessions, exercises]);
+
   const strengthTrends = useMemo(() => {
     const trends: { exerciseId: string; first: number; last: number }[] = [];
     for (const pr of prs) {
@@ -249,6 +253,8 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
         </div>
       </section>
 
+      <ActivityHeatmap sessions={sessions} />
+
       <section>
         <h2>Recent</h2>
         {recent.length === 0 ? (
@@ -295,6 +301,25 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
               )}
             </>
           )}
+        </section>
+      )}
+
+      {recency.length > 0 && (
+        <section className="atlas-progress__distribution">
+          <h2>Training Recency</h2>
+          <p className="atlas-progress__distribution-window">
+            Days since each muscle group was last trained -- a plain tally, not a recovery estimate.
+          </p>
+          <ul className="atlas-progress__recency-list">
+            {recency.map((entry) => (
+              <li key={entry.label}>
+                <span>{entry.label}</span>
+                <span>
+                  {entry.daysSinceTrained === 0 ? 'Today' : `${entry.daysSinceTrained}d ago`}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

@@ -256,9 +256,28 @@ function validateBackup(
     else entities[key] = validated;
   }
   if (!ok) return null;
+
+  // v0.2.0. Optional, unlike every key above: absent entirely on a backup
+  // exported before this field existed, which must still validate and
+  // restore cleanly (see restoreBackup.ts's own `?? []`) -- never rejected
+  // just for missing a key that didn't exist yet.
+  let workoutOccurrences: unknown[] = [];
+  if (value.entities.workout_occurrences !== undefined) {
+    const validated = validateEntityArray(
+      value.entities.workout_occurrences,
+      `${path}.entities.workout_occurrences`,
+      issues,
+    );
+    if (validated === null) return null;
+    workoutOccurrences = validated;
+  }
+
   return {
     device_id: value.device_id,
-    entities: entities as AtlasBackupDocument['entities'],
+    entities: {
+      ...entities,
+      workout_occurrences: workoutOccurrences,
+    } as AtlasBackupDocument['entities'],
   };
 }
 

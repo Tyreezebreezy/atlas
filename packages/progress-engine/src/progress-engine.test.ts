@@ -20,7 +20,7 @@ import { trainingDistribution } from './trainingDistribution';
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
     setIndex: 0,
-    setType: 'working',
+    setType: 'normal',
     weight: null,
     reps: null,
     durationSeconds: null,
@@ -246,7 +246,7 @@ describe('trainingDistribution', () => {
   it('excludes warmup sets from every bucket, same rule as PR eligibility', () => {
     const s1 = completedSession(
       'bench',
-      [set({ exerciseId: 'bench', setType: 'warmup' }), set({ exerciseId: 'bench' })],
+      [set({ exerciseId: 'bench', phase: 'warmup' }), set({ exerciseId: 'bench' })],
       '2026-08-01T10:00:00.000Z',
     );
     const dist = trainingDistribution([s1], exercises, 365);

@@ -9,6 +9,7 @@ import {
 } from '@atlas/program-engine';
 import { reorder, withSequentialOrder } from '@atlas/workout-engine';
 import type { Program, ProgramDay, ProgramWeek, WorkoutTemplate } from '@atlas/data-model';
+import { ProgressionPolicyFields } from './ProgressionPolicyFields';
 import type { AtlasStorage } from '@atlas/storage';
 
 interface ProgramEditorProps {
@@ -195,6 +196,12 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
           isn&rsquo;t skipped
         </label>
       </fieldset>
+
+      <ProgressionPolicyFields
+        idPrefix="program-default-progression"
+        policy={program.default_progression_policy}
+        onChange={(policy) => setProgram({ ...program, default_progression_policy: policy })}
+      />
 
       {program.weeks.map((week, weekIndex) => (
         <div key={week.id} className="atlas-program-editor__week">

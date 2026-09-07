@@ -16,7 +16,7 @@ import { newlyAchievedMilestones } from './detectNewMilestones';
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
     setIndex: 0,
-    setType: 'working',
+    setType: 'normal',
     weight: null,
     reps: null,
     durationSeconds: null,

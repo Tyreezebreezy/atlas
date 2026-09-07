@@ -17,12 +17,14 @@ export function templateToPlanWorkout(template: WorkoutTemplate, library: Exerci
     target_reps_min: planned.target_reps_min,
     target_reps_max: planned.target_reps_max,
     target_weight: planned.target_weight,
+    target_external_load: planned.target_external_load,
     target_rpe: planned.target_rpe,
     target_rir: planned.target_rir,
     target_duration_seconds: planned.target_duration_seconds,
     target_distance_meters: planned.target_distance_meters,
     rest_seconds: planned.rest_seconds,
     notes: planned.notes,
+    progression_policy: planned.progression_policy,
   }));
   return { name: template.name, is_quick_workout: template.is_quick_workout, exercises };
 }

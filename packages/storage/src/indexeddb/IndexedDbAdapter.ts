@@ -7,6 +7,7 @@ import type {
   PersonalRecord,
   Program,
   ProgramNote,
+  WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
 } from '@atlas/data-model';
@@ -27,6 +28,7 @@ export class IndexedDbAdapter implements AtlasStorage {
   readonly milestones: DexieRepository<Milestone>;
   readonly benchmarks: DexieRepository<Benchmark>;
   readonly bodyMeasurements: DexieRepository<BodyMeasurement>;
+  readonly workoutOccurrences: DexieRepository<WorkoutOccurrence>;
 
   constructor(dbName = 'atlas') {
     this.db = new AtlasDexie(dbName);
@@ -40,6 +42,7 @@ export class IndexedDbAdapter implements AtlasStorage {
     this.milestones = new DexieRepository(this.db.milestones);
     this.benchmarks = new DexieRepository(this.db.benchmarks);
     this.bodyMeasurements = new DexieRepository(this.db.bodyMeasurements);
+    this.workoutOccurrences = new DexieRepository(this.db.workoutOccurrences);
     // Dexie opens lazily on first query otherwise — open eagerly so a schema
     // problem surfaces at boot, not on whatever screen happens to query first.
     void this.db.open();

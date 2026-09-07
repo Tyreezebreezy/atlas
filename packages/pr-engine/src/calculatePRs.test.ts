@@ -44,7 +44,7 @@ function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
     setIndex: 0,
-    setType: 'working',
+    setType: 'normal',
     weight: null,
     reps: null,
     durationSeconds: null,
@@ -166,12 +166,40 @@ describe('calculatePRs: eligibility rules', () => {
     const session = completedSession(
       bench.id,
       [
-        set({ exerciseId: bench.id, weight: 300, reps: 5, setType: 'warmup' }),
-        set({ exerciseId: bench.id, weight: 185, reps: 5, setType: 'working' }),
+        set({ exerciseId: bench.id, weight: 300, reps: 5, phase: 'warmup' }),
+        set({ exerciseId: bench.id, weight: 185, reps: 5 }),
       ],
       '2026-08-01T10:00:00.000Z',
     );
     const prs = calculatePRs([session], bench);
+    expect(prs.find((p) => p.kind === 'max_load')?.value).toBe(185);
+  });
+
+  it('still excludes warm-ups from a genuinely pre-v0.2.0 stored session (no `phase` field, old `set_type: "warmup"` literal)', () => {
+    const session = completedSession(
+      bench.id,
+      [set({ exerciseId: bench.id, weight: 185, reps: 5 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    // Simulate real stored data written before the phase/set_type split
+    // existed: `phase` is entirely absent, and `set_type` carries the old
+    // literal a pre-v0.2.0 record actually has on disk (TypeScript no
+    // longer permits new code to write this, but old rows still have it).
+    const legacyWarmup = { ...set({ exerciseId: bench.id, weight: 300, reps: 5 }) } as Record<
+      string,
+      unknown
+    >;
+    delete legacyWarmup.phase;
+    legacyWarmup.set_type = 'warmup';
+    const withLegacyWarmup: WorkoutSession = {
+      ...session,
+      performed_sets: [
+        ...session.performed_sets,
+        legacyWarmup as unknown as (typeof session.performed_sets)[number],
+      ],
+    };
+    const prs = calculatePRs([withLegacyWarmup], bench);
+    // 300 must NOT win despite being the heavier set -- it's a legacy warmup.
     expect(prs.find((p) => p.kind === 'max_load')?.value).toBe(185);
   });
 

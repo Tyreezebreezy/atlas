@@ -31,6 +31,11 @@ export function describePR(pr: PersonalRecord): PRDescription {
       return { title: 'Distance PR', value: `${pr.value} m` };
     case 'bodyweight':
       return { title: 'Rep PR', value: `${pr.value} reps` };
+    case 'weighted_bodyweight':
+      return {
+        title: 'Added Load PR',
+        value: `+${pr.value} lb${pr.reps ? ` × ${pr.reps}` : ''}`,
+      };
     default: {
       const exhaustive: never = pr.kind;
       throw new Error(`Unhandled PR kind: ${String(exhaustive)}`);

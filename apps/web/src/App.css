@@ -170,6 +170,8 @@ button {
 .atlas-milestone-form select,
 .atlas-body-form input,
 .atlas-body-form textarea,
+.atlas-log-past input,
+.atlas-log-past select,
 .atlas-exercise-detail__add-note textarea {
   width: 100%;
   min-height: 44px;
@@ -578,15 +580,27 @@ button {
 
 /* Body composition */
 
-.atlas-body-form {
+.atlas-body-form,
+.atlas-log-past {
   display: flex;
   flex-direction: column;
 }
 
-.atlas-body-form label {
+.atlas-body-form label,
+.atlas-log-past label {
   margin-top: var(--atlas-space-3);
   font-size: 0.85rem;
   color: var(--atlas-color-text-secondary);
+}
+
+.atlas-log-past .atlas-resume-card__resume {
+  margin-top: var(--atlas-space-6);
+  min-height: 48px;
+  border-radius: var(--atlas-radius-sm);
+}
+
+.atlas-log-past > .atlas-template-editor__back {
+  align-self: flex-start;
 }
 
 .atlas-body-form__actions {
@@ -732,6 +746,7 @@ button {
 
 .atlas-program-screen__list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: var(--atlas-space-2);
 }
@@ -1646,6 +1661,57 @@ button {
 
 /* Rest timer */
 
+.atlas-activity-heatmap__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.atlas-activity-heatmap__grid {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: var(--atlas-space-2);
+}
+
+.atlas-activity-heatmap__week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.atlas-activity-heatmap__day {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--atlas-color-surface);
+}
+
+.atlas-activity-heatmap__day--level-1 {
+  background: color-mix(
+    in srgb,
+    var(--atlas-color-accent, var(--atlas-color-timer)) 25%,
+    var(--atlas-color-surface)
+  );
+}
+.atlas-activity-heatmap__day--level-2 {
+  background: color-mix(
+    in srgb,
+    var(--atlas-color-accent, var(--atlas-color-timer)) 50%,
+    var(--atlas-color-surface)
+  );
+}
+.atlas-activity-heatmap__day--level-3 {
+  background: color-mix(
+    in srgb,
+    var(--atlas-color-accent, var(--atlas-color-timer)) 75%,
+    var(--atlas-color-surface)
+  );
+}
+.atlas-activity-heatmap__day--level-4 {
+  background: var(--atlas-color-accent, var(--atlas-color-timer));
+}
+
 .atlas-rest-timer {
   display: flex;
   align-items: center;
@@ -1655,6 +1721,22 @@ button {
   border: 1px solid var(--atlas-color-timer);
   border-radius: var(--atlas-radius-md);
   background: var(--atlas-color-surface);
+}
+
+/* v0.2.0: brief visual signal on natural timer completion (never on manual
+   skip) -- a couple of pulses over FLASH_DURATION_MS, then reverts. */
+.atlas-rest-timer--flash {
+  animation: atlas-rest-timer-flash 0.3s ease-in-out 2;
+}
+
+@keyframes atlas-rest-timer-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--atlas-color-timer);
+  }
 }
 
 .atlas-rest-timer__label {
@@ -2442,4 +2524,68 @@ button {
 
 .atlas-importexport__done {
   padding: var(--atlas-space-6) 0;
+}
+
+/* Exercise context sheet (v0.2.0 item 31) -- a bottom sheet over Gym Mode's
+   "..." menu (History / Plate Calculator / Why this target / Alternatives /
+   Create Superset). Anchored to the bottom on phones, capped and centered
+   on wider screens so it doesn't stretch into a full-width slab. */
+.atlas-context-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.5);
+}
+
+.atlas-context-sheet__panel {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: min(80vh, 640px);
+  overflow-y: auto;
+  padding: var(--atlas-space-6) var(--atlas-space-4);
+  padding-bottom: calc(var(--atlas-space-6) + env(safe-area-inset-bottom));
+  background: var(--atlas-color-background);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md) var(--atlas-radius-md) 0 0;
+}
+
+@media (min-width: 640px) {
+  .atlas-context-sheet {
+    align-items: center;
+  }
+
+  .atlas-context-sheet__panel {
+    max-height: min(80vh, 640px);
+    border-radius: var(--atlas-radius-md);
+  }
+}
+
+.atlas-context-sheet__close {
+  position: absolute;
+  top: var(--atlas-space-3);
+  right: var(--atlas-space-3);
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: 999px;
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-primary);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.atlas-context-sheet__panel h3 {
+  margin: 0 var(--atlas-space-6) var(--atlas-space-4) 0;
+}
+
+.atlas-context-sheet__history-row {
+  display: flex;
+  gap: var(--atlas-space-3);
+  padding: var(--atlas-space-2) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
 }

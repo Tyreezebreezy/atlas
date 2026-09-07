@@ -23,6 +23,28 @@ export interface ApplyImportResult {
   program: Program | null;
 }
 
+/**
+ * Re-importing the same source (the owner re-uploading the same HTML,
+ * accidentally applying an already-applied plan file) must not silently
+ * duplicate a Program/WorkoutTemplate -- see docs/IMPORT_FORMAT.md "Import
+ * idempotency." Checked by the caller BEFORE calling `applyImport` (which
+ * always creates fresh rows unconditionally -- it has no opinion on
+ * whether this is a duplicate, only on writing what it's told to), so the
+ * preview step can warn the owner and let them choose, matching "preview
+ * the result before applying."
+ */
+export function findExistingImportByFingerprint(
+  fingerprint: string,
+  programs: Program[],
+  templates: WorkoutTemplate[],
+): Program | WorkoutTemplate | null {
+  return (
+    programs.find((p) => p.import_fingerprint === fingerprint && !p.deleted_at) ??
+    templates.find((t) => t.import_fingerprint === fingerprint && !t.deleted_at) ??
+    null
+  );
+}
+
 function resolveExerciseId(
   entry: ImportPreviewExercise,
   resolutions: ImportResolutions,
@@ -72,6 +94,7 @@ function buildTemplate(
       target_reps_min: entry.planned.target_reps_min,
       target_reps_max: entry.planned.target_reps_max,
       target_weight: entry.planned.target_weight,
+      target_external_load: entry.planned.target_external_load ?? null,
       target_rpe: entry.planned.target_rpe,
       target_rir: entry.planned.target_rir,
       target_duration_seconds: entry.planned.target_duration_seconds,
@@ -79,6 +102,7 @@ function buildTemplate(
       rest_seconds: entry.planned.rest_seconds,
       notes: entry.planned.notes,
       group_id: (groupKey && groupIdByKey.get(groupKey)) || null,
+      progression_policy: entry.planned.progression_policy ?? null,
     });
   }
 
@@ -119,6 +143,7 @@ export async function applyImport(
   preview: ImportPreview,
   resolutions: ImportResolutions,
   storage: AtlasStorage,
+  importFingerprint: string | null = null,
 ): Promise<ApplyImportResult> {
   const createdExercises: Exercise[] = [];
 
@@ -127,7 +152,10 @@ export async function applyImport(
     // is_quick_workout: true it would be an orphan template unreachable from
     // any screen (see docs/DATA_MODEL.md on how a template becomes visible).
     // Confirmed by manual testing, not assumed.
-    const template = buildTemplate(preview.workout, resolutions, createdExercises, true);
+    const template = {
+      ...buildTemplate(preview.workout, resolutions, createdExercises, true),
+      import_fingerprint: importFingerprint,
+    };
     for (const exercise of createdExercises) await storage.exercises.put(exercise);
     await storage.workoutTemplates.put(template);
     return { created_exercises: createdExercises, workout_template: template, program: null };
@@ -147,7 +175,7 @@ export async function applyImport(
     }
     weeks.push({ ...programWeek, days });
   }
-  const finalProgram: Program = { ...program, weeks };
+  const finalProgram: Program = { ...program, weeks, import_fingerprint: importFingerprint };
   for (const exercise of createdExercises) await storage.exercises.put(exercise);
   await storage.programs.put(finalProgram);
 

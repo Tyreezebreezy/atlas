@@ -1,4 +1,5 @@
 import type { PerformedSet, WorkoutSession } from '@atlas/data-model';
+import { setPhaseOf } from '@atlas/workout-engine';
 
 export interface EligibleSet {
   set: PerformedSet;
@@ -30,7 +31,7 @@ export function eligibleSets(sessions: WorkoutSession[]): EligibleSet[] {
   for (const session of sessions) {
     if (session.status !== 'completed') continue;
     for (const set of session.performed_sets) {
-      if (set.set_type === 'warmup') continue;
+      if (setPhaseOf(set) === 'warmup') continue;
       result.push({ set, session });
     }
   }

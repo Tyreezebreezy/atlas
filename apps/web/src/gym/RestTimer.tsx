@@ -7,6 +7,10 @@ interface RestTimerProps {
   onAdjust: (deltaSeconds: number) => void;
   onSkip: () => void;
   onComplete: () => void;
+  /** v0.2.0. A brief CSS flash on natural completion (never on manual
+   * skip) -- degrades to nothing if the owner has it turned off, same
+   * "not every signal on every platform" spirit as sound/vibration. */
+  flashEnabled?: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -15,9 +19,12 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const FLASH_DURATION_MS = 600;
+
 /** Timestamp-derived every tick, never a decrementing counter -- resilient to the tab being backgrounded mid-rest. */
-export function RestTimer({ timer, onAdjust, onSkip, onComplete }: RestTimerProps) {
+export function RestTimer({ timer, onAdjust, onSkip, onComplete, flashEnabled }: RestTimerProps) {
   const [remaining, setRemaining] = useState(() => remainingSeconds(timer));
+  const [flashing, setFlashing] = useState(false);
 
   useEffect(() => {
     let completed = false;
@@ -26,16 +33,27 @@ export function RestTimer({ timer, onAdjust, onSkip, onComplete }: RestTimerProp
       setRemaining(value);
       if (value <= 0 && !completed) {
         completed = true;
+        if (flashEnabled) setFlashing(true);
         onComplete();
       }
     };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [timer, onComplete]);
+  }, [timer, onComplete, flashEnabled]);
+
+  useEffect(() => {
+    if (!flashing) return;
+    const timeout = setTimeout(() => setFlashing(false), FLASH_DURATION_MS);
+    return () => clearTimeout(timeout);
+  }, [flashing]);
 
   return (
-    <div className="atlas-rest-timer" role="timer" aria-live="polite">
+    <div
+      className={`atlas-rest-timer${flashing ? ' atlas-rest-timer--flash' : ''}`}
+      role="timer"
+      aria-live="polite"
+    >
       <span className="atlas-rest-timer__label">Rest</span>
       <span className="atlas-rest-timer__time">{formatTime(remaining)}</span>
       <div className="atlas-rest-timer__actions">

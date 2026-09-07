@@ -104,4 +104,71 @@ describe('restoreBackup round trip', () => {
     const restoredPr = await target.personalRecords.get('pr-1');
     expect(restoredPr?.value).toBe(40);
   });
+
+  it('round-trips workout occurrences (v0.2.0)', async () => {
+    const source = new IndexedDbAdapter(`atlas-test-source-${crypto.randomUUID()}`);
+    await source.workoutOccurrences.put({
+      id: 'occ-1',
+      created_at: '2026-09-01T00:00:00.000Z',
+      updated_at: '2026-09-01T00:00:00.000Z',
+      version: 1,
+      device_id: 'seed',
+      deleted_at: null,
+      program_id: 'prog-1',
+      program_day_id: 'day-1',
+      original_date: '2026-09-01',
+      effective_date: '2026-09-02',
+      status: 'moved',
+      replacement_template_id: null,
+      session_id: null,
+      notes: null,
+    });
+
+    const exported = await exportBackup(source);
+    const reparsed: unknown = JSON.parse(JSON.stringify(exported));
+    const validated = validateAtlasPlan(reparsed);
+    expect(validated.valid).toBe(true);
+    if (!validated.valid || validated.value.kind !== 'backup')
+      throw new Error('expected a valid backup');
+
+    const target = new IndexedDbAdapter(`atlas-test-target-${crypto.randomUUID()}`);
+    const result = await restoreBackup(validated.value, target);
+    expect(result.restored_counts.workout_occurrences).toBe(1);
+
+    const restored = await target.workoutOccurrences.get('occ-1');
+    expect(restored?.status).toBe('moved');
+    expect(restored?.effective_date).toBe('2026-09-02');
+  });
+
+  it('restores a pre-v0.2.0 backup with no workout_occurrences key at all', async () => {
+    // Simulates a real backup file exported before this entity existed --
+    // `entities.workout_occurrences` is entirely absent, not an empty array.
+    const legacyBackup = {
+      format: 'atlas-plan-v1',
+      kind: 'backup',
+      exported_at: '2026-01-01T00:00:00.000Z',
+      device_id: 'old-device',
+      entities: {
+        exercises: [],
+        programs: [],
+        workout_templates: [],
+        workout_sessions: [],
+        exercise_notes: [],
+        program_notes: [],
+        personal_records: [],
+        milestones: [],
+        body_measurements: [],
+        // no workout_occurrences key
+      },
+    };
+    const validated = validateAtlasPlan(legacyBackup);
+    expect(validated.valid).toBe(true);
+    if (!validated.valid || validated.value.kind !== 'backup')
+      throw new Error('expected a valid backup');
+
+    const target = new IndexedDbAdapter(`atlas-test-target-${crypto.randomUUID()}`);
+    const result = await restoreBackup(validated.value, target);
+    expect(result.restored_counts.workout_occurrences).toBe(0);
+    expect(await target.workoutOccurrences.getAll()).toEqual([]);
+  });
 });

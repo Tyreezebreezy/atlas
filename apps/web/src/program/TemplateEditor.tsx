@@ -8,6 +8,8 @@ import {
   reorder,
   withSequentialOrder,
 } from '@atlas/workout-engine';
+import { plannedMuscleDistribution } from '@atlas/progress-engine';
+import { ProgressionPolicyFields } from './ProgressionPolicyFields';
 import type {
   Exercise,
   ExerciseGroupType,
@@ -39,6 +41,7 @@ export function TemplateEditor({
 }: TemplateEditorProps) {
   const [template, setTemplate] = useState<WorkoutTemplate | null>(null);
   const [exerciseNames, setExerciseNames] = useState<Map<string, string>>(new Map());
+  const [exercisesById, setExercisesById] = useState<Map<string, Exercise>>(new Map());
   const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupingDraft, setGroupingDraft] = useState<GroupingDraft | null>(null);
@@ -49,6 +52,7 @@ export function TemplateEditor({
       setTemplate(existing ?? createWorkoutTemplate('', isQuickWorkoutDefault));
       const allExercises = await storage.exercises.getAll();
       setExerciseNames(new Map(allExercises.map((e) => [e.id, e.name])));
+      setExercisesById(new Map(allExercises.map((e) => [e.id, e])));
     })();
   }, [storage, templateId, isQuickWorkoutDefault]);
 
@@ -308,11 +312,17 @@ export function TemplateEditor({
             onChange={(v) => updateExercise(exercise.id, { target_distance_meters: v })}
           />
         </div>
+        <ProgressionPolicyFields
+          idPrefix={`exercise-progression-${exercise.id}`}
+          policy={exercise.progression_policy}
+          onChange={(policy) => updateExercise(exercise.id, { progression_policy: policy })}
+        />
       </li>
     );
   }
 
   const slots = buildGymSlots(template.exercises, template.groups);
+  const muscleDistribution = plannedMuscleDistribution(template.exercises, exercisesById);
 
   return (
     <div className="atlas-template-editor">
@@ -336,6 +346,19 @@ export function TemplateEditor({
         />
         Show in Quick Workouts
       </label>
+
+      {muscleDistribution.length > 0 && (
+        <ul
+          className="atlas-template-editor__muscle-preview"
+          aria-label="Planned working sets by muscle group"
+        >
+          {muscleDistribution.map((entry) => (
+            <li key={entry.label}>
+              {entry.label} <strong>{entry.workingSets}</strong>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {slots.map((slot) =>
         slot.kind === 'single' ? (

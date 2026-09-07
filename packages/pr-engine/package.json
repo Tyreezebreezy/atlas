@@ -10,9 +10,7 @@
   },
   "dependencies": {
     "@atlas/core": "*",
-    "@atlas/data-model": "*"
-  },
-  "devDependencies": {
+    "@atlas/data-model": "*",
     "@atlas/workout-engine": "*"
   }
 }

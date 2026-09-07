@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
   Benchmark,
@@ -6,6 +7,7 @@ import type {
   Exercise,
   Milestone,
   PersonalRecord,
+  WorkoutOccurrence,
 } from '@atlas/data-model';
 import { IndexedDbAdapter } from './IndexedDbAdapter';
 
@@ -204,5 +206,71 @@ describe('IndexedDbAdapter: v0.0.8 BodyMeasurement fields round-trip without a m
     };
     await adapter.bodyMeasurements.put(measurement);
     expect(await adapter.bodyMeasurements.get(measurement.id)).toEqual(measurement);
+  });
+});
+
+function makeOccurrence(overrides: Partial<WorkoutOccurrence> = {}): WorkoutOccurrence {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    created_at: now,
+    updated_at: now,
+    version: 1,
+    device_id: 'test-device',
+    deleted_at: null,
+    program_id: 'prog-1',
+    program_day_id: 'day-1',
+    original_date: '2026-09-01',
+    effective_date: '2026-09-01',
+    status: 'planned',
+    replacement_template_id: null,
+    session_id: null,
+    notes: null,
+    ...overrides,
+  };
+}
+
+describe('IndexedDbAdapter: v0.2.0 WorkoutOccurrence (first real Dexie version bump)', () => {
+  it('round-trips a WorkoutOccurrence', async () => {
+    const adapter = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    const occurrence = makeOccurrence({ status: 'moved', effective_date: '2026-09-02' });
+    await adapter.workoutOccurrences.put(occurrence);
+    expect(await adapter.workoutOccurrences.get(occurrence.id)).toEqual(occurrence);
+  });
+
+  it('upgrades a real pre-v0.2.0 database (version 1 only) without losing existing data, and the new store works immediately after', async () => {
+    const dbName = `atlas-test-upgrade-${crypto.randomUUID()}`;
+
+    // Simulates a real owner device on v0.1.x: only the version(1) schema
+    // has ever been declared against this database name.
+    const legacyDb = new Dexie(dbName);
+    legacyDb.version(1).stores({
+      exercises: 'id, name, is_custom, deleted_at',
+      programs: 'id, is_active, deleted_at',
+      workoutTemplates: 'id, is_quick_workout, deleted_at',
+      workoutSessions: 'id, status, started_at, deleted_at',
+      exerciseNotes: 'id, exercise_id, deleted_at',
+      programNotes: 'id, program_id, deleted_at',
+      personalRecords: 'id, exercise_id, kind, deleted_at',
+      milestones: 'id, exercise_id, deleted_at',
+      benchmarks: 'id, metric, deleted_at',
+      bodyMeasurements: 'id, date, deleted_at',
+    });
+    await legacyDb.open();
+    const preExistingExercise = makeExercise({ name: 'Owner Bench Press' });
+    await legacyDb.table('exercises').put(preExistingExercise);
+    legacyDb.close();
+
+    // The real app upgrade: open the SAME database name with the current
+    // (version 1 + version 2) schema, exactly what happens when an
+    // existing install loads v0.2.0 code for the first time.
+    const upgraded = new IndexedDbAdapter(dbName);
+
+    const survived = await upgraded.exercises.get(preExistingExercise.id);
+    expect(survived?.name).toBe('Owner Bench Press');
+
+    const occurrence = makeOccurrence();
+    await upgraded.workoutOccurrences.put(occurrence);
+    expect(await upgraded.workoutOccurrences.get(occurrence.id)).toEqual(occurrence);
   });
 });

@@ -8,7 +8,12 @@ export type PrKind =
   | 'volume'
   | 'timed'
   | 'distance'
-  | 'bodyweight';
+  | 'bodyweight'
+  /** v0.2.0. Best `PerformedSet.external_load` for a weighted bodyweight
+   * movement (e.g. a weighted pull-up) -- the bodyweight analogue of
+   * `max_load`. Only ever computed when at least one eligible set actually
+   * has `external_load` set. */
+  | 'weighted_bodyweight';
 
 export interface PersonalRecord extends SyncMeta {
   exercise_id: string;

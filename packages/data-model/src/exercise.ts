@@ -101,4 +101,9 @@ export interface Exercise extends SyncMeta {
   user_notes: string | null;
   enrichment: ExerciseEnrichment | null;
   media?: ExerciseMedia | null;
+  /** v0.2.0. Optional, same reasoning as `media` -- absent on every
+   * exercise seeded before this field existed, and nothing derives a
+   * required fallback from its absence. Read via `exercise.is_favorite`
+   * with `?? false` at call sites, never assumed present. */
+  is_favorite?: boolean;
 }

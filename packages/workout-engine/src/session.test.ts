@@ -49,7 +49,7 @@ describe('addPerformedSet / removePerformedSet', () => {
     const set = createPerformedSet({
       exerciseId: 'ex-1',
       setIndex: 0,
-      setType: 'working',
+      setType: 'normal',
       weight: 170,
       reps: 8,
       durationSeconds: null,
@@ -72,7 +72,7 @@ describe('addPerformedSet / removePerformedSet', () => {
     const set = createPerformedSet({
       exerciseId: 'ex-1',
       setIndex: 0,
-      setType: 'working',
+      setType: 'normal',
       weight: null,
       reps: 15,
       durationSeconds: null,
@@ -83,6 +83,23 @@ describe('addPerformedSet / removePerformedSet', () => {
     });
     expect(set.weight).toBeNull();
     expect(set.reps).toBe(15);
+  });
+
+  it('stamps completed_at from completedAt when given, for backdated Log Past Workout entries', () => {
+    const set = createPerformedSet({
+      exerciseId: 'ex-1',
+      setIndex: 0,
+      setType: 'normal',
+      weight: 90,
+      reps: 12,
+      durationSeconds: null,
+      distanceMeters: null,
+      rpe: null,
+      rir: null,
+      notes: null,
+      completedAt: '2026-08-01T17:00:00.000Z',
+    });
+    expect(set.completed_at).toBe('2026-08-01T17:00:00.000Z');
   });
 });
 
@@ -99,6 +116,22 @@ describe('completeWorkoutSession / discardWorkoutSession', () => {
     const discarded = discardWorkoutSession(session);
     expect(discarded.status).toBe('discarded');
     expect(discarded.id).toBe(session.id);
+  });
+
+  it('a historical entry completes at its planned date, not the moment Finish is tapped', () => {
+    const historical = startWorkoutSession({
+      name: 'Backfilled Session',
+      templateId: null,
+      programId: null,
+      programDayId: null,
+      plannedSnapshot: [],
+      startedAt: '2026-08-01T18:00:00.000Z',
+      plannedCompletedAt: '2026-08-01T19:00:00.000Z',
+    });
+    const completed = completeWorkoutSession(historical);
+    expect(completed.started_at).toBe('2026-08-01T18:00:00.000Z');
+    expect(completed.completed_at).toBe('2026-08-01T19:00:00.000Z');
+    expect(completed.planned_completed_at).toBeNull(); // cleared once actually completed
   });
 });
 

@@ -29,7 +29,7 @@ describe('session storage round-trip', () => {
     const set = createPerformedSet({
       exerciseId: 'ex-1',
       setIndex: 0,
-      setType: 'working',
+      setType: 'normal',
       weight: 170,
       reps: 8,
       durationSeconds: null,
@@ -181,7 +181,7 @@ describe('session storage round-trip', () => {
       createPerformedSet({
         exerciseId: 'ex-1',
         setIndex: 0,
-        setType: 'working',
+        setType: 'normal',
         weight: 100,
         reps: 8,
         durationSeconds: null,

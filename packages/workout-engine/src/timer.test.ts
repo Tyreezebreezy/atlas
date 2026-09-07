@@ -7,6 +7,7 @@ import {
   clearActiveTimer,
   isTimerComplete,
   remainingSeconds,
+  resolveGroupRestSeconds,
   resolveRestSeconds,
   startExerciseTimer,
   startRestTimer,
@@ -24,21 +25,81 @@ function makeSession() {
 }
 
 describe('resolveRestSeconds', () => {
-  it('prefers the workout-specific override over everything else', () => {
+  it('a session override wins over everything else', () => {
+    const planned = { ...createPlannedExercise('ex-1', 0), rest_seconds: 45 };
+    expect(
+      resolveRestSeconds({
+        planned,
+        session: { rest_override_seconds: 10 },
+        exercise: { default_rest_seconds: 120 },
+        program: { default_rest_seconds: 60 },
+      }),
+    ).toBe(10);
+  });
+
+  it('the plan slot rest wins over the group, exercise, and program tiers', () => {
     const planned = { ...createPlannedExercise('ex-1', 0), rest_seconds: 45 };
     const exercise = { default_rest_seconds: 120 } as Exercise;
-    expect(resolveRestSeconds(planned, exercise)).toBe(45);
+    expect(resolveRestSeconds({ planned, group: { member_rest_seconds: 20 }, exercise })).toBe(45);
   });
 
-  it('falls back to the exercise default when the workout has none', () => {
+  it('falls back to the group member rest (mid-round) before the exercise/program tiers', () => {
+    const planned = createPlannedExercise('ex-1', 0);
+    expect(
+      resolveRestSeconds({
+        planned,
+        group: { member_rest_seconds: 30 },
+        exercise: { default_rest_seconds: 120 },
+      }),
+    ).toBe(30);
+  });
+
+  it('falls back to the exercise default when nothing more specific is set', () => {
     const planned = createPlannedExercise('ex-1', 0);
     const exercise = { default_rest_seconds: 120 } as Exercise;
-    expect(resolveRestSeconds(planned, exercise)).toBe(120);
+    expect(resolveRestSeconds({ planned, exercise })).toBe(120);
   });
 
-  it('falls back to the global default when neither is set', () => {
+  it('falls back to the program default below the exercise library default', () => {
     const planned = createPlannedExercise('ex-1', 0);
-    expect(resolveRestSeconds(planned, undefined)).toBe(DEFAULT_REST_SECONDS);
+    expect(resolveRestSeconds({ planned, program: { default_rest_seconds: 75 } })).toBe(75);
+  });
+
+  it('falls back to the global default when nothing is set at any tier', () => {
+    const planned = createPlannedExercise('ex-1', 0);
+    expect(resolveRestSeconds({ planned })).toBe(DEFAULT_REST_SECONDS);
+  });
+});
+
+describe('resolveGroupRestSeconds', () => {
+  it('uses the group’s own configured rest_after_seconds when set', () => {
+    expect(resolveGroupRestSeconds({ group: { rest_after_seconds: 45 }, members: [] })).toBe(45);
+  });
+
+  it('falls back to the longest member rest_seconds when the group has none configured', () => {
+    const members = [
+      { ...createPlannedExercise('a', 0), rest_seconds: 20 },
+      { ...createPlannedExercise('b', 1), rest_seconds: 40 },
+    ];
+    expect(resolveGroupRestSeconds({ group: { rest_after_seconds: null }, members })).toBe(40);
+  });
+
+  it('falls through to the program default when neither the group nor any member has a rest value', () => {
+    const members = [createPlannedExercise('a', 0), createPlannedExercise('b', 1)];
+    expect(
+      resolveGroupRestSeconds({
+        group: { rest_after_seconds: null },
+        members,
+        program: { default_rest_seconds: 60 },
+      }),
+    ).toBe(60);
+  });
+
+  it('falls all the way back to the global default', () => {
+    const members = [createPlannedExercise('a', 0)];
+    expect(resolveGroupRestSeconds({ group: { rest_after_seconds: null }, members })).toBe(
+      DEFAULT_REST_SECONDS,
+    );
   });
 });
 

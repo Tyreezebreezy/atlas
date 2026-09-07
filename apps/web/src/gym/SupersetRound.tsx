@@ -81,7 +81,7 @@ export function SupersetRound({
       return {
         exerciseId: member.exercise_id,
         setIndex: round,
-        setType: 'working',
+        setType: 'normal',
         weight: showsWeight && draft.weight !== '' ? Number(draft.weight) : null,
         reps: showsReps && draft.reps !== '' ? Number(draft.reps) : null,
         durationSeconds: showsDuration && draft.duration !== '' ? Number(draft.duration) : null,
@@ -112,6 +112,16 @@ export function SupersetRound({
         {group.type === 'superset' ? 'Superset' : 'Circuit'} &middot; Round {round + 1} of{' '}
         {group.rounds}
       </h2>
+      {group.member_rest_seconds != null && (
+        // Informational only -- this round logs all members together (see
+        // this component's own doc comment), so there is no per-member step
+        // to insert a real timer between; a configured value is still
+        // worth surfacing rather than silently ignored. See
+        // docs/DATA_MODEL.md "Rest hierarchy."
+        <p className="atlas-superset__member-rest">
+          Rest {group.member_rest_seconds}s between exercises within a round
+        </p>
+      )}
       <ul className="atlas-superset__members">
         {members.map((member, memberIndex) => {
           const exercise = exercises.get(member.exercise_id);
