@@ -1,4 +1,5 @@
 import type { Exercise } from '@atlas/data-model';
+import { disambiguateByPredicates, fuzzyKey, normalize } from './mediaMatching';
 
 export interface WorkoutGuideFrameAttribution {
   creator: string;
@@ -50,83 +51,22 @@ export interface MediaMappingReport {
   atlasWithoutMediaCount: number;
 }
 
-function normalize(name: string): string {
-  // Punctuation becomes a space, not deleted outright -- "Pull-Up" and
-  // "pull up" must normalize identically, which deleting the hyphen
-  // outright would break ("Pull-Up" -> "pullup" vs "pull up" unchanged).
-  return name
-    .toLowerCase()
-    .replace(/[.,'’-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Compound words that "normalize()"'s punctuation-to-space rule otherwise
-// leaves as two tokens on one side and one on the other (e.g. ATLAS's
-// "pull up" vs the source's "Pullup"). Applied to the whole normalized
-// string, not per-token, since these are two-word phrases.
-const PHRASE_FOLDS: [RegExp, string][] = [
-  [/\bpress ?up\b/g, 'pushup'],
-  [/\bpush ?up\b/g, 'pushup'],
-  [/\bpull ?up\b/g, 'pullup'],
-  [/\bchin ?up\b/g, 'chinup'],
-  [/\bsit ?up\b/g, 'situp'],
-  [/\bpull ?down\b/g, 'pulldown'],
-];
-
-// Standalone equipment shorthand -- word-boundary token replacement only,
-// never a substring replace (a substring "bb"->"barbell" would corrupt
-// unrelated words).
-const TOKEN_FOLDS: Record<string, string> = { db: 'dumbbell', bb: 'barbell', kb: 'kettlebell' };
-
-/**
- * A stronger, order- and plural-insensitive canonical key, layered on top
- * of `normalize()`. Only folds spelling/format variants of the identical
- * movement (compound-word spacing, equipment shorthand, plural "-s", word
- * order) -- it never drops a token, so a real distinguishing qualifier
- * (incline/flat, front/back, seated/standing, pronated/supinated, "single
- * arm", etc.) always survives and still blocks a match. See "do not
- * false-match movements" in docs/EXERCISE_MEDIA.md.
- */
-function fuzzyKey(name: string): string {
-  let s = normalize(name);
-  for (const [pattern, replacement] of PHRASE_FOLDS) s = s.replace(pattern, replacement);
-  const tokens = s
-    .split(' ')
-    .filter((t) => t.length > 0 && t !== 's') // "World's" -> "world s" under normalize(); drop the stray possessive "s".
-    .map((t) => TOKEN_FOLDS[t] ?? t)
-    .map((t) => (t.length > 3 && t.endsWith('s') && !t.endsWith('ss') ? t.slice(0, -1) : t));
-  tokens.sort();
-  return tokens.join(' ');
-}
-
 function equipmentToken(value: string): string {
   const v = value.toLowerCase().trim();
   return v === 'bodyweight' ? 'body weight' : v;
 }
 
-/**
- * Narrows an already-fuzzy-matched but ambiguous (2+ candidate) group down
- * to one, using the workout-guide entry's own `equipment`/`primaryMuscle`
- * fields against the ATLAS candidates' `equipment`/`target_muscle` --
- * never as a primary match signal on its own (metadata alone would match
- * dozens of exercises), only to disambiguate a name match that's already
- * narrowed to a small candidate set. Equipment is checked first since it's
- * the sharpest signal for the false-match risks that matter most (dumbbell
- * vs barbell, cable vs machine); muscle only breaks a further tie.
- */
+/** Workout-Guide-specific wrapper around the shared disambiguator: equipment
+ * first, then primary muscle. See `disambiguateByPredicates` for why this
+ * is metadata-as-tiebreaker, never metadata-as-primary-signal. */
 function disambiguateByMetadata(entry: WorkoutGuideEntry, candidates: Exercise[]): Exercise | null {
   const entryEquipment = equipmentToken(entry.equipment);
-  const byEquipment = candidates.filter((e) =>
-    e.equipment.some((eq) => equipmentToken(eq) === entryEquipment),
-  );
-  const pool =
-    byEquipment.length === 1 ? byEquipment : byEquipment.length > 1 ? byEquipment : candidates;
-  if (pool.length === 1) return pool[0] ?? null;
-
   const entryMuscle = entry.primaryMuscle.toLowerCase().trim();
-  const byMuscle = pool.filter((e) => (e.target_muscle ?? '').toLowerCase().trim() === entryMuscle);
-  return byMuscle.length === 1 ? (byMuscle[0] ?? null) : null;
+  return disambiguateByPredicates(
+    candidates,
+    (e) => e.equipment.some((eq) => equipmentToken(eq) === entryEquipment),
+    (e) => (e.target_muscle ?? '').toLowerCase().trim() === entryMuscle,
+  );
 }
 
 /**

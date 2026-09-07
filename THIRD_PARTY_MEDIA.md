@@ -50,13 +50,55 @@ split the upstream project itself uses.
   the media and its metadata, not the tooling that produces or displays it
   upstream. See docs/EXERCISE_MEDIA.md for how ATLAS maps and renders it.
 
+## Exercise start/end pose photos (Free Exercise DB) — v0.1.5
+
+**This provider's license is different from Workout Guide's above — public
+domain, not CC BY-SA — and the two must not be conflated.** No attribution
+is legally required for this one; ATLAS credits it anyway, in each
+exercise's own `attribution` string, as a courtesy.
+
+- **Source**: [yuhonas/free-exercise-db](https://github.com/yuhonas/free-exercise-db)
+- **Pinned to**: commit `a859101d633a01c4a1a920d6a8ce41dabba0705f` (no git tag
+  exists upstream as of this writing, so a commit SHA is the stable
+  reference instead)
+- **Retrieved**: 2026-09-06, via a full `git clone` (this repository has no
+  large unrelated subdirectories the way `workout-guide`'s monorepo did, so
+  a sparse checkout wasn't needed to keep the fetch reasonable)
+- **License**: **Unlicense** (public domain dedication) —
+  `LICENSE.md` in the upstream repository, confirmed directly, not assumed
+  from the README.
+- **Source exercise count**: 876 total upstream entries; 873 carry exactly
+  two images (`0.jpg` start pose, `1.jpg` end pose), 3 carry zero (see
+  docs/EXERCISE_MEDIA.md) and are simply excluded, not a bug.
+- **What was imported**: the upstream `dist/exercises.json` (a
+  pre-consolidated array of every entry's structured data — name,
+  equipment, muscles, instructions, image paths) verbatim into
+  `packages/exercise-library/src/data/freeExerciseDbManifest.json`, all 876
+  entries, for the same "stays available for future matching" reason as
+  Workout Guide's own full manifest. Of the upstream `exercises/<id>/{0,1}.jpg`
+  image files (1,746 across 873 usable entries), only the 277 exercises
+  that actually matched an ATLAS exercise
+  (`packages/exercise-library/src/matchFreeExerciseDbMedia.ts`, see
+  docs/EXERCISE_MEDIA.md's mapping report) were kept, at
+  `apps/web/public/exercise-media/fed/<id>/{0,1}.jpg` (554 files, ~33MB) —
+  namespaced under `fed/` specifically to keep this provider's files
+  unambiguously separate from Workout Guide's, both in the URL and in this
+  document. The rest remain retrievable by re-cloning the pinned commit
+  above if a future explicit-mapping addition resolves more of them.
+- **Modifications**: none — the 554 shipped files are byte-identical
+  copies of the pinned commit's own JPEGs, not resized, recompressed, or
+  re-encoded.
+
 ## Full license text
 
 - CC BY-SA 4.0 legal code: <https://creativecommons.org/licenses/by-sa/4.0/legalcode>
 - CC BY-SA 4.0 human-readable summary: <https://creativecommons.org/licenses/by-sa/4.0/>
+- Unlicense: <https://unlicense.org>
 
-Under CC BY-SA 4.0, any adaptation ATLAS makes to these specific image
-files (resizing, recompression, format conversion) must itself remain
-available under CC BY-SA 4.0 with the same attribution preserved — this
-applies only to the imported media files under `apps/web/public/exercise-media/`,
-not to ATLAS's own application source.
+Under CC BY-SA 4.0, any adaptation ATLAS makes to the Workout Guide image
+files specifically (resizing, recompression, format conversion) must
+itself remain available under CC BY-SA 4.0 with the same attribution
+preserved — this applies only to `apps/web/public/exercise-media/<slug>/`
+(Workout Guide), not to ATLAS's own application source, and not to the
+separately-licensed `apps/web/public/exercise-media/fed/` (Free Exercise
+DB, public domain, no such requirement).

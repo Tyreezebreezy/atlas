@@ -36,6 +36,14 @@ export interface ExerciseEnrichment {
 export type ExerciseMediaKind = 'image' | 'gif' | 'video' | 'frame-sequence';
 
 /**
+ * v0.1.5: which external media source populated this exercise's media,
+ * distinguishing it in code from the media LICENSE (also present per-record
+ * via `attribution`, but this is what selection/reporting logic keys off
+ * of). See docs/EXERCISE_MEDIA.md "Provider model."
+ */
+export type ExerciseMediaProvider = 'workout-guide' | 'free-exercise-db';
+
+/**
  * Added in v0.1.2 (Stage 5) as an abstraction only -- no exercise in the
  * seeded library had this populated at the time. `url`/`thumbnail_url`
  * point into a local or remote media pack, never an inlined data URI --
@@ -46,7 +54,11 @@ export type ExerciseMediaKind = 'image' | 'gif' | 'video' | 'frame-sequence';
  * or a real video -- see docs/EXERCISE_MEDIA.md's Workout Guide
  * integration. `url` is still required for this kind too: it's the first
  * frame, used as the reduced-motion-safe static fallback and before any
- * animation logic has run.
+ * animation logic has run. v0.1.5 reuses this same kind (not a new
+ * "two-state" kind) for Free Exercise DB's start/end pose pairs -- a
+ * `frames` array of length 2 cycles `start → end → start → end` through
+ * the identical rendering code, since nothing about that loop assumes
+ * exactly 3 frames.
  *
  * Optional (not required + null like most other whole-document additions)
  * because unlike `groups`/`progression_mode`, nothing derives a fallback
@@ -61,6 +73,14 @@ export interface ExerciseMedia {
   frames?: string[];
   thumbnail_url: string | null;
   attribution: string | null;
+  /** v0.1.5. Optional for the same reason as the rest of this interface --
+   * absent on any media created before this field existed, and nothing
+   * reads it with a required fallback. `provider_source_id` is that
+   * provider's own upstream identifier for this exercise (a Workout Guide
+   * `slug` or a Free Exercise DB `id`), kept so a mapping can be traced
+   * back to its source without re-deriving it. */
+  provider?: ExerciseMediaProvider;
+  provider_source_id?: string;
 }
 
 export interface Exercise extends SyncMeta {

@@ -20,6 +20,8 @@ function mediaForEntry(entry: WorkoutGuideEntry): ExerciseMedia {
     frames,
     thumbnail_url: null,
     attribution: attributionParts.join(' — '),
+    provider: 'workout-guide',
+    provider_source_id: entry.slug,
   };
 }
 

@@ -88,6 +88,8 @@ describe('applyWorkoutGuideMedia', () => {
       thumbnail_url: null,
       attribution:
         'Bryl Lim (Workout Guide, CC BY-SA 4.0) — derived from Everkinetic, CC BY-SA 4.0',
+      provider: 'workout-guide',
+      provider_source_id: 'bench-press',
     });
   });
 

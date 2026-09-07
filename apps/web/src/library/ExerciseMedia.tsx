@@ -10,9 +10,20 @@ interface ExerciseMediaProps {
 }
 
 const FRAME_STEP_MS = 350;
-// 1 -> 2 -> 3 -> 2, repeating -- a ping-pong loop over 3 unique frames
-// without storing the repeated middle frame twice in data.
-const LOOP_INDICES = [0, 1, 2, 1];
+
+/** A ping-pong index sequence over `length` frames without storing repeated
+ * frames twice in data -- generic over frame count, not hardcoded to
+ * Workout Guide's 3 (1 -> 2 -> 3 -> 2, repeating). Free Exercise DB's
+ * start/end pairs have only 2 frames, which have no middle to bounce off
+ * of: for length 2 this is just a plain alternation (0 -> 1, repeating),
+ * the literal "start -> end -> start -> end" v0.1.5 asks for -- not
+ * interpolated, not a fake animation, exactly the two real poses. */
+function pingPongIndices(length: number): number[] {
+  if (length <= 2) return Array.from({ length }, (_, i) => i);
+  const forward = Array.from({ length }, (_, i) => i);
+  const backward = forward.slice(1, -1).reverse();
+  return [...forward, ...backward];
+}
 
 /** JS-driven index cycling rather than this codebase's usual CSS-keyframe
  * approach (see .atlas-milestone-reveal in App.css) -- that pattern
@@ -33,10 +44,11 @@ function useFrameSequence(frames: string[] | undefined): { index: number; animat
 
   useEffect(() => {
     if (!animated || !frames) return;
+    const loopIndices = pingPongIndices(frames.length);
     let step = 0;
     const interval = setInterval(() => {
-      step = (step + 1) % LOOP_INDICES.length;
-      setIndex(LOOP_INDICES[step] ?? 0);
+      step = (step + 1) % loopIndices.length;
+      setIndex(loopIndices[step] ?? 0);
     }, FRAME_STEP_MS);
     return () => clearInterval(interval);
   }, [animated, frames]);
