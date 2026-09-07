@@ -26,6 +26,18 @@ describe('parsePrescription', () => {
     });
   });
 
+  it('parses a sets range x rep range, taking the max of the sets range (e.g. real Pump Guide dose "2–3 × 12–15")', () => {
+    const result = parsePrescription('2–3 × 12–15');
+    expect(result).toMatchObject({ target_sets: 3, target_reps_min: 12, target_reps_max: 15 });
+    expect(result.note).toBe('Sets: 2–3');
+  });
+
+  it('parses a sets range x flat reps, taking the max of the sets range', () => {
+    const result = parsePrescription('1–2 × 8');
+    expect(result).toMatchObject({ target_sets: 2, target_reps_min: 8, target_reps_max: 8 });
+    expect(result.note).toBe('Sets: 1–2');
+  });
+
   it('parses per-side reps and notes "per side"', () => {
     const result = parsePrescription('1 × 12 / side');
     expect(result).toMatchObject({ target_sets: 1, target_reps_min: 12, target_reps_max: 12 });

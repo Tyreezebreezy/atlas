@@ -97,6 +97,26 @@ export function TodayScreen() {
 
   async function reload() {
     if (!storage) return;
+    // Today is the screen every install lands on first, so the owner's
+    // built-in starter Program/Quick Workouts (v0.2.1) are backfilled here
+    // rather than waiting on Library/ExercisePicker to have been visited --
+    // "I open ATLAS and my workouts are already there," not "after I first
+    // browse the exercise library." Exercises must be seeded first so the
+    // starter data's name/id matching has a real library to resolve
+    // against; both are no-ops once already applied. Dynamically imported,
+    // not a static top-level import: both pull in the ~1,300-exercise seed
+    // dataset, and unlike LibraryScreen/ExercisePicker (already their own
+    // lazy route chunks, so a static import there is fine) Today is part of
+    // the app's eagerly-loaded shell -- a static import here previously
+    // pulled that whole dataset into the main bundle (confirmed via a
+    // build-size regression: precache 29 entries/342 KB main chunk went to
+    // 25 entries/3 MB).
+    const [{ ensureExercisesSeeded }, { ensureOwnerStarterDataSeeded }] = await Promise.all([
+      import('@atlas/exercise-library'),
+      import('@atlas/import-export'),
+    ]);
+    await ensureExercisesSeeded(storage);
+    await ensureOwnerStarterDataSeeded(storage);
     const [sessions, programs, allTemplates, exercises, allOccurrences] = await Promise.all([
       storage.workoutSessions.getAll(),
       storage.programs.getAll(),

@@ -1,4 +1,4 @@
-import type { SyncMeta } from './sync';
+import type { OwnerStarterPackProvenance, SyncMeta } from './sync';
 import type { ProgressionDecision, ProgressionPolicy } from './progression';
 
 /**
@@ -132,6 +132,8 @@ export interface WorkoutTemplate extends SyncMeta {
   /** v0.2.0. See `Program.import_fingerprint`'s doc comment -- same
    * mechanism, for a standalone/Quick Workout import. */
   import_fingerprint?: string | null;
+  /** v0.2.1. See `OwnerStarterPackProvenance`'s doc comment. */
+  starter_pack?: OwnerStarterPackProvenance | null;
 }
 
 export type WorkoutSessionStatus = 'in_progress' | 'completed' | 'discarded' | 'skipped';

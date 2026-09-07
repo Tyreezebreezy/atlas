@@ -10,3 +10,5 @@ export * from './exportWorkout';
 export * from './exportProgram';
 export * from './exportBackup';
 export * from './restoreBackup';
+export * from './ownerStarterData';
+export * from './seedOwnerStarterData';

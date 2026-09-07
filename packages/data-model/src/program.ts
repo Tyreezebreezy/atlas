@@ -1,4 +1,4 @@
-import type { SyncMeta } from './sync';
+import type { OwnerStarterPackProvenance, SyncMeta } from './sync';
 import type { ProgressionPolicy } from './progression';
 
 export interface ProgramDay {
@@ -52,4 +52,6 @@ export interface Program extends SyncMeta {
    * source-fingerprint/transaction ledger. Null for a program authored
    * directly in ATLAS. */
   import_fingerprint?: string | null;
+  /** v0.2.1. See `OwnerStarterPackProvenance`'s doc comment. */
+  starter_pack?: OwnerStarterPackProvenance | null;
 }

@@ -148,6 +148,29 @@ export function parsePrescription(
     };
   }
 
+  // "A–B × C–D" or "A–B × C" -- a *sets* range (e.g. "2–3 × 12–15"): takes
+  // the max of the sets range, same convention as every other range in this
+  // function, and keeps the literal sets range in the note since it's lost
+  // otherwise.
+  m = base.match(/^(\d+)\s*[-–]\s*(\d+)\s*[x×]\s*(\d+)\s*[-–]\s*(\d+)$/);
+  if (m?.[1] && m[2] && m[3] && m[4]) {
+    return {
+      target_sets: Math.max(Number(m[1]), Number(m[2])),
+      target_reps_min: Number(m[3]),
+      target_reps_max: Number(m[4]),
+      note: withSideNote(`Sets: ${m[1]}–${m[2]}`),
+    };
+  }
+  m = base.match(/^(\d+)\s*[-–]\s*(\d+)\s*[x×]\s*(\d+)$/);
+  if (m?.[1] && m[2] && m[3]) {
+    return {
+      target_sets: Math.max(Number(m[1]), Number(m[2])),
+      target_reps_min: Number(m[3]),
+      target_reps_max: Number(m[3]),
+      note: withSideNote(`Sets: ${m[1]}–${m[2]}`),
+    };
+  }
+
   // "N × A–B" or "N × A" -- rep range or a flat rep count.
   m = base.match(/^(\d+)\s*[x×]\s*(\d+)\s*[-–]\s*(\d+)$/);
   if (m?.[1] && m[2] && m[3]) {
@@ -269,7 +292,17 @@ function extractRow(rowEl: Element): ExtractedRow | null {
   const raw = segments.length > 0 ? segments : [(clone.textContent ?? '').trim()];
   if (raw.length === 0 || !raw[0]) return null;
 
-  const doseIndex = raw.findIndex(isDoseLike);
+  // Last match, not first: every real source document puts the dose span
+  // visually last (name, then note(s), then dose) -- searching from the end
+  // avoids a note that happens to mention a number ("Default target: 20-30
+  // minutes") being mistaken for the actual dose.
+  let doseIndex = -1;
+  for (let i = raw.length - 1; i >= 0; i--) {
+    if (isDoseLike(raw[i] ?? '')) {
+      doseIndex = i;
+      break;
+    }
+  }
   const name = raw[0];
   if (!name) return null;
   const dose = doseIndex >= 0 ? (raw[doseIndex] ?? null) : null;
