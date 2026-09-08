@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Exercise } from '@atlas/data-model';
 import {
   ensureExercisesSeeded,
+  formatExerciseName,
   listBodyParts,
   listEquipment,
   searchExercises,
@@ -128,7 +129,7 @@ export function LibraryScreen() {
               type="button"
               onClick={() => setSelectedId(exercise.id)}
               aria-label={[
-                exercise.name,
+                formatExerciseName(exercise.name),
                 exercise.category,
                 exercise.equipment.join(', '),
                 exercise.media ? 'has a demonstration' : null,
@@ -137,7 +138,7 @@ export function LibraryScreen() {
                 .join(', ')}
             >
               <span className="atlas-library__item-name" aria-hidden="true">
-                {exercise.name}
+                {formatExerciseName(exercise.name)}
                 {exercise.media && (
                   <span className="atlas-library__demo-badge" title="Has a demonstration">
                     ●

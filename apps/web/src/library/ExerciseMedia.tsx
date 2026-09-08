@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, ExerciseMedia as ExerciseMediaData } from '@atlas/data-model';
 
 interface ExerciseMediaProps {
@@ -88,7 +89,7 @@ export function ExerciseMedia({ exercise, compact }: ExerciseMediaProps) {
   const media = exercise.media;
   if (!media) return null;
 
-  const alt = `${exercise.name} demonstration`;
+  const alt = `${formatExerciseName(exercise.name)} demonstration`;
   const className = [
     'atlas-exercise-media',
     compact && 'atlas-exercise-media--compact',

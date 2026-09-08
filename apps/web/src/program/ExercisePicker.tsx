@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ensureExercisesSeeded, searchExercises } from '@atlas/exercise-library';
+import {
+  ensureExercisesSeeded,
+  formatExerciseName,
+  searchExercises,
+} from '@atlas/exercise-library';
 import type { Exercise } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
 
@@ -42,12 +46,16 @@ export function ExercisePicker({ storage, onPick, onCancel }: ExercisePickerProp
             <button
               type="button"
               onClick={() => onPick(exercise)}
-              aria-label={[exercise.name, exercise.category, exercise.equipment.join(', ')]
+              aria-label={[
+                formatExerciseName(exercise.name),
+                exercise.category,
+                exercise.equipment.join(', '),
+              ]
                 .filter(Boolean)
                 .join(', ')}
             >
               <span className="atlas-library__item-name" aria-hidden="true">
-                {exercise.name}
+                {formatExerciseName(exercise.name)}
               </span>
               <span className="atlas-library__item-meta" aria-hidden="true">
                 {[exercise.category, exercise.equipment.join(', ')].filter(Boolean).join(' · ')}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { searchExercises } from '@atlas/exercise-library';
+import { formatExerciseName, searchExercises } from '@atlas/exercise-library';
 import { suggestSubstitutes } from '@atlas/substitution-engine';
 import type { Exercise, ExerciseReplacement } from '@atlas/data-model';
 
@@ -106,10 +106,10 @@ export function ReplaceExercisePanel({
                 <button
                   type="button"
                   onClick={() => setSelected(candidate.exercise)}
-                  aria-label={`Replace with ${candidate.exercise.name}`}
+                  aria-label={`Replace with ${formatExerciseName(candidate.exercise.name)}`}
                 >
                   <span className="atlas-library__item-name" aria-hidden="true">
-                    {candidate.exercise.name}
+                    {formatExerciseName(candidate.exercise.name)}
                   </span>
                   <span className="atlas-library__item-meta" aria-hidden="true">
                     {candidate.reasons[0] ?? 'Related'}
@@ -137,10 +137,10 @@ export function ReplaceExercisePanel({
               <button
                 type="button"
                 onClick={() => setSelected(exercise)}
-                aria-label={`Replace with ${exercise.name}`}
+                aria-label={`Replace with ${formatExerciseName(exercise.name)}`}
               >
                 <span className="atlas-library__item-name" aria-hidden="true">
-                  {exercise.name}
+                  {formatExerciseName(exercise.name)}
                 </span>
               </button>
             </li>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { calculatePlateBreakdown, DEFAULT_AVAILABLE_PLATES } from '@atlas/workout-engine';
 import { suggestSubstitutes } from '@atlas/substitution-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, PlannedExercise, WorkoutSession } from '@atlas/data-model';
 import { loadSettings } from '../settings/settings';
 
@@ -86,7 +87,11 @@ export function ExerciseContextSheet({
     : [];
 
   return (
-    <div className="atlas-context-sheet" role="dialog" aria-label={`${exercise.name} options`}>
+    <div
+      className="atlas-context-sheet"
+      role="dialog"
+      aria-label={`${formatExerciseName(exercise.name)} options`}
+    >
       <div className="atlas-context-sheet__panel">
         <button
           type="button"
@@ -137,7 +142,7 @@ export function ExerciseContextSheet({
 
         {view === 'history' && (
           <div>
-            <h3>History &middot; {exercise.name}</h3>
+            <h3>History &middot; {formatExerciseName(exercise.name)}</h3>
             {recentHistory(allSessions, exercise.id).length === 0 && <p>No prior sessions yet.</p>}
             {recentHistory(allSessions, exercise.id).map(({ session, sets }) => (
               <div key={session.id} className="atlas-context-sheet__history-row">
@@ -245,7 +250,8 @@ export function ExerciseContextSheet({
           <div>
             <h3>Alternatives -- {activeProfile.name}</h3>
             <p>
-              {exercise.name} needs {exercise.equipment.join(', ')}, not in your active equipment
+              {formatExerciseName(exercise.name)} needs {exercise.equipment.join(', ')}, not in
+              your active equipment
               profile.
             </p>
             {alternatives.length === 0 ? (
@@ -255,7 +261,7 @@ export function ExerciseContextSheet({
                 {alternatives.map((candidate) => (
                   <li key={candidate.exercise.id}>
                     <span className="atlas-library__item-name" aria-hidden="true">
-                      {candidate.exercise.name}
+                      {formatExerciseName(candidate.exercise.name)}
                     </span>
                     <span className="atlas-library__item-meta" aria-hidden="true">
                       {candidate.reasons.join(', ')}

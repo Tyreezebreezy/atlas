@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise } from '@atlas/data-model';
 import type {
   ImportPreview,
@@ -62,7 +63,9 @@ function ExerciseRow({ entry, resolution, onResolve }: ExerciseRowProps) {
   return (
     <li className="atlas-importexport__row">
       <div className="atlas-importexport__row-main">
-        <span className="atlas-importexport__row-name">{entry.planned.exercise_name}</span>
+        <span className="atlas-importexport__row-name">
+          {formatExerciseName(entry.planned.exercise_name)}
+        </span>
         <span className="atlas-importexport__row-targets">{targetSummary(entry)}</span>
         {entry.warnings.map((warning) => (
           <span key={warning.message} className="atlas-importexport__row-warning">
@@ -73,7 +76,10 @@ function ExerciseRow({ entry, resolution, onResolve }: ExerciseRowProps) {
 
       {!isUnresolved ? (
         <span className="atlas-importexport__row-match">
-          Matched: {entry.match.matched_exercise?.name}
+          Matched:{' '}
+          {entry.match.matched_exercise
+            ? formatExerciseName(entry.match.matched_exercise.name)
+            : null}
           {entry.match.confidence !== 'exact' && ` (${entry.match.confidence})`}
         </span>
       ) : (

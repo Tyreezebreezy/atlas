@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getOrCreateDeviceId, newId } from '@atlas/core';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, ExerciseNote, WorkoutSession } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
 import { ExerciseMedia } from './ExerciseMedia';
@@ -60,11 +61,11 @@ export function ExerciseDetail({ exercise, storage, onBack }: ExerciseDetailProp
 
   return (
     <div className="atlas-exercise-detail">
-      <button type="button" className="atlas-exercise-detail__back" onClick={onBack}>
+      <button type="button" className="atlas-template-editor__back" onClick={onBack}>
         &larr; Back
       </button>
       <div className="atlas-exercise-detail__title-row">
-        <h1>{exercise.name}</h1>
+        <h1>{formatExerciseName(exercise.name)}</h1>
         <button
           type="button"
           className="atlas-exercise-detail__favorite"

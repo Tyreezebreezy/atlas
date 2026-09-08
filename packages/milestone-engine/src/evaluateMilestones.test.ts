@@ -101,6 +101,81 @@ describe('evaluateMilestone: dimensions', () => {
     expect(achieved.achieved_at).toBe('2026-08-08T10:00:00.000Z');
   });
 
+  it('weight_and_reps: pins the exact v0.2.3 spec examples for "225 lb x 5"', () => {
+    const milestone = createMilestone({
+      title: '225 For Reps',
+      exerciseId: 'bench',
+      dimension: 'weight_and_reps',
+      targetWeight: 225,
+      targetReps: 5,
+    });
+
+    // Achieved: a single set at 225 for 5 (or more) reps.
+    const exactMatch = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench', weight: 225, reps: 5 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(milestone, [exactMatch], []).achieved_at).toBe(
+      '2026-08-01T10:00:00.000Z',
+    );
+
+    // NOT achieved: right weight, one rep short.
+    const rightWeightShortReps = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench', weight: 225, reps: 4 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(milestone, [rightWeightShortReps], []).achieved_at).toBeNull();
+
+    // NOT achieved: right reps, weight 5 lb short.
+    const rightRepsLightWeight = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench', weight: 220, reps: 5 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(milestone, [rightRepsLightWeight], []).achieved_at).toBeNull();
+
+    // NOT achieved: weight from one set and reps from a different set never combine.
+    const splitAcrossSets = completedSession(
+      'bench',
+      [
+        set({ exerciseId: 'bench', weight: 225, reps: 1 }),
+        set({ exerciseId: 'bench', weight: 135, reps: 5 }),
+      ],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(milestone, [splitAcrossSets], []).achieved_at).toBeNull();
+  });
+
+  it('a warm-up set at or above target never counts, for any dimension (shared eligibility with PRs)', () => {
+    const weightMilestone = createMilestone({
+      title: '225 Bench',
+      exerciseId: 'bench',
+      dimension: 'weight',
+      targetWeight: 225,
+    });
+    const warmupOnly = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench', weight: 315, reps: 1, phase: 'warmup' })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(weightMilestone, [warmupOnly], []).achieved_at).toBeNull();
+
+    const repsMilestone = createMilestone({
+      title: '10 Pull-Ups',
+      exerciseId: 'pullup',
+      dimension: 'reps',
+      targetReps: 10,
+    });
+    const warmupReps = completedSession(
+      'pullup',
+      [set({ exerciseId: 'pullup', reps: 15, phase: 'warmup' })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    expect(evaluateMilestone(repsMilestone, [warmupReps], []).achieved_at).toBeNull();
+  });
+
   it('reps: bodyweight rep target, no weight involved', () => {
     const milestone = createMilestone({
       title: '50 Push-Ups',

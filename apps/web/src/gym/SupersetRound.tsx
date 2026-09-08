@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { currentGroupRound, isGroupComplete, type LogSetInput } from '@atlas/workout-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, ExerciseGroup, PerformedSet, PlannedExercise } from '@atlas/data-model';
 
 interface MemberDraft {
@@ -140,13 +141,15 @@ export function SupersetRound({
           return (
             <li key={member.id} className="atlas-superset__member">
               <span className="atlas-superset__member-label">{label}</span>
-              <span className="atlas-superset__member-name">{exercise?.name ?? 'Exercise'}</span>
+              <span className="atlas-superset__member-name">
+                {formatExerciseName(exercise?.name ?? 'Exercise')}
+              </span>
               <div className="atlas-superset__member-fields">
                 {showsWeight && (
                   <input
                     type="number"
                     inputMode="decimal"
-                    aria-label={`${exercise?.name ?? 'Exercise'} weight`}
+                    aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} weight`}
                     placeholder="Weight"
                     value={draft.weight}
                     onChange={(e) => updateDraft(member.id, { weight: e.target.value })}
@@ -157,7 +160,7 @@ export function SupersetRound({
                   <input
                     type="number"
                     inputMode="numeric"
-                    aria-label={`${exercise?.name ?? 'Exercise'} reps`}
+                    aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} reps`}
                     placeholder="Reps"
                     value={draft.reps}
                     onChange={(e) => updateDraft(member.id, { reps: e.target.value })}
@@ -168,7 +171,7 @@ export function SupersetRound({
                   <input
                     type="number"
                     inputMode="numeric"
-                    aria-label={`${exercise?.name ?? 'Exercise'} seconds`}
+                    aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} seconds`}
                     placeholder="Seconds"
                     value={draft.duration}
                     onChange={(e) => updateDraft(member.id, { duration: e.target.value })}
@@ -179,7 +182,7 @@ export function SupersetRound({
                   <input
                     type="number"
                     inputMode="decimal"
-                    aria-label={`${exercise?.name ?? 'Exercise'} distance`}
+                    aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} distance`}
                     placeholder="Meters"
                     value={draft.distance}
                     onChange={(e) => updateDraft(member.id, { distance: e.target.value })}

@@ -1,4 +1,5 @@
 import { summarizeSession } from '@atlas/workout-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
 import { describePR } from '../progress/formatPR';
 
@@ -58,7 +59,7 @@ export function WorkoutSummary({
               return (
                 <li key={pr.id}>
                   <span className="atlas-workout-summary__pr-exercise">
-                    {exercises.get(pr.exercise_id)?.name ?? 'Exercise'}
+                    {formatExerciseName(exercises.get(pr.exercise_id)?.name ?? 'Exercise')}
                   </span>
                   <span className="atlas-workout-summary__pr-value">{value}</span>
                   <span className="atlas-workout-summary__pr-title">{title}</span>
@@ -77,7 +78,7 @@ export function WorkoutSummary({
               <li key={milestone.id}>
                 <span className="atlas-workout-summary__milestone-exercise">
                   {milestone.exercise_id
-                    ? (exercises.get(milestone.exercise_id)?.name ?? 'Exercise')
+                    ? formatExerciseName(exercises.get(milestone.exercise_id)?.name ?? 'Exercise')
                     : ''}
                 </span>
                 <span className="atlas-workout-summary__milestone-title">{milestone.title}</span>

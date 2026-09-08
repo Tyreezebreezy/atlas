@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { createMilestone } from '@atlas/milestone-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, Milestone, MilestoneDimension } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
 import { ExercisePicker } from '../program/ExercisePicker';
@@ -18,24 +19,31 @@ function dimensionMismatchHint(exercise: Exercise, dimension: MilestoneDimension
     dimension === 'custom';
   const needsReps = dimension === 'reps' || dimension === 'weight_and_reps';
 
+  const displayName = formatExerciseName(exercise.name);
   if (needsWeight && type !== 'reps_weight') {
-    return `${exercise.name} doesn't log a weight, so this milestone may never be achievable. "Reps" is usually the better fit for a bodyweight exercise.`;
+    return `${displayName} doesn't log a weight, so this milestone may never be achievable. "Reps" is usually the better fit for a bodyweight exercise.`;
   }
   if (dimension === 'duration' && type !== 'time' && type !== 'distance_time') {
-    return `${exercise.name} doesn't log a duration, so this milestone may never be achievable.`;
+    return `${displayName} doesn't log a duration, so this milestone may never be achievable.`;
   }
   if (dimension === 'distance' && type !== 'distance' && type !== 'distance_time') {
-    return `${exercise.name} doesn't log a distance, so this milestone may never be achievable.`;
+    return `${displayName} doesn't log a distance, so this milestone may never be achievable.`;
   }
   if (needsReps && (type === 'time' || type === 'distance')) {
-    return `${exercise.name} is logged by ${type === 'time' ? 'duration' : 'distance'}, not reps, so this milestone may never be achievable.`;
+    return `${displayName} is logged by ${type === 'time' ? 'duration' : 'distance'}, not reps, so this milestone may never be achievable.`;
   }
   return null;
 }
 
 interface MilestoneFormProps {
   storage: AtlasStorage;
-  onCreated: (milestone: Milestone) => void;
+  /** Present when editing an existing milestone; omitted when creating a new one. */
+  existingMilestone?: Milestone;
+  /** Required alongside `existingMilestone` -- the caller already has the
+   * full exercise map loaded, so this form never needs its own fetch just
+   * to resolve one id back to a name. */
+  existingExercise?: Exercise;
+  onSaved: (milestone: Milestone) => void;
   onCancel: () => void;
 }
 
@@ -58,49 +66,102 @@ function parseNum(value: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-export function MilestoneForm({ storage, onCreated, onCancel }: MilestoneFormProps) {
-  const [exercise, setExercise] = useState<Exercise | null>(null);
-  const [title, setTitle] = useState('');
-  const [dimension, setDimension] = useState<MilestoneDimension>('weight');
-  const [targetWeight, setTargetWeight] = useState('');
-  const [targetReps, setTargetReps] = useState('');
-  const [targetVolume, setTargetVolume] = useState('');
-  const [targetDurationSeconds, setTargetDurationSeconds] = useState('');
-  const [targetDistanceMeters, setTargetDistanceMeters] = useState('');
-  const [referenceValue, setReferenceValue] = useState('');
-  const [multiplier, setMultiplier] = useState('');
+export function MilestoneForm({
+  storage,
+  existingMilestone,
+  existingExercise,
+  onSaved,
+  onCancel,
+}: MilestoneFormProps) {
+  const [exercise, setExercise] = useState<Exercise | null>(existingExercise ?? null);
+  const [title, setTitle] = useState(existingMilestone?.title ?? '');
+  const [dimension, setDimension] = useState<MilestoneDimension>(
+    existingMilestone?.dimension ?? 'weight',
+  );
+  const [targetWeight, setTargetWeight] = useState(
+    existingMilestone?.target_weight?.toString() ?? '',
+  );
+  const [targetReps, setTargetReps] = useState(existingMilestone?.target_reps?.toString() ?? '');
+  const [targetVolume, setTargetVolume] = useState(
+    existingMilestone?.target_volume?.toString() ?? '',
+  );
+  const [targetDurationSeconds, setTargetDurationSeconds] = useState(
+    existingMilestone?.target_duration_seconds?.toString() ?? '',
+  );
+  const [targetDistanceMeters, setTargetDistanceMeters] = useState(
+    existingMilestone?.target_distance_meters?.toString() ?? '',
+  );
+  const [referenceValue, setReferenceValue] = useState(
+    existingMilestone?.reference_value?.toString() ?? '',
+  );
+  const [multiplier, setMultiplier] = useState(existingMilestone?.multiplier?.toString() ?? '');
 
   if (!exercise) {
     return <ExercisePicker storage={storage} onPick={setExercise} onCancel={onCancel} />;
   }
 
   const mismatchHint = dimensionMismatchHint(exercise, dimension);
+  const forksBuiltin = existingMilestone?.is_builtin ?? false;
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!title.trim() || !exercise) return;
-    onCreated(
-      createMilestone({
-        title: title.trim(),
-        exerciseId: exercise.id,
-        dimension,
-        targetWeight: parseNum(targetWeight),
-        targetReps: parseNum(targetReps),
-        targetVolume: parseNum(targetVolume),
-        targetDurationSeconds: parseNum(targetDurationSeconds),
-        targetDistanceMeters: parseNum(targetDistanceMeters),
-        referenceValue: dimension === 'custom' ? parseNum(referenceValue) : null,
-        multiplier: parseNum(multiplier),
-      }),
-    );
+    const fields = {
+      title: title.trim(),
+      exerciseId: exercise.id,
+      dimension,
+      targetWeight: parseNum(targetWeight),
+      targetReps: parseNum(targetReps),
+      targetVolume: parseNum(targetVolume),
+      targetDurationSeconds: parseNum(targetDurationSeconds),
+      targetDistanceMeters: parseNum(targetDistanceMeters),
+      referenceValue: dimension === 'custom' ? parseNum(referenceValue) : null,
+      multiplier: parseNum(multiplier),
+    };
+
+    // createMilestone recomputes every target_* field consistently
+    // (notably 'custom''s target_weight = referenceValue * multiplier) --
+    // reused here rather than hand-mapping camelCase to snake_case a
+    // second time for the in-place-edit path below.
+    const recomputed = createMilestone(fields);
+
+    if (existingMilestone && !forksBuiltin) {
+      // In-place edit of an owner-created milestone: keep its identity and
+      // history, take the freshly recomputed target fields.
+      onSaved({
+        ...recomputed,
+        id: existingMilestone.id,
+        created_at: existingMilestone.created_at,
+        device_id: existingMilestone.device_id,
+        active: existingMilestone.active,
+        achieved_at: existingMilestone.achieved_at,
+        origin_session_id: existingMilestone.origin_session_id,
+        origin_set_id: existingMilestone.origin_set_id,
+        version: existingMilestone.version + 1,
+      });
+      return;
+    }
+
+    // Either a brand-new milestone, or a substantial edit of an immutable
+    // built-in template -- v0.2.3 Part F forks that into the owner's own
+    // new custom milestone rather than rewriting the shared catalog entry
+    // (the caller demotes the original built-in back to catalog-only once
+    // it sees the saved milestone has a different id than what it passed in).
+    onSaved(recomputed);
   }
 
   return (
     <form className="atlas-milestone-form" onSubmit={handleSubmit}>
-      <h1>New Milestone</h1>
+      <h1>{existingMilestone ? 'Edit Milestone' : 'New Milestone'}</h1>
+      {forksBuiltin && (
+        <p className="atlas-milestone-form__hint">
+          This built-in goal can't be changed directly -- saving creates your own copy with these
+          values, and removes this one from your active goals.
+        </p>
+      )}
 
       <div className="atlas-milestone-form__exercise">
-        <span>{exercise.name}</span>
+        <span>{formatExerciseName(exercise.name)}</span>
         <button type="button" onClick={() => setExercise(null)}>
           Change
         </button>

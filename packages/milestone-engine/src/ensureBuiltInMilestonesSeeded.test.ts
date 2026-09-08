@@ -18,6 +18,22 @@ describe('ensureBuiltInMilestonesSeeded', () => {
     expect(milestones.find((m) => m.title === '225 lb Bench Press')?.target_weight).toBe(225);
   });
 
+  it('seeds every built-in as catalog-only, not an active goal (v0.2.3)', async () => {
+    // The owner explicitly does not want every seeded target treated as an
+    // active personal goal -- a fresh seed is a browsable catalog, and the
+    // owner opts individual goals into "My Milestones" from there (see
+    // MilestoneCatalog.tsx). evaluateMilestone already skips `!active`
+    // milestones entirely, so this also means a fresh install never
+    // evaluates a goal the owner hasn't chosen.
+    const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    await ensureExercisesSeeded(storage);
+    await ensureBuiltInMilestonesSeeded(storage);
+
+    const milestones = await storage.milestones.getAll();
+    expect(milestones.length).toBeGreaterThan(0);
+    expect(milestones.every((m) => m.active === false)).toBe(true);
+  });
+
   it('is a no-op once built-in milestones already exist', async () => {
     const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
     await ensureExercisesSeeded(storage);

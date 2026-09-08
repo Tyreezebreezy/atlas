@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { searchExercises } from '@atlas/exercise-library';
+import { formatExerciseName, searchExercises } from '@atlas/exercise-library';
 import type { Exercise, ExerciseReplacement } from '@atlas/data-model';
 
 type AddScope = ExerciseReplacement['scope'];
@@ -98,10 +98,10 @@ export function AddExercisePanel({
               <button
                 type="button"
                 onClick={() => setSelected(exercise)}
-                aria-label={`Add ${exercise.name}`}
+                aria-label={`Add ${formatExerciseName(exercise.name)}`}
               >
                 <span className="atlas-library__item-name" aria-hidden="true">
-                  {exercise.name}
+                  {formatExerciseName(exercise.name)}
                 </span>
               </button>
             </li>

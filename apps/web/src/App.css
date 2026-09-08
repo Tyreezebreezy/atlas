@@ -17,6 +17,25 @@ body {
   font-family: var(--atlas-font-sans);
 }
 
+/* v0.2.3: form controls don't inherit body's color in any browser -- the
+   UA stylesheet sets its own (typically near-black), which read as
+   black-on-graphite the moment a rule below gave a control a dark
+   background without also setting its text color. One global rule beats
+   auditing every `input`/`select`/`textarea` selector in this file for a
+   `color` declaration, and a class rule further down can still override it
+   for an intentionally muted control (e.g. the inline set-type select). */
+input,
+select,
+textarea {
+  color: var(--atlas-color-text-primary);
+  -webkit-text-fill-color: var(--atlas-color-text-primary);
+}
+
+::placeholder {
+  color: var(--atlas-color-text-secondary);
+  opacity: 1;
+}
+
 button {
   font-family: inherit;
 }
@@ -266,16 +285,6 @@ button {
 }
 
 /* Exercise detail */
-
-.atlas-exercise-detail__back {
-  border: none;
-  background: transparent;
-  color: var(--atlas-color-accent);
-  padding: 0;
-  margin-bottom: var(--atlas-space-3);
-  min-height: 44px;
-  cursor: pointer;
-}
 
 .atlas-exercise-detail__meta {
   color: var(--atlas-color-text-secondary);
@@ -2427,6 +2436,52 @@ button {
 .atlas-progress__milestone-exercise {
   font-size: 0.8rem;
   color: var(--atlas-color-text-secondary);
+}
+
+/* v0.2.3: My Milestones/Achieved/Catalog cards all put a title+meta column
+   on the left of the same flex row (`.atlas-progress__milestone-list li`
+   is already `justify-content: space-between`) with actions on the right,
+   so this is the only new layout rule needed for all three. */
+.atlas-progress__milestone-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.atlas-progress__milestone-actions {
+  display: flex;
+  gap: var(--atlas-space-2);
+  flex-shrink: 0;
+}
+
+.atlas-progress__milestone-actions button,
+.atlas-progress__milestone-toggle {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.atlas-progress__milestone-toggle[aria-pressed='true'] {
+  border-color: var(--atlas-color-milestone);
+  color: var(--atlas-color-milestone);
+}
+
+.atlas-milestone-catalog__create {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-milestone);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-milestone);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .atlas-progress__benchmark-list {

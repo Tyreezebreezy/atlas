@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { summarizeSession } from '@atlas/workout-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, WorkoutSession } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
 
@@ -33,7 +34,7 @@ function SessionDetail({ session, exercises, onBack }: SessionDetailProps) {
       </p>
       {[...byExercise.entries()].map(([exerciseId, sets]) => (
         <div key={exerciseId} className="atlas-history-detail__exercise">
-          <h2>{exercises.get(exerciseId)?.name ?? 'Unknown exercise'}</h2>
+          <h2>{formatExerciseName(exercises.get(exerciseId)?.name ?? 'Unknown exercise')}</h2>
           <ul>
             {sets
               .sort((a, b) => a.set_index - b.set_index)
@@ -52,7 +53,11 @@ function SessionDetail({ session, exercises, onBack }: SessionDetailProps) {
   );
 }
 
-export function HistoryScreen() {
+interface HistoryScreenProps {
+  onBack: () => void;
+}
+
+export function HistoryScreen({ onBack }: HistoryScreenProps) {
   const storage = useStorage();
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
@@ -99,6 +104,9 @@ export function HistoryScreen() {
 
   return (
     <div className="atlas-history">
+      <button type="button" className="atlas-template-editor__back" onClick={onBack}>
+        &larr; Back
+      </button>
       <h1>History</h1>
       {completed.length === 0 ? (
         <p className="atlas-program-screen__empty">

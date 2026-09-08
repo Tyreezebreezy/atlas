@@ -5,7 +5,13 @@ import {
   trainingRecency,
   type DistributionEntry,
 } from '@atlas/progress-engine';
-import { ensureBuiltInMilestonesSeeded, groupMilestones } from '@atlas/milestone-engine';
+import {
+  describeMilestoneProgress,
+  ensureBuiltInMilestonesSeeded,
+  groupMilestones,
+  migrateBuiltInMilestonesToCatalog,
+} from '@atlas/milestone-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import {
   ensureBenchmarksSeeded,
   findBenchmark,
@@ -23,6 +29,8 @@ import type {
 import { useStorage } from '../storage/StorageContext';
 import { ActivityHeatmap } from './ActivityHeatmap';
 import { describePR } from './formatPR';
+import { evaluateMilestonesForSession } from './evaluateMilestonesForSession';
+import { MilestoneCatalog } from './MilestoneCatalog';
 import { MilestoneForm } from './MilestoneForm';
 
 interface ProgressScreenProps {
@@ -98,6 +106,9 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  /** Null when the catalog is closed; a string (possibly empty) is its initial search text. */
+  const [catalogQuery, setCatalogQuery] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storage) return;
@@ -105,6 +116,10 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
 
     async function loadAll() {
       if (!storage) return;
+      // Order doesn't matter for correctness (migration only touches
+      // existing rows, seeding only creates ones with a name it hasn't
+      // seen), but demoting old data before a fresh seed reads clearer.
+      await migrateBuiltInMilestonesToCatalog(storage);
       await Promise.all([ensureBuiltInMilestonesSeeded(storage), ensureBenchmarksSeeded(storage)]);
       const [allPRs, allMilestones, allBenchmarks, allExercises, allSessions] = await Promise.all([
         storage.personalRecords.getAll(),
@@ -135,7 +150,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
         key: `pr:${pr.id}`,
         kind: 'pr',
         date: pr.achieved_at,
-        exerciseName: exercises.get(pr.exercise_id)?.name ?? 'Exercise',
+        exerciseName: formatExerciseName(exercises.get(pr.exercise_id)?.name ?? 'Exercise'),
         title,
         value,
       };
@@ -146,7 +161,9 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
         key: `milestone:${m.id}`,
         kind: 'milestone',
         date: m.achieved_at,
-        exerciseName: m.exercise_id ? (exercises.get(m.exercise_id)?.name ?? 'Exercise') : '',
+        exerciseName: m.exercise_id
+          ? formatExerciseName(exercises.get(m.exercise_id)?.name ?? 'Exercise')
+          : '',
         title: m.title,
         value: null,
       }));
@@ -177,13 +194,32 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
   // achieved_at, which scrambles different movements together the moment
   // two milestones are hit on different days. See docs/DATA_MODEL.md
   // "Milestone grouping."
-  const milestoneGroups = useMemo(
+  //
+  // v0.2.3 Part B/C: "active" now means "the owner selected this as a
+  // goal" (built-ins seed inactive -- see ensureBuiltInMilestonesSeeded.ts
+  // -- and evaluateMilestone already skips `!active` entirely, so an
+  // unselected catalog target is never even evaluated). My Milestones and
+  // Achieved are mutually exclusive: a goal graduates out of "in progress"
+  // the moment it's achieved, regardless of its active flag from then on.
+  const myMilestoneGroups = useMemo(
     () =>
       groupMilestones(
-        milestones.filter((m) => m.active || m.achieved_at != null),
+        milestones.filter((m) => m.active && m.achieved_at == null),
         exercises,
       ),
     [milestones, exercises],
+  );
+  const achievedMilestoneGroups = useMemo(
+    () => groupMilestones(milestones.filter((m) => m.achieved_at != null), exercises),
+    [milestones, exercises],
+  );
+  // The catalog only ever shows built-ins still worth pursuing -- an
+  // already-achieved one has nothing left to "add" (it's in Achieved
+  // regardless of this list), and this is the ONLY screen the full set of
+  // dozens of built-ins is ever rendered on (Part K).
+  const catalogMilestones = useMemo(
+    () => milestones.filter((m) => m.is_builtin && m.achieved_at == null),
+    [milestones],
   );
 
   const benchmarkComparisons = useMemo(() => {
@@ -199,18 +235,79 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       const percentile = interpolatePercentile(pr.value, found.percentile_thresholds);
       results.push({
         benchmark: found,
-        exerciseName: exercises.get(benchmark.exercise_id)?.name ?? 'Exercise',
+        exerciseName: formatExerciseName(exercises.get(benchmark.exercise_id)?.name ?? 'Exercise'),
         display: formatPercentileDisplay(percentile, found.comparison_population),
       });
     }
     return results;
   }, [benchmarks, prs, exercises]);
 
-  async function handleMilestoneCreated(milestone: Milestone) {
+  async function handleMilestoneSaved(saved: Milestone) {
     if (!storage) return;
-    await storage.milestones.put(milestone);
+    await storage.milestones.put(saved);
+    // MilestoneForm forks a substantially-edited built-in into a new custom
+    // milestone rather than rewriting the shared template (Part F) -- it
+    // signals that here by handing back a different id than what this
+    // screen passed in as `editingMilestone`. Demote the original so it
+    // doesn't also linger as a second active goal alongside the fork.
+    if (editingMilestone?.is_builtin && editingMilestone.id !== saved.id) {
+      await storage.milestones.put({
+        ...editingMilestone,
+        active: false,
+        updated_at: new Date().toISOString(),
+        version: editingMilestone.version + 1,
+      });
+    }
+    // A freshly-activated goal (new custom, or forked-then-active) may
+    // already be satisfied by existing history -- credit it immediately
+    // rather than waiting for the next workout to finish.
+    await evaluateMilestonesForSession(storage);
     setMilestones(await storage.milestones.getAll());
     setShowMilestoneForm(false);
+    setEditingMilestone(null);
+  }
+
+  async function handleToggleCatalogMilestone(milestone: Milestone, nextActive: boolean) {
+    if (!storage) return;
+    await storage.milestones.put({
+      ...milestone,
+      active: nextActive,
+      updated_at: new Date().toISOString(),
+      version: milestone.version + 1,
+    });
+    if (nextActive) await evaluateMilestonesForSession(storage);
+    setMilestones(await storage.milestones.getAll());
+  }
+
+  // Removing a not-yet-achieved goal from My Milestones: a built-in just
+  // returns to catalog-only (the shared row stays, achievable again later
+  // from the catalog); a custom milestone has no catalog to return to, so
+  // it's soft-deleted outright -- either way, achieved history elsewhere
+  // is untouched by construction (this only ever runs on achieved_at ==
+  // null rows, since that's all My Milestones ever shows).
+  async function handleRemoveMilestone(milestone: Milestone) {
+    if (!storage) return;
+    if (milestone.is_builtin) {
+      await storage.milestones.put({
+        ...milestone,
+        active: false,
+        updated_at: new Date().toISOString(),
+        version: milestone.version + 1,
+      });
+    } else {
+      await storage.milestones.softDelete(milestone.id);
+    }
+    setMilestones(await storage.milestones.getAll());
+  }
+
+  // After achieving a goal, offer the catalog pre-filtered to the same
+  // exercise rather than a bespoke "next rung" picker -- one browse
+  // surface, and the owner decides (Part J: no automatic replacement).
+  function handleChooseNextGoal(milestone: Milestone) {
+    const exerciseName = milestone.exercise_id
+      ? (exercises.get(milestone.exercise_id)?.name ?? '')
+      : '';
+    setCatalogQuery(exerciseName);
   }
 
   if (!storage || loading) {
@@ -222,12 +319,35 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     );
   }
 
-  if (showMilestoneForm) {
+  if (catalogQuery != null) {
+    return (
+      <MilestoneCatalog
+        milestones={catalogMilestones}
+        exercises={exercises}
+        initialQuery={catalogQuery}
+        onToggle={(m, next) => void handleToggleCatalogMilestone(m, next)}
+        onCreateCustom={() => {
+          setCatalogQuery(null);
+          setShowMilestoneForm(true);
+        }}
+        onBack={() => setCatalogQuery(null)}
+      />
+    );
+  }
+
+  if (showMilestoneForm || editingMilestone) {
     return (
       <MilestoneForm
         storage={storage}
-        onCreated={(m) => void handleMilestoneCreated(m)}
-        onCancel={() => setShowMilestoneForm(false)}
+        existingMilestone={editingMilestone ?? undefined}
+        existingExercise={
+          editingMilestone?.exercise_id ? exercises.get(editingMilestone.exercise_id) : undefined
+        }
+        onSaved={(m) => void handleMilestoneSaved(m)}
+        onCancel={() => {
+          setShowMilestoneForm(false);
+          setEditingMilestone(null);
+        }}
       />
     );
   }
@@ -331,7 +451,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
             {strengthTrends.map((t) => (
               <li key={t.exerciseId}>
                 <span className="atlas-progress__trend-exercise">
-                  {exercises.get(t.exerciseId)?.name ?? 'Exercise'}
+                  {formatExerciseName(exercises.get(t.exerciseId)?.name ?? 'Exercise')}
                 </span>
                 <span className="atlas-progress__trend-value">
                   {Math.round(t.first)} &rarr; {Math.round(t.last)} e1RM
@@ -343,38 +463,81 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       )}
 
       <section className="atlas-progress__milestones">
-        <h2>Milestones</h2>
-        {milestoneGroups.length === 0 && (
-          <p className="atlas-program-screen__empty">No milestones yet.</p>
+        <h2>My Milestones</h2>
+        {myMilestoneGroups.length === 0 && (
+          <p className="atlas-program-screen__empty">
+            No active goals yet -- add one from the catalog below.
+          </p>
         )}
-        {milestoneGroups.map((group) => (
+        {myMilestoneGroups.map((group) => (
           <div
             key={group.exerciseId ?? group.displayName}
             className="atlas-progress__milestone-group"
           >
-            <h3 className="atlas-progress__milestone-group-title">{group.displayName}</h3>
+            <h3 className="atlas-progress__milestone-group-title">
+              {formatExerciseName(group.displayName)}
+            </h3>
             <ul className="atlas-progress__milestone-list">
-              {group.milestones.map((m) => (
-                <li
-                  key={m.id}
-                  className={
-                    m.achieved_at
-                      ? 'atlas-progress__milestone--achieved'
-                      : 'atlas-progress__milestone--pending'
-                  }
-                >
-                  <span className="atlas-progress__milestone-title">{m.title}</span>
-                  <span className="atlas-progress__milestone-date">
-                    {m.achieved_at ? formatDate(m.achieved_at) : 'Not yet'}
-                  </span>
-                </li>
-              ))}
+              {group.milestones.map((m) => {
+                const progress = describeMilestoneProgress(m, prs);
+                return (
+                  <li key={m.id}>
+                    <div className="atlas-progress__milestone-main">
+                      <span className="atlas-progress__milestone-title">{m.title}</span>
+                      <span className="atlas-progress__milestone-date">{progress.text}</span>
+                    </div>
+                    <div className="atlas-progress__milestone-actions">
+                      <button type="button" onClick={() => setEditingMilestone(m)}>
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => void handleRemoveMilestone(m)}>
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}
-        <button type="button" onClick={() => setShowMilestoneForm(true)}>
-          + New Milestone
+        <button type="button" onClick={() => setCatalogQuery('')}>
+          + Add Milestone
         </button>
+      </section>
+
+      <section className="atlas-progress__milestones">
+        <h2>Achieved</h2>
+        {achievedMilestoneGroups.length === 0 ? (
+          <p className="atlas-program-screen__empty">Nothing achieved yet.</p>
+        ) : (
+          achievedMilestoneGroups.map((group) => (
+            <div
+              key={group.exerciseId ?? group.displayName}
+              className="atlas-progress__milestone-group"
+            >
+              <h3 className="atlas-progress__milestone-group-title">
+                {formatExerciseName(group.displayName)}
+              </h3>
+              <ul className="atlas-progress__milestone-list">
+                {group.milestones.map((m) => (
+                  <li key={m.id} className="atlas-progress__milestone--achieved">
+                    <div className="atlas-progress__milestone-main">
+                      <span className="atlas-progress__milestone-title">{m.title}</span>
+                      <span className="atlas-progress__milestone-date">
+                        {formatDate(m.achieved_at!)}
+                      </span>
+                    </div>
+                    <div className="atlas-progress__milestone-actions">
+                      <button type="button" onClick={() => handleChooseNextGoal(m)}>
+                        Choose Next Goal
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        )}
       </section>
 
       {benchmarkComparisons.length > 0 && (

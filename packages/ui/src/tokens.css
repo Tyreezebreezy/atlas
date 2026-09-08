@@ -13,6 +13,12 @@
  * checked against 3:1/4.5:1 instead.
  */
 :root {
+  /* v0.2.3: ATLAS has no light theme -- tell the browser once so native
+     controls (date/time pickers, scrollbars, select popups) render dark by
+     default instead of guessing from OS light-mode. See App.css's
+     input/select/textarea rule for the text-color half of this fix. */
+  color-scheme: dark;
+
   --atlas-color-background: #0b0d10;
   --atlas-color-surface: #15191e;
   --atlas-color-surface-raised: #242b33;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { type LogSetInput, remainingSeconds, setPhaseOf, setTypeOf } from '@atlas/workout-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import type {
   Exercise,
   PersonalRecord,
@@ -286,11 +287,11 @@ export function ExerciseLogger({
   return (
     <div className="atlas-gym-exercise">
       <div className="atlas-gym-exercise__header">
-        <h2>{exercise.name}</h2>
+        <h2>{formatExerciseName(exercise.name)}</h2>
         <button
           type="button"
           className="atlas-gym-exercise__menu-button"
-          aria-label={`${exercise.name} options`}
+          aria-label={`${formatExerciseName(exercise.name)} options`}
           onClick={() => setShowContextSheet(true)}
         >
           &hellip;

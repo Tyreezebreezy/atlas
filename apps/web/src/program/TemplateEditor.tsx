@@ -9,6 +9,7 @@ import {
   withSequentialOrder,
 } from '@atlas/workout-engine';
 import { plannedMuscleDistribution } from '@atlas/progress-engine';
+import { formatExerciseName } from '@atlas/exercise-library';
 import { ProgressionPolicyFields } from './ProgressionPolicyFields';
 import type {
   Exercise,
@@ -126,7 +127,7 @@ export function TemplateEditor({
         exercises: [...prev.exercises, createPlannedExercise(exercise.id, prev.exercises.length)],
       };
     });
-    setExerciseNames((prev) => new Map(prev).set(exercise.id, exercise.name));
+    setExerciseNames((prev) => new Map(prev).set(exercise.id, formatExerciseName(exercise.name)));
     setPicking(false);
   }
 

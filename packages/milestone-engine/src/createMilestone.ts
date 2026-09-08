@@ -16,6 +16,12 @@ export interface CreateMilestoneInput {
   /** For 'custom' (with referenceValue) and 'bodyweight_multiplier' (alone). */
   multiplier?: number | null;
   isBuiltin?: boolean;
+  /** Whether this counts toward "My Milestones" (evaluated, surfaced as an
+   * active goal) vs catalog-only (see evaluateMilestone's own `!active`
+   * skip). Defaults to true -- an owner explicitly creating a custom
+   * milestone always means it as a goal; only the built-in seeder passes
+   * `false` (see ensureBuiltInMilestonesSeeded.ts). */
+  active?: boolean;
 }
 
 export function createMilestone(input: CreateMilestoneInput): Milestone {
@@ -51,7 +57,7 @@ export function createMilestone(input: CreateMilestoneInput): Milestone {
     reference_value: input.referenceValue ?? null,
     multiplier: input.multiplier ?? null,
     is_builtin: input.isBuiltin ?? false,
-    active: true,
+    active: input.active ?? true,
     achieved_at: null,
     origin_session_id: null,
     origin_set_id: null,

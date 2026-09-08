@@ -63,6 +63,11 @@ async function seed(storage: AtlasStorage): Promise<void> {
       targetReps: spec.targetReps ?? null,
       targetDurationSeconds: spec.targetDurationSeconds ?? null,
       isBuiltin: true,
+      // v0.2.3: built-ins seed as catalog entries, not automatic goals --
+      // the owner opts in from the catalog (see MilestoneCatalog.tsx).
+      // Pre-existing installs get a one-time correction, not this default:
+      // see migrateBuiltInMilestonesToCatalog.ts.
+      active: false,
     });
   }).filter((m): m is NonNullable<typeof m> => m != null);
 

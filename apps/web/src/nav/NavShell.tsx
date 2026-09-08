@@ -30,7 +30,7 @@ type MoreView = 'menu' | 'history' | 'log-past' | 'settings' | 'body' | 'import-
 
 function MoreTab() {
   const [view, setView] = useState<MoreView>('menu');
-  if (view === 'history') return <HistoryScreen />;
+  if (view === 'history') return <HistoryScreen onBack={() => setView('menu')} />;
   if (view === 'log-past') return <LogPastWorkoutScreen onBack={() => setView('menu')} />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
   if (view === 'body') return <BodyScreen onBack={() => setView('menu')} />;

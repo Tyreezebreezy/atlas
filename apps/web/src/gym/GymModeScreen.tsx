@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatExerciseName } from '@atlas/exercise-library';
 import {
   addExerciseToSession,
   addExerciseToTemplate,
@@ -392,7 +393,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       ) : currentPlanned ? (
         skippedEntry ? (
           <div className="atlas-gym-exercise atlas-gym-exercise--skipped">
-            <h2>{exercises.get(currentPlanned.exercise_id)?.name ?? 'Exercise'}</h2>
+            <h2>{formatExerciseName(exercises.get(currentPlanned.exercise_id)?.name ?? 'Exercise')}</h2>
             <p className="atlas-gym-exercise__skipped-note">
               Skipped{skippedEntry.reason ? ` — ${skippedEntry.reason}` : ''}
             </p>
