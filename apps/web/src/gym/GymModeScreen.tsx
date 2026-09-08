@@ -36,7 +36,7 @@ import type {
   WorkoutOccurrence,
   WorkoutSession,
 } from '@atlas/data-model';
-import { advanceProgramSequence, completeOccurrence, findOccurrence } from '@atlas/program-engine';
+import { advanceProgramSequence, resolveOccurrenceCompletion } from '@atlas/program-engine';
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
 import { loadSettings } from '../settings/settings';
@@ -189,23 +189,19 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       if (program) {
         await activeStorage.programs.put(advanceProgramSequence(program, completed.program_day_id));
       }
-      // Only touches a slot that already has an occurrence row (moved,
-      // skipped-then-reconsidered, or replaced) -- the ordinary unmoved
-      // case intentionally never gets one at all (see WorkoutOccurrence's
-      // doc comment), so most completions are correctly a no-op here.
-      const todayIso = new Date().toISOString().slice(0, 10);
-      const existingOccurrence = findOccurrence(occurrences, completed.program_day_id, todayIso);
-      if (existingOccurrence) {
-        await activeStorage.workoutOccurrences.put(
-          completeOccurrence(
-            existingOccurrence,
-            completed.program_id,
-            completed.program_day_id,
-            todayIso,
-            completed.id,
-          ),
-        );
-      }
+    }
+    // v0.2.4: keyed by the session's own `scheduled_date` (the occurrence's
+    // original date), never today's wall-clock date -- a missed Monday
+    // workout finished live on Tuesday must complete MONDAY'S occurrence.
+    // Also always attempted now, not gated on an occurrence already
+    // existing -- an ordinary on-time completion of a never-touched day
+    // needs its own 'completed' row created just as much as a moved one
+    // needs its existing row updated (see resolveOccurrenceCompletion's
+    // doc comment). Null (no program day, or a "Do Again" rerun with no
+    // scheduled_date) correctly means nothing to do here.
+    const occurrenceUpdate = resolveOccurrenceCompletion(occurrences, completed);
+    if (occurrenceUpdate) {
+      await activeStorage.workoutOccurrences.put(occurrenceUpdate);
     }
 
     // PRs are recomputed (not incrementally patched) for every exercise this

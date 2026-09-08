@@ -41,6 +41,45 @@ describe('startWorkoutSession', () => {
     planned.push(createPlannedExercise('ex-2', 1));
     expect(session.planned_snapshot).toHaveLength(1);
   });
+
+  it('defaults scheduled_date to null when not given -- Freestyle/Quick Workouts and "Do Again" reruns', () => {
+    const session = makeSession();
+    expect(session.scheduled_date).toBeNull();
+  });
+
+  it('v0.2.4: scheduled_date is independent of startedAt -- a live late completion sets scheduled_date without backdating started_at', () => {
+    // The defining case this release fixes: starting Monday's missed
+    // workout live on Tuesday. started_at must stay real "now" (no
+    // startedAt override at all) while scheduled_date carries Monday.
+    const before = Date.now();
+    const session = startWorkoutSession({
+      name: 'Upper A',
+      templateId: 't-1',
+      programId: 'prog-1',
+      programDayId: 'day-1',
+      plannedSnapshot: [],
+      scheduledDate: '2026-09-07', // Monday
+    });
+    expect(session.scheduled_date).toBe('2026-09-07');
+    expect(new Date(session.started_at).getTime()).toBeGreaterThanOrEqual(before);
+    expect(session.planned_completed_at).toBeNull();
+  });
+
+  it('v0.2.4: only an explicit startedAt override (Log Past Workout) backdates started_at -- scheduledDate never does', () => {
+    const session = startWorkoutSession({
+      name: 'Upper A',
+      templateId: 't-1',
+      programId: 'prog-1',
+      programDayId: 'day-1',
+      plannedSnapshot: [],
+      startedAt: '2026-08-01T12:00:00.000Z',
+      plannedCompletedAt: '2026-08-01T13:00:00.000Z',
+      scheduledDate: '2026-08-01',
+    });
+    expect(session.started_at).toBe('2026-08-01T12:00:00.000Z');
+    expect(session.planned_completed_at).toBe('2026-08-01T13:00:00.000Z');
+    expect(session.scheduled_date).toBe('2026-08-01');
+  });
 });
 
 describe('addPerformedSet / removePerformedSet', () => {

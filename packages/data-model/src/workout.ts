@@ -154,6 +154,21 @@ export interface WorkoutSession extends SyncMeta {
   program_day_id: string | null;
   template_id: string | null;
   /**
+   * v0.2.4. The Program occurrence's ORIGINAL calendar date (YYYY-MM-DD)
+   * this session fulfills -- e.g. Monday, even when this session's own
+   * `started_at`/`completed_at` fall on Tuesday because the owner
+   * performed a missed workout late. Distinct from (and orthogonal to)
+   * `started_at`: this session is still a normal LIVE session with a
+   * real-time `started_at`, never backdated -- only "Log Past Workout"
+   * backdates `started_at`/`completed_at` (see `planned_completed_at`
+   * above). Null for Freestyle/Quick Workouts (no program day at all) and
+   * for a "Do Again" rerun of an already-completed occurrence: leaving it
+   * unset there is what tells `resolveOccurrenceCompletion` not to touch
+   * the occurrence a prior session already completed. See
+   * docs/DATA_MODEL.md "Scheduled vs. performed date."
+   */
+  scheduled_date?: string | null;
+  /**
    * Copied from the template/program day at session start — never a live
    * reference. Editing or deleting the program later must not rewrite this
    * session's history, so this snapshot is the session's own permanent record

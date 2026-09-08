@@ -23,6 +23,14 @@ export interface StartSessionInput {
    * tapped. */
   startedAt?: string;
   plannedCompletedAt?: string | null;
+  /** v0.2.4. The Program occurrence's original date this session
+   * fulfills -- orthogonal to `startedAt`/`plannedCompletedAt` above.
+   * Starting Monday's missed workout live on Tuesday sets this to
+   * Monday's date while `startedAt` stays unset (a normal, real-time
+   * session); only Log Past Workout backdates `startedAt`. Omit for
+   * Freestyle/Quick Workouts and for a "Do Again" rerun -- see
+   * `WorkoutSession.scheduled_date`'s doc comment. */
+  scheduledDate?: string | null;
 }
 
 /**
@@ -46,6 +54,7 @@ export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
     program_id: input.programId,
     program_day_id: input.programDayId,
     template_id: input.templateId,
+    scheduled_date: input.scheduledDate ?? null,
     planned_snapshot: input.plannedSnapshot.map((exercise) => ({ ...exercise })),
     groups: (input.groups ?? []).map((group) => ({ ...group })),
     performed_sets: [],

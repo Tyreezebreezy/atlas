@@ -1205,6 +1205,128 @@ button {
   font-size: 0.85rem;
 }
 
+.atlas-today__return {
+  min-height: 36px;
+  margin: var(--atlas-space-1) 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-accent);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* v0.2.4 week navigator -- compact Mon-Sun strip standing in for the old
+   full-week card list. Flex (not grid) so the day column naturally
+   shrinks to fit seven of them plus both arrows at 360px without any
+   viewport-conditional layout: a min-width floor keeps each one
+   tappable, gap stays small so nothing has to wrap. */
+.atlas-week-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-1);
+  margin-top: var(--atlas-space-3);
+}
+
+.atlas-week-nav__arrow {
+  flex: 0 0 auto;
+  min-width: 28px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.atlas-week-nav__days {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.atlas-week-nav__day {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--atlas-space-1) 0;
+  border: 1px solid transparent;
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-text-primary);
+  cursor: pointer;
+}
+
+.atlas-week-nav__day--today {
+  border-color: var(--atlas-color-accent);
+}
+
+.atlas-week-nav__day--selected {
+  background: var(--atlas-color-accent-mist);
+}
+
+.atlas-week-nav__letter {
+  font-size: 0.7rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-week-nav__daynum {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.atlas-week-nav__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--atlas-color-border);
+}
+
+.atlas-week-nav__dot--completed {
+  background: var(--atlas-color-success);
+}
+
+.atlas-week-nav__dot--missed {
+  background: var(--atlas-color-warning);
+}
+
+.atlas-week-nav__dot--skipped,
+.atlas-week-nav__dot--moved {
+  background: transparent;
+  border: 1px solid var(--atlas-color-text-secondary);
+}
+
+.atlas-week-nav__dot--scheduled,
+.atlas-week-nav__dot--future {
+  background: var(--atlas-color-accent);
+}
+
+.atlas-week-nav__dot--rest,
+.atlas-week-nav__dot--none {
+  background: transparent;
+}
+
+.atlas-week-nav__today-label {
+  position: absolute;
+  bottom: -14px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--atlas-color-accent);
+}
+
+.atlas-week-nav--sequence .atlas-week-nav__day--sequence {
+  min-height: 44px;
+}
+
 .atlas-today__primary {
   margin-top: var(--atlas-space-4) !important;
 }
@@ -1277,6 +1399,68 @@ button {
   border-radius: var(--atlas-radius-sm);
   background: var(--atlas-color-surface);
   text-align: left;
+  cursor: pointer;
+}
+
+/* v0.2.4 Missed section -- compact by design (Part 10): a couple of rows
+   plus a "view more" toggle, never the full backlog at once. */
+.atlas-today__missed {
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-warning);
+  border-radius: var(--atlas-radius-md);
+  background: color-mix(in srgb, var(--atlas-color-warning) 8%, var(--atlas-color-surface));
+}
+
+.atlas-today__missed h2 {
+  margin: 0 0 var(--atlas-space-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--atlas-color-warning);
+}
+
+.atlas-today__missed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-2);
+  min-height: 44px;
+}
+
+.atlas-today__missed-row + .atlas-today__missed-row {
+  border-top: 1px solid var(--atlas-color-border);
+}
+
+.atlas-today__missed-day {
+  font-weight: 600;
+}
+
+.atlas-today__missed-name {
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.atlas-today__missed-row button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-warning);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-warning);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.atlas-today__missed-more {
+  width: 100%;
+  min-height: 36px;
+  margin-top: var(--atlas-space-2);
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
   cursor: pointer;
 }
 

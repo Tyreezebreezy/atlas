@@ -4,8 +4,10 @@ import { createProgram, createProgramDay, createProgramWeek } from './createProg
 import { completeOccurrence, moveOccurrence, skipOccurrence } from './workoutOccurrence';
 import {
   resolveDayWeekday,
+  resolveMissedWorkouts,
   resolveUpNext,
   resolveWeeklySchedule,
+  resolveWeekSchedule,
   todaysScheduleEntry,
   weekdayOfIsoDate,
 } from './todaySchedule';
@@ -226,6 +228,117 @@ describe('resolveUpNext', () => {
     const occurrence = moveOccurrence(null, program.id, tuesdayDay.id, TUESDAY, '2026-09-09');
     const next = resolveUpNext(program, templates, [occurrence], MONDAY);
     expect(next?.date).toBe('2026-09-09');
+  });
+});
+
+describe('resolveMissedWorkouts', () => {
+  it("returns yesterday's missed Monday when viewed from Tuesday", () => {
+    const { program, templates } = weeklyProgram();
+    const missed = resolveMissedWorkouts(program, templates, [], TUESDAY, 1);
+    expect(missed).toHaveLength(1);
+    expect(missed[0]?.date).toBe(MONDAY);
+    expect(missed[0]?.resolved.day.label).toBe('Monday · Upper A');
+  });
+
+  it('excludes a day that was completed', () => {
+    const { program, templates } = weeklyProgram();
+    const mondayDay = program.weeks[0]!.days[0]!;
+    const completed = completeOccurrence(null, program.id, mondayDay.id, MONDAY, 'session-1');
+    const missed = resolveMissedWorkouts(program, templates, [completed], TUESDAY, 1);
+    expect(missed).toHaveLength(0);
+  });
+
+  it('excludes a day that was explicitly skipped', () => {
+    const { program, templates } = weeklyProgram();
+    const mondayDay = program.weeks[0]!.days[0]!;
+    const skipped = skipOccurrence(null, program.id, mondayDay.id, MONDAY, 'felt sick');
+    const missed = resolveMissedWorkouts(program, templates, [skipped], TUESDAY, 1);
+    expect(missed).toHaveLength(0);
+  });
+
+  it('excludes a day that was moved away -- moving is not the same as missing', () => {
+    const { program, templates } = weeklyProgram();
+    const mondayDay = program.weeks[0]!.days[0]!;
+    const moved = moveOccurrence(null, program.id, mondayDay.id, MONDAY, '2026-09-10');
+    const missed = resolveMissedWorkouts(program, templates, [moved], TUESDAY, 1);
+    expect(missed).toHaveLength(0);
+  });
+
+  it('never flags a rest day as missed', () => {
+    const { program, templates } = weeklyProgram();
+    // Looking back from the following Monday (2026-09-14) across a full
+    // week hits the prior Sunday (rest, 2026-09-13) and Sat (none) among
+    // real missed workout days -- rest/none must never appear.
+    const missed = resolveMissedWorkouts(program, templates, [], '2026-09-14', 7);
+    expect(missed.every((m) => m.resolved.template && m.resolved.template.exercises.length > 0)).toBe(
+      true,
+    );
+  });
+
+  it('sorts most-recently-missed first', () => {
+    const { program, templates } = weeklyProgram();
+    // From the following Tuesday (2026-09-15), a 7-day lookback reaches
+    // back to Monday 09-14 (Upper A) and, one further step, Tuesday 09-08
+    // is out of range at 7 days -- use 8 to also catch last Tuesday's Lower.
+    const missed = resolveMissedWorkouts(program, templates, [], '2026-09-15', 8);
+    const dates = missed.map((m) => m.date);
+    expect(dates).toEqual([...dates].sort().reverse());
+    expect(dates[0]).toBe('2026-09-14'); // most recent Monday
+  });
+
+  it('returns nothing for a sequential-mode program -- no calendar cadence to be missed against', () => {
+    const day1 = createProgramDay(1, 'Day 1', 'tpl-monday');
+    const week = { ...createProgramWeek(1, null), days: [day1] };
+    const program: Program = {
+      ...createProgram('Sequential Test', null),
+      progression_mode: 'sequential',
+      weeks: [week],
+    };
+    const templates = new Map([['tpl-monday', template('tpl-monday', 'Upper A')]]);
+    expect(resolveMissedWorkouts(program, templates, [], TUESDAY, 7)).toEqual([]);
+  });
+});
+
+describe('resolveWeekSchedule', () => {
+  it('anchored mid-week, returns Monday through Sunday of that same week', () => {
+    const { program, templates } = weeklyProgram();
+    const week = resolveWeekSchedule(program, templates, [], TUESDAY);
+    expect(week).toHaveLength(7);
+    expect(week[0]?.date).toBe(MONDAY);
+    expect(week[6]?.date).toBe(SUNDAY);
+  });
+
+  it('anchored ON Sunday, still returns that Sunday as the LAST day of the week, not the first', () => {
+    const { program, templates } = weeklyProgram();
+    const week = resolveWeekSchedule(program, templates, [], SUNDAY);
+    expect(week[0]?.date).toBe(MONDAY);
+    expect(week[6]?.date).toBe(SUNDAY);
+  });
+
+  it('each day resolves exactly what resolveWeeklySchedule itself would for that date', () => {
+    const { program, templates } = weeklyProgram();
+    const week = resolveWeekSchedule(program, templates, [], TUESDAY);
+    const monday = week.find((d) => d.date === MONDAY);
+    const tuesday = week.find((d) => d.date === TUESDAY);
+    const sunday = week.find((d) => d.date === SUNDAY);
+    expect(monday?.entry.kind).toBe('workout');
+    if (monday?.entry.kind === 'workout') expect(monday.entry.resolved.template?.name).toBe('Upper A');
+    expect(tuesday?.entry.kind).toBe('workout');
+    expect(sunday?.entry).toMatchObject({ kind: 'rest' });
+  });
+
+  it('reflects a moved occurrence the same way resolveWeeklySchedule does', () => {
+    const { program, templates } = weeklyProgram();
+    const mondayDay = program.weeks[0]!.days[0]!;
+    const occurrence = moveOccurrence(null, program.id, mondayDay.id, MONDAY, TUESDAY);
+    const week = resolveWeekSchedule(program, templates, [occurrence], MONDAY);
+    const monday = week.find((d) => d.date === MONDAY);
+    const tuesday = week.find((d) => d.date === TUESDAY);
+    expect(monday?.entry).toMatchObject({ kind: 'moved_away' });
+    expect(tuesday?.entry.kind).toBe('workout');
+    if (tuesday?.entry.kind === 'workout') {
+      expect(tuesday.entry.resolved.template?.name).toBe('Upper A'); // Monday's workout, moved in
+    }
   });
 });
 

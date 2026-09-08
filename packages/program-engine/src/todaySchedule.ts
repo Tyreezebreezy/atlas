@@ -16,6 +16,14 @@ const WEEKDAY_NAMES = [
   'saturday',
 ] as const;
 
+/** Local (not UTC) YYYY-MM-DD for a `Date` -- the inverse of the
+ * `new Date(y, m, d)` construction `weekdayOfIsoDate` relies on, so a date
+ * arrived at by pure day-arithmetic (`setDate`) round-trips back to the
+ * same local calendar day it was constructed from. */
+function toIsoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 /** `Date.getDay()`'s local (not UTC) weekday for `date` -- device-local by
  * construction, since `new Date(y, m, d)` (no timezone marker) always
  * resolves in the local timezone, unlike `new Date("YYYY-MM-DD")` which
@@ -154,13 +162,99 @@ export function resolveUpNext(
   for (let offset = 1; offset <= 7; offset++) {
     const candidate = new Date(start);
     candidate.setDate(candidate.getDate() + offset);
-    const iso = `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, '0')}-${String(candidate.getDate()).padStart(2, '0')}`;
+    const iso = toIsoDate(candidate);
     const entry = resolveWeeklySchedule(program, templates, occurrences, iso);
     if (entry.kind === 'workout') {
       return { day: entry.resolved.day, template: entry.resolved.template, date: iso };
     }
   }
   return null;
+}
+
+export interface MissedEntry {
+  /** ISO date this occurrence was originally scheduled for -- always in the past. */
+  date: string;
+  resolved: ResolvedDay;
+}
+
+/**
+ * v0.2.4. Walks backward up to `lookbackDays` (default one week, mirroring
+ * `resolveUpNext`'s forward-looking bound) from yesterday, collecting any
+ * date that still resolves to a real, unaddressed workout -- i.e. `kind:
+ * 'workout'`, meaning not completed, not skipped, and not moved away
+ * (those already have their own status and don't belong here). Most
+ * recently missed first, since that's the most actionable.
+ *
+ * Fixed-schedule programs only: a sequential program has no calendar
+ * cadence to be "missed" against -- its only notion of "next" is
+ * `currentSequentialDay`, which doesn't advance until explicitly completed
+ * or skipped, so nothing is ever silently missed there.
+ */
+export function resolveMissedWorkouts(
+  program: Program,
+  templates: Map<string, WorkoutTemplate>,
+  occurrences: WorkoutOccurrence[],
+  todayIso: string,
+  lookbackDays = 7,
+): MissedEntry[] {
+  if (programProgressionMode(program) !== 'fixed') return [];
+  const start = new Date(`${todayIso}T00:00:00`);
+  const results: MissedEntry[] = [];
+  for (let offset = 1; offset <= lookbackDays; offset++) {
+    const candidate = new Date(start);
+    candidate.setDate(candidate.getDate() - offset);
+    const iso = toIsoDate(candidate);
+    const entry = resolveWeeklySchedule(program, templates, occurrences, iso);
+    if (entry.kind === 'workout') {
+      results.push({ date: iso, resolved: entry.resolved });
+    }
+  }
+  return results.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export interface WeekDayEntry {
+  date: string;
+  /** `Date.getDay()` convention (0=Sun..6=Sat), for the caller's own weekday labeling. */
+  weekday: number;
+  entry: TodayScheduleEntry;
+}
+
+/**
+ * v0.2.4. The Monday-Sunday week containing `anyDateInWeekIso`, each day
+ * resolved independently through the exact same `resolveWeeklySchedule`
+ * used for Today/Up Next/Missed -- a week navigator asks nothing that
+ * those don't already answer per-date. Monday-first is a pure display
+ * convention here (the underlying weekday matching is unaffected).
+ *
+ * Fixed-schedule programs only -- see `resolveMissedWorkouts`'s doc
+ * comment for why Sequential mode has no calendar week to show; callers
+ * should offer a sequence-based navigator (current position and its
+ * neighbors) instead.
+ */
+export function resolveWeekSchedule(
+  program: Program,
+  templates: Map<string, WorkoutTemplate>,
+  occurrences: WorkoutOccurrence[],
+  anyDateInWeekIso: string,
+): WeekDayEntry[] {
+  const centerWeekday = weekdayOfIsoDate(anyDateInWeekIso);
+  const mondayOffset = centerWeekday === 0 ? -6 : 1 - centerWeekday;
+  const center = new Date(`${anyDateInWeekIso}T00:00:00`);
+  const monday = new Date(center);
+  monday.setDate(monday.getDate() + mondayOffset);
+
+  const result: WeekDayEntry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    const iso = toIsoDate(d);
+    result.push({
+      date: iso,
+      weekday: weekdayOfIsoDate(iso),
+      entry: resolveWeeklySchedule(program, templates, occurrences, iso),
+    });
+  }
+  return result;
 }
 
 /** The single combined entry point Today should use, regardless of

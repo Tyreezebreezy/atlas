@@ -1,5 +1,5 @@
 import { getOrCreateDeviceId, newId } from '@atlas/core';
-import type { WorkoutOccurrence } from '@atlas/data-model';
+import type { WorkoutOccurrence, WorkoutSession } from '@atlas/data-model';
 
 /**
  * The already-recorded occurrence for this program day's ORIGINAL planned
@@ -125,4 +125,39 @@ export function completeOccurrence(
 ): WorkoutOccurrence {
   const base = ensureOccurrence(existing, programId, programDayId, originalDate);
   return { ...base, status: 'completed', session_id: sessionId, ...touch(base) };
+}
+
+/**
+ * v0.2.4. What finishing a workout should do to occurrences, decided
+ * purely from the just-completed session -- extracted out of
+ * GymModeScreen's Finish handler so the critical scheduled-vs-performed
+ * distinction is unit-testable without rendering a component (this
+ * codebase's convention: business logic lives in packages, components
+ * stay thin glue).
+ *
+ * Returns null when there's nothing to link: no Program day at all
+ * (Freestyle/Quick Workout), or no `scheduled_date` -- the latter is
+ * exactly how a "Do Again" rerun (see `WorkoutSession.scheduled_date`'s
+ * doc comment) is told apart from a real occurrence completion, so it
+ * never overwrites the `session_id` a prior session already claimed on
+ * that same occurrence.
+ *
+ * Always keys the occurrence lookup by the session's own `scheduled_date`
+ * (the occurrence's `original_date`), never by today's wall-clock date --
+ * a missed Monday workout finished live on Tuesday must complete
+ * MONDAY'S occurrence, not create/miss one keyed to Tuesday.
+ */
+export function resolveOccurrenceCompletion(
+  occurrences: WorkoutOccurrence[],
+  session: WorkoutSession,
+): WorkoutOccurrence | null {
+  if (!session.program_id || !session.program_day_id || !session.scheduled_date) return null;
+  const existing = findOccurrence(occurrences, session.program_day_id, session.scheduled_date);
+  return completeOccurrence(
+    existing,
+    session.program_id,
+    session.program_day_id,
+    session.scheduled_date,
+    session.id,
+  );
 }

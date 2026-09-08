@@ -94,6 +94,13 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
       groups: template?.groups ?? [],
       startedAt,
       plannedCompletedAt,
+      // v0.2.4: a backfilled Program day should complete/link its own
+      // occurrence too (using the owner's chosen historical date, not
+      // today) -- otherwise it would keep showing up as Missed despite
+      // genuinely having been logged. Distinct from `startedAt` above:
+      // that backdates the performed timestamps (Log Past Workout's own
+      // job); this only says which occurrence this fulfills.
+      scheduledDate: programDay ? date : null,
     });
     await storage.workoutSessions.put(session);
     enterGymMode(session.id);

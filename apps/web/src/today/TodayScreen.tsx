@@ -8,11 +8,18 @@ import {
 import {
   advanceProgramSequence,
   applyProgressionToSession,
+  currentSequentialDay,
+  flattenProgramDays,
   moveOccurrence,
   programProgressionMode,
+  programSequencePosition,
+  resolveMissedWorkouts,
   resolveUpNext,
+  resolveWeeklySchedule,
+  resolveWeekSchedule,
   skipOccurrence,
-  todaysScheduleEntry,
+  type FlattenedProgramDay,
+  type ResolvedDay,
   type TodayScheduleEntry,
 } from '@atlas/program-engine';
 import type {
@@ -24,15 +31,44 @@ import type {
 } from '@atlas/data-model';
 import { useGymMode } from '../gym/GymModeContext';
 import { useStorage } from '../storage/StorageContext';
+import { SessionDetail } from '../history/SessionDetail';
+import { WeekNavigator } from './WeekNavigator';
+import { SequenceNavigator } from './SequenceNavigator';
 
 function todayIso(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function formatUpNextDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
     weekday: 'long',
+  });
+}
+
+function longWeekday(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long' });
+}
+
+function monthDay(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+}
+
+function shortMonthDay(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function formatCompletedAt(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
@@ -64,6 +100,7 @@ function SkipRow({ onCancel, onConfirm }: SkipRowProps) {
 }
 
 interface MoveRowProps {
+  initialDate: string;
   onCancel: () => void;
   onConfirm: (newDate: string) => void;
 }
@@ -71,8 +108,8 @@ interface MoveRowProps {
 /** Move never rewrites the Program template -- it records a
  * WorkoutOccurrence with the original date preserved and a new effective
  * date. See docs/DATA_MODEL.md "Scheduling." */
-function MoveRow({ onCancel, onConfirm }: MoveRowProps) {
-  const [date, setDate] = useState(todayIso());
+function MoveRow({ initialDate, onCancel, onConfirm }: MoveRowProps) {
+  const [date, setDate] = useState(initialDate);
   return (
     <div className="atlas-today__skip-row">
       <input
@@ -134,7 +171,7 @@ function TodayOverflowMenu({
         Start as Deload
       </button>
       <button type="button" role="menuitem" onClick={onSkip}>
-        Skip Today
+        Skip
       </button>
       <button type="button" role="menuitem" onClick={onClose}>
         Close
@@ -155,6 +192,18 @@ export function TodayScreen() {
   const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
   const [exercisesById, setExercisesById] = useState<Map<string, Exercise>>(new Map());
   const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
+
+  // v0.2.4 browsing state. `selectedDate`/`selectedSequenceIndex` of `null`
+  // both mean "follow the live current day/position" -- "Return to Today"
+  // is just resetting these back to null, same shape for both modes.
+  // `weekOffsetWeeks` is which week the STRIP shows; independent of which
+  // day is selected within it (arrow-browsing a week doesn't change what
+  // the primary card is showing until a day is actually tapped).
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [weekOffsetWeeks, setWeekOffsetWeeks] = useState(0);
+  const [selectedSequenceIndex, setSelectedSequenceIndex] = useState<number | null>(null);
+  const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
+  const [showAllMissed, setShowAllMissed] = useState(false);
 
   async function reload() {
     if (!storage) return;
@@ -203,6 +252,7 @@ export function TodayScreen() {
     template: WorkoutTemplate,
     programId: string | null,
     programDayId: string | null,
+    scheduledDate: string | null,
     isDeload = false,
   ) {
     if (!storage) return;
@@ -224,6 +274,7 @@ export function TodayScreen() {
       programDayId,
       plannedSnapshot,
       groups: template.groups,
+      scheduledDate,
     });
     await storage.workoutSessions.put(isDeload ? { ...session, is_deload: true } : session);
     enterGymMode(session.id);
@@ -245,6 +296,18 @@ export function TodayScreen() {
     enterGymMode(session.id);
   }
 
+  /** v0.2.4 Part 9: an independent extra session for an already-completed
+   * occurrence. No `scheduledDate` -- that's what keeps this from
+   * disturbing the original completion link at Finish time (see
+   * resolveOccurrenceCompletion). */
+  async function handleDoAgain(occurrence: WorkoutOccurrence) {
+    const original = allSessions.find((s) => s.id === occurrence.session_id);
+    const templateId = original?.template_id ?? null;
+    const template = templateId ? (templates.get(templateId) ?? null) : null;
+    if (!template) return;
+    await startFromTemplate(template, occurrence.program_id, occurrence.program_day_id, null);
+  }
+
   async function handleDiscard() {
     if (!storage || !activeSession) return;
     await storage.workoutSessions.put(discardWorkoutSession(activeSession));
@@ -256,6 +319,7 @@ export function TodayScreen() {
     template: WorkoutTemplate | null,
     programId: string | null,
     programDayId: string | null,
+    date: string,
     reason: string | null,
   ) {
     if (!storage) return;
@@ -276,21 +340,14 @@ export function TodayScreen() {
         // missed day (never opened) stays "next." See sequentialProgress.ts.
         await storage.programs.put(advanceProgramSequence(program, programDayId));
         // Weekly mode has no sequence position to advance -- instead record
-        // the occurrence so Today doesn't keep re-offering the same day for
-        // the rest of today (next week's occurrence of this weekday is
-        // unaffected -- a fresh original_date, never touched by this row).
+        // the occurrence so this slot doesn't keep re-offering itself
+        // (next week's occurrence of this weekday is unaffected -- a fresh
+        // original_date, never touched by this row).
         if (programProgressionMode(program) !== 'sequential') {
           const existing = occurrences.find(
-            (o) =>
-              o.program_day_id === programDayId && o.original_date === todayIso() && !o.deleted_at,
+            (o) => o.program_day_id === programDayId && o.original_date === date && !o.deleted_at,
           );
-          const occurrence = skipOccurrence(
-            existing ?? null,
-            programId,
-            programDayId,
-            todayIso(),
-            reason,
-          );
+          const occurrence = skipOccurrence(existing ?? null, programId, programDayId, date, reason);
           await storage.workoutOccurrences.put(occurrence);
         }
       }
@@ -299,22 +356,16 @@ export function TodayScreen() {
     await reload();
   }
 
-  /** Records a WorkoutOccurrence for today's slot rather than editing the
-   * Program -- the template/day this occurrence points at is unchanged;
-   * only where it's scheduled moves. See docs/DATA_MODEL.md "Scheduling." */
-  async function handleMove(programId: string, programDayId: string, newDate: string) {
+  /** Records a WorkoutOccurrence for the selected slot rather than editing
+   * the Program -- the template/day this occurrence points at is
+   * unchanged; only where it's scheduled moves. See docs/DATA_MODEL.md
+   * "Scheduling." */
+  async function handleMove(programId: string, programDayId: string, originalDate: string, newDate: string) {
     if (!storage) return;
-    const originalDate = todayIso();
     const existing = occurrences.find(
       (o) => o.program_day_id === programDayId && o.original_date === originalDate && !o.deleted_at,
     );
-    const occurrence = moveOccurrence(
-      existing ?? null,
-      programId,
-      programDayId,
-      originalDate,
-      newDate,
-    );
+    const occurrence = moveOccurrence(existing ?? null, programId, programDayId, originalDate, newDate);
     await storage.workoutOccurrences.put(occurrence);
     setOverflow(null);
     await reload();
@@ -385,9 +436,73 @@ export function TodayScreen() {
     .sort(compareByName);
 
   const today = todayIso();
-  const scheduleEntry: TodayScheduleEntry | null = activeProgram
-    ? todaysScheduleEntry(activeProgram, templates, occurrences, today)
-    : null;
+  const isSequential = !!activeProgram && programProgressionMode(activeProgram) === 'sequential';
+
+  if (viewingSessionId) {
+    const session = allSessions.find((s) => s.id === viewingSessionId);
+    if (session) {
+      return (
+        <SessionDetail
+          session={session}
+          exercises={exercisesById}
+          onBack={() => setViewingSessionId(null)}
+        />
+      );
+    }
+    setViewingSessionId(null);
+  }
+
+  // ----- Weekly/fixed mode: resolve the selected date's entry directly. -----
+  const effectiveSelectedDate = selectedDate ?? today;
+  const weekAnchor = addDays(today, weekOffsetWeeks * 7);
+  const weeklyEntry: TodayScheduleEntry | null =
+    activeProgram && !isSequential
+      ? resolveWeeklySchedule(activeProgram, templates, occurrences, effectiveSelectedDate)
+      : null;
+  const weekDays =
+    activeProgram && !isSequential ? resolveWeekSchedule(activeProgram, templates, occurrences, weekAnchor) : [];
+  const missed =
+    activeProgram && !isSequential ? resolveMissedWorkouts(activeProgram, templates, occurrences, today) : [];
+
+  // ----- Sequential mode: resolve a small preview window around current. -----
+  const flattened = activeProgram && isSequential ? flattenProgramDays(activeProgram) : [];
+  const currentIndex = activeProgram && isSequential ? programSequencePosition(activeProgram) % Math.max(flattened.length, 1) : 0;
+  const effectiveSequenceIndex = selectedSequenceIndex ?? currentIndex;
+  const sequenceWindowStart = Math.max(0, Math.min(effectiveSequenceIndex - 1, flattened.length - 4));
+  const sequenceWindow: { index: number; day: FlattenedProgramDay }[] = flattened
+    .slice(sequenceWindowStart, sequenceWindowStart + 4)
+    .map((day, i) => ({ index: sequenceWindowStart + i, day }));
+  const sequentialResolved = activeProgram && isSequential ? currentSequentialDay(activeProgram) : null;
+  const previewedSequenceDay = flattened[effectiveSequenceIndex] ?? sequentialResolved;
+  const sequentialEntry: TodayScheduleEntry | null =
+    activeProgram && isSequential && previewedSequenceDay
+      ? (() => {
+          const previewOccurrence =
+            effectiveSequenceIndex === currentIndex
+              ? occurrences.find(
+                  (o) =>
+                    o.program_day_id === previewedSequenceDay.day.id &&
+                    o.original_date === today &&
+                    !o.deleted_at,
+                ) ?? null
+              : null;
+          if (previewOccurrence?.status === 'completed') {
+            return { kind: 'completed', day: previewedSequenceDay.day, occurrence: previewOccurrence };
+          }
+          const tpl = previewedSequenceDay.day.template_id
+            ? (templates.get(previewedSequenceDay.day.template_id) ?? null)
+            : null;
+          if (tpl && tpl.exercises.length === 0) return { kind: 'rest', day: previewedSequenceDay.day };
+          return {
+            kind: 'workout',
+            resolved: { day: previewedSequenceDay.day, template: tpl, occurrence: previewOccurrence },
+          };
+        })()
+      : null;
+
+  const scheduleEntry = isSequential ? sequentialEntry : weeklyEntry;
+  const isViewingToday = isSequential ? effectiveSequenceIndex === currentIndex : effectiveSelectedDate === today;
+
   const upNext =
     activeProgram && programProgressionMode(activeProgram) === 'fixed'
       ? resolveUpNext(activeProgram, templates, occurrences, today)
@@ -398,10 +513,58 @@ export function TodayScreen() {
     day: 'numeric',
   });
 
+  function resolvedDayScheduledDate(resolved: ResolvedDay, viewedDateIso: string): string {
+    return resolved.occurrence?.original_date ?? viewedDateIso;
+  }
+
   return (
     <div className="atlas-today">
-      <h1>Today</h1>
-      <p className="atlas-today__date">{todayLongDate}</p>
+      {isViewingToday ? (
+        <>
+          <h1>Today</h1>
+          <p className="atlas-today__date">{todayLongDate}</p>
+        </>
+      ) : (
+        <>
+          <h1>{isSequential ? `Day ${effectiveSequenceIndex + 1}` : longWeekday(effectiveSelectedDate)}</h1>
+          <p className="atlas-today__date">
+            {isSequential ? previewedSequenceDay?.day.label : monthDay(effectiveSelectedDate)}
+          </p>
+          <button
+            type="button"
+            className="atlas-today__return"
+            onClick={() => {
+              setSelectedDate(null);
+              setSelectedSequenceIndex(null);
+              setWeekOffsetWeeks(0);
+            }}
+          >
+            &lsaquo; Return to Today
+          </button>
+        </>
+      )}
+
+      {activeProgram &&
+        !isSequential &&
+        (weekDays.length > 0 ? (
+          <WeekNavigator
+            weekDays={weekDays}
+            todayIso={today}
+            selectedDate={effectiveSelectedDate}
+            onSelectDate={(date) => setSelectedDate(date)}
+            onPrevWeek={() => setWeekOffsetWeeks((w) => w - 1)}
+            onNextWeek={() => setWeekOffsetWeeks((w) => w + 1)}
+          />
+        ) : null)}
+
+      {activeProgram && isSequential && sequenceWindow.length > 0 && (
+        <SequenceNavigator
+          window={sequenceWindow}
+          currentIndex={currentIndex}
+          selectedIndex={effectiveSequenceIndex}
+          onSelectIndex={(index) => setSelectedSequenceIndex(index)}
+        />
+      )}
 
       {activeProgram && scheduleEntry && (
         <section className="atlas-today__primary">
@@ -415,15 +578,22 @@ export function TodayScreen() {
                       scheduleEntry.resolved.template,
                       activeProgram.id,
                       scheduleEntry.resolved.day.id,
+                      isSequential ? today : effectiveSelectedDate,
                       reason,
                     )
                   }
                 />
               ) : overflow === 'move' ? (
                 <MoveRow
+                  initialDate={isSequential ? today : effectiveSelectedDate}
                   onCancel={() => setOverflow(null)}
                   onConfirm={(newDate) =>
-                    void handleMove(activeProgram.id, scheduleEntry.resolved.day.id, newDate)
+                    void handleMove(
+                      activeProgram.id,
+                      scheduleEntry.resolved.day.id,
+                      resolvedDayScheduledDate(scheduleEntry.resolved, isSequential ? today : effectiveSelectedDate),
+                      newDate,
+                    )
                   }
                 />
               ) : (
@@ -438,6 +608,10 @@ export function TodayScreen() {
                           ? `${scheduleEntry.resolved.template.exercises.length} exercise${scheduleEntry.resolved.template.exercises.length === 1 ? '' : 's'}`
                           : ''}
                         {scheduleEntry.resolved.occurrence?.status === 'replaced' && ' · Replaced'}
+                        {!isSequential &&
+                          !isViewingToday &&
+                          effectiveSelectedDate < today &&
+                          ' · Missed / Not Completed'}
                       </p>
                     </div>
                     <TodayOverflowMenu
@@ -450,6 +624,10 @@ export function TodayScreen() {
                           scheduleEntry.resolved.template as WorkoutTemplate,
                           activeProgram.id,
                           scheduleEntry.resolved.day.id,
+                          resolvedDayScheduledDate(
+                            scheduleEntry.resolved,
+                            isSequential ? today : effectiveSelectedDate,
+                          ),
                           true,
                         )
                       }
@@ -466,6 +644,10 @@ export function TodayScreen() {
                         scheduleEntry.resolved.template,
                         activeProgram.id,
                         scheduleEntry.resolved.day.id,
+                        resolvedDayScheduledDate(
+                          scheduleEntry.resolved,
+                          isSequential ? today : effectiveSelectedDate,
+                        ),
                       )
                     }
                   >
@@ -486,37 +668,85 @@ export function TodayScreen() {
           {scheduleEntry.kind === 'skipped' && (
             <div className="atlas-today__card atlas-today__card--rest">
               <h2 className="atlas-today__workout-name">{scheduleEntry.day.label}</h2>
-              <p className="atlas-today__workout-meta">Skipped for today</p>
+              <p className="atlas-today__workout-meta">Skipped</p>
+              {scheduleEntry.occurrence.notes && (
+                <p className="atlas-today__workout-meta">{scheduleEntry.occurrence.notes}</p>
+              )}
             </div>
           )}
 
           {scheduleEntry.kind === 'completed' && (
-            <div className="atlas-today__card atlas-today__card--rest">
+            <div className="atlas-today__card">
               <h2 className="atlas-today__workout-name">{scheduleEntry.day.label}</h2>
-              <p className="atlas-today__workout-meta">Already completed today</p>
+              <p className="atlas-today__workout-meta">
+                {(() => {
+                  const session = allSessions.find((s) => s.id === scheduleEntry.occurrence.session_id);
+                  return session?.completed_at
+                    ? `Completed ${formatCompletedAt(session.completed_at)}`
+                    : 'Completed';
+                })()}
+              </p>
+              <div className="atlas-resume-card__actions">
+                {scheduleEntry.occurrence.session_id && (
+                  <button
+                    type="button"
+                    onClick={() => setViewingSessionId(scheduleEntry.occurrence.session_id)}
+                  >
+                    View Session
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="atlas-resume-card__resume"
+                  onClick={() => void handleDoAgain(scheduleEntry.occurrence)}
+                >
+                  Do Again
+                </button>
+              </div>
             </div>
           )}
 
           {(scheduleEntry.kind === 'moved_away' || scheduleEntry.kind === 'none') && (
             <div className="atlas-today__card atlas-today__card--rest">
-              <h2 className="atlas-today__workout-name">No scheduled workout today</h2>
+              <h2 className="atlas-today__workout-name">
+                {scheduleEntry.kind === 'moved_away' ? scheduleEntry.day.label : 'Nothing scheduled'}
+              </h2>
               {scheduleEntry.kind === 'moved_away' && (
-                <p className="atlas-today__workout-meta">
-                  {scheduleEntry.day.label} moved to {scheduleEntry.movedToDate}
-                </p>
+                <p className="atlas-today__workout-meta">Moved to {scheduleEntry.movedToDate}</p>
               )}
             </div>
           )}
         </section>
       )}
 
-      <button
-        type="button"
-        className="atlas-today__freestyle"
-        onClick={() => void startFreestyle()}
-      >
+      <button type="button" className="atlas-today__freestyle" onClick={() => void startFreestyle()}>
         Start Freestyle Workout
       </button>
+
+      {isViewingToday && missed.length > 0 && (
+        <section className="atlas-today__missed">
+          <h2>Missed</h2>
+          {(showAllMissed ? missed : missed.slice(0, 2)).map((m) => (
+            <div key={m.date} className="atlas-today__missed-row">
+              <div>
+                <span className="atlas-today__missed-day">{shortMonthDay(m.date)}</span>
+                <span className="atlas-today__missed-name">
+                  {' '}
+                  &middot; {m.resolved.template?.name ?? m.resolved.day.label}
+                </span>
+              </div>
+              <button type="button" onClick={() => setSelectedDate(m.date)}>
+                Start
+              </button>
+            </div>
+          ))}
+          {missed.length > 2 && !showAllMissed && (
+            <button type="button" className="atlas-today__missed-more" onClick={() => setShowAllMissed(true)}>
+              View {missed.length - 2} more missed workout{missed.length - 2 === 1 ? '' : 's'}
+            </button>
+          )}
+        </section>
+      )}
 
       <section>
         <h2>Quick Workouts</h2>
@@ -530,7 +760,7 @@ export function TodayScreen() {
               <li key={template.id}>
                 <button
                   type="button"
-                  onClick={() => void startFromTemplate(template, null, null)}
+                  onClick={() => void startFromTemplate(template, null, null, null)}
                   aria-label={`Start ${template.name}`}
                 >
                   <span className="atlas-library__item-name" aria-hidden="true">
@@ -547,7 +777,7 @@ export function TodayScreen() {
         )}
       </section>
 
-      {upNext && (
+      {isViewingToday && upNext && (
         <section className="atlas-today__up-next">
           <h2>Up Next</h2>
           <p className="atlas-today__up-next-day">{formatUpNextDate(upNext.date)}</p>
