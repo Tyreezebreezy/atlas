@@ -1,5 +1,11 @@
 import { newId } from '@atlas/core';
-import type { ExerciseGroup, ExerciseGroupType, PerformedSet, PlannedExercise, WorkoutSession } from '@atlas/data-model';
+import type {
+  ExerciseGroup,
+  ExerciseGroupType,
+  PerformedSet,
+  PlannedExercise,
+  WorkoutSession,
+} from '@atlas/data-model';
 
 export interface GymSingleSlot {
   kind: 'single';

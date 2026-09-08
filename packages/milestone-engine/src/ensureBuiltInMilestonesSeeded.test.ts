@@ -42,6 +42,41 @@ describe('ensureBuiltInMilestonesSeeded', () => {
     expect(milestones.every((m) => m.exercise_id != null && m.exercise_id.length > 0)).toBe(true);
   });
 
+  it('maps each movement to the intended exercise (v0.2.2 mapping audit)', async () => {
+    // Audited per the v0.2.2 UX-cleanup handoff's explicit concern that
+    // "60-Second Plank -> weighted front plank" might be a mismatch.
+    // Confirmed correct, not a bug: the raw Free Exercise DB dataset has no
+    // plain "plank"/"front plank" entry at all (verified directly against
+    // the seed dataset), and "weighted front plank" was deliberately chosen
+    // in curatedEnrichment.ts (v0.0.7) as the closest real entry, with its
+    // measurement_type corrected to 'time' specifically so it behaves as a
+    // plain timed plank (no weight field shown) -- "weighted" in its name
+    // is a dataset-naming artifact, not a real prerequisite. This test
+    // pins that intended mapping (and the other three movements) so a
+    // future change can't silently drift it back to something wrong.
+    const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    await ensureExercisesSeeded(storage);
+    await ensureBuiltInMilestonesSeeded(storage);
+    const [milestones, exercises] = await Promise.all([
+      storage.milestones.getAll(),
+      storage.exercises.getAll(),
+    ]);
+    const exerciseById = new Map(exercises.map((e) => [e.id, e]));
+
+    function exerciseNameFor(title: string): string | undefined {
+      const milestone = milestones.find((m) => m.title === title);
+      return milestone?.exercise_id ? exerciseById.get(milestone.exercise_id)?.name : undefined;
+    }
+
+    expect(exerciseNameFor('225 lb Bench Press')).toBe('barbell bench press');
+    expect(exerciseNameFor('50 Push-Ups')).toBe('push-up');
+    expect(exerciseNameFor('5 Pull-Ups')).toBe('pull-up');
+    expect(exerciseNameFor('60-Second Plank')).toBe('weighted front plank');
+
+    const plankExercise = exercises.find((e) => e.name === 'weighted front plank');
+    expect(plankExercise?.measurement_type).toBe('time'); // no weight field despite the name
+  });
+
   it('does not double-seed when called concurrently for the same storage instance (React StrictMode double-mount)', async () => {
     const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
     await ensureExercisesSeeded(storage);

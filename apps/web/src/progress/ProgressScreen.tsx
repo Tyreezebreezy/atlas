@@ -5,7 +5,7 @@ import {
   trainingRecency,
   type DistributionEntry,
 } from '@atlas/progress-engine';
-import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
+import { ensureBuiltInMilestonesSeeded, groupMilestones } from '@atlas/milestone-engine';
 import {
   ensureBenchmarksSeeded,
   findBenchmark,
@@ -173,16 +173,17 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     return trends.slice(0, 3);
   }, [prs, sessions]);
 
-  const achievedMilestones = useMemo(
+  // Grouped by movement and ordered by increasing target (v0.2.2) -- not by
+  // achieved_at, which scrambles different movements together the moment
+  // two milestones are hit on different days. See docs/DATA_MODEL.md
+  // "Milestone grouping."
+  const milestoneGroups = useMemo(
     () =>
-      milestones
-        .filter((m) => m.achieved_at != null)
-        .sort((a, b) => (b.achieved_at ?? '').localeCompare(a.achieved_at ?? '')),
-    [milestones],
-  );
-  const activeMilestones = useMemo(
-    () => milestones.filter((m) => m.achieved_at == null && m.active),
-    [milestones],
+      groupMilestones(
+        milestones.filter((m) => m.active || m.achieved_at != null),
+        exercises,
+      ),
+    [milestones, exercises],
   );
 
   const benchmarkComparisons = useMemo(() => {
@@ -343,33 +344,34 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
 
       <section className="atlas-progress__milestones">
         <h2>Milestones</h2>
-        {achievedMilestones.length > 0 && (
-          <ul className="atlas-progress__milestone-list atlas-progress__milestone-list--achieved">
-            {achievedMilestones.map((m) => (
-              <li key={m.id}>
-                <span className="atlas-progress__milestone-title">{m.title}</span>
-                <span className="atlas-progress__milestone-date">
-                  {m.achieved_at ? formatDate(m.achieved_at) : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {activeMilestones.length > 0 && (
-          <ul className="atlas-progress__milestone-list">
-            {activeMilestones.map((m) => (
-              <li key={m.id}>
-                <span className="atlas-progress__milestone-title">{m.title}</span>
-                <span className="atlas-progress__milestone-exercise">
-                  {m.exercise_id ? (exercises.get(m.exercise_id)?.name ?? '') : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {achievedMilestones.length === 0 && activeMilestones.length === 0 && (
+        {milestoneGroups.length === 0 && (
           <p className="atlas-program-screen__empty">No milestones yet.</p>
         )}
+        {milestoneGroups.map((group) => (
+          <div
+            key={group.exerciseId ?? group.displayName}
+            className="atlas-progress__milestone-group"
+          >
+            <h3 className="atlas-progress__milestone-group-title">{group.displayName}</h3>
+            <ul className="atlas-progress__milestone-list">
+              {group.milestones.map((m) => (
+                <li
+                  key={m.id}
+                  className={
+                    m.achieved_at
+                      ? 'atlas-progress__milestone--achieved'
+                      : 'atlas-progress__milestone--pending'
+                  }
+                >
+                  <span className="atlas-progress__milestone-title">{m.title}</span>
+                  <span className="atlas-progress__milestone-date">
+                    {m.achieved_at ? formatDate(m.achieved_at) : 'Not yet'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
         <button type="button" onClick={() => setShowMilestoneForm(true)}>
           + New Milestone
         </button>

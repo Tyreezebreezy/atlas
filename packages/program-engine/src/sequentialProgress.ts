@@ -12,6 +12,15 @@ export function programSequencePosition(program: Program): number {
   return program.sequence_position ?? 0;
 }
 
+/** v0.2.2. A single repeating week's own "Week 1" label is redundant
+ * clutter in normal owner-facing UI (see docs/DATA_MODEL.md "Single-week
+ * programs") -- true multi-week programs (a real Week 1/Week 2/.../Deload
+ * progression) still show their week labels normally. Presentation only:
+ * the underlying ProgramWeek model is unchanged either way. */
+export function shouldShowWeekLabel(program: Program): boolean {
+  return program.weeks.length > 1;
+}
+
 export interface FlattenedProgramDay {
   week: ProgramWeek;
   weekIndex: number;

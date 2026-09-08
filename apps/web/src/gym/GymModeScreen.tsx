@@ -154,7 +154,10 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     // Immediate autosave: every completed set is written the instant it's marked done.
     let updated = addPerformedSet(
       currentSession,
-      createPerformedSet({ ...input, completedAt: currentSession.planned_completed_at ?? undefined }),
+      createPerformedSet({
+        ...input,
+        completedAt: currentSession.planned_completed_at ?? undefined,
+      }),
     );
     const planned = currentSession.planned_snapshot.find((p) => p.exercise_id === input.exerciseId);
     if (planned) {
@@ -314,7 +317,10 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     for (const input of sets) {
       updated = addPerformedSet(
         updated,
-        createPerformedSet({ ...input, completedAt: currentSession.planned_completed_at ?? undefined }),
+        createPerformedSet({
+          ...input,
+          completedAt: currentSession.planned_completed_at ?? undefined,
+        }),
       );
     }
     // Rest is after the group's round (after its last member), not
@@ -419,8 +425,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                   allSessions={priorSessions}
                   library={[...exercises.values()]}
                   canGroupWithNext={
-                    slots[exerciseIndex + 1]?.kind === 'single' &&
-                    performedForExercise.length === 0
+                    slots[exerciseIndex + 1]?.kind === 'single' && performedForExercise.length === 0
                   }
                   onGroupWithNext={() => void handleGroupWithNext()}
                   onCompleteSet={(input) => void handleCompleteSet(input)}

@@ -84,39 +84,41 @@ export function LibraryScreen() {
       <p className="atlas-library__subtitle">
         Browse every exercise, with a how-to demonstration wherever one exists.
       </p>
-      <input
-        type="search"
-        placeholder="Search exercises"
-        aria-label="Search exercises"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="atlas-library__search"
-      />
-      <div className="atlas-library__filters">
-        <select
-          aria-label="Filter by body part"
-          value={bodyPart}
-          onChange={(e) => setBodyPart(e.target.value)}
-        >
-          <option value="">All body parts</option>
-          {bodyParts.map((bp) => (
-            <option key={bp} value={bp}>
-              {bp}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Filter by equipment"
-          value={equipment}
-          onChange={(e) => setEquipment(e.target.value)}
-        >
-          <option value="">All equipment</option>
-          {equipmentOptions.map((eq) => (
-            <option key={eq} value={eq}>
-              {eq}
-            </option>
-          ))}
-        </select>
+      <div className="atlas-library__sticky-controls">
+        <input
+          type="search"
+          placeholder="Search exercises"
+          aria-label="Search exercises"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="atlas-library__search"
+        />
+        <div className="atlas-library__filters">
+          <select
+            aria-label="Filter by body part"
+            value={bodyPart}
+            onChange={(e) => setBodyPart(e.target.value)}
+          >
+            <option value="">All body parts</option>
+            {bodyParts.map((bp) => (
+              <option key={bp} value={bp}>
+                {bp}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter by equipment"
+            value={equipment}
+            onChange={(e) => setEquipment(e.target.value)}
+          >
+            <option value="">All equipment</option>
+            {equipmentOptions.map((eq) => (
+              <option key={eq} value={eq}>
+                {eq}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <p className="atlas-library__count">{filtered.length} exercises</p>
       <ul className="atlas-library__list">

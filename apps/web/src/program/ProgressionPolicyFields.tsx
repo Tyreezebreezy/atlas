@@ -21,7 +21,11 @@ const KIND_LABELS: Record<ProgressionPolicyKind, string> = {
  * selecting "None" explicitly here still writes the resolved `none`
  * policy object rather than clearing the field back to null, matching
  * what a deliberate choice should do vs. simply never having set one. */
-export function ProgressionPolicyFields({ idPrefix, policy, onChange }: ProgressionPolicyFieldsProps) {
+export function ProgressionPolicyFields({
+  idPrefix,
+  policy,
+  onChange,
+}: ProgressionPolicyFieldsProps) {
   const kind = policy?.kind ?? 'none';
 
   function updateKind(nextKind: ProgressionPolicyKind) {

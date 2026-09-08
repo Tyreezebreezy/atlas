@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { compareByName } from '@atlas/core';
 import { setActiveProgram } from '@atlas/program-engine';
 import type { Program, WorkoutTemplate } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
@@ -34,7 +35,10 @@ export function ProgramScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storage]);
 
-  const quickWorkouts = useMemo(() => templates.filter((t) => t.is_quick_workout), [templates]);
+  const quickWorkouts = useMemo(
+    () => templates.filter((t) => t.is_quick_workout).sort(compareByName),
+    [templates],
+  );
 
   if (!storage || loading) {
     return (

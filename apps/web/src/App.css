@@ -184,6 +184,18 @@ button {
   font-size: 1rem;
 }
 
+/* v0.2.2: search stays reachable while scrolling 1,324 exercises, without
+   eating the screen -- just the search input + the one filter row, not a
+   bigger sticky header. */
+.atlas-library__sticky-controls {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--atlas-color-background);
+  padding-top: var(--atlas-space-2);
+  margin-top: calc(-1 * var(--atlas-space-2));
+}
+
 .atlas-library__filters {
   display: flex;
   gap: var(--atlas-space-2);
@@ -1055,13 +1067,19 @@ button {
 
 .atlas-program-editor__day {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--atlas-space-2);
   align-items: center;
 }
 
+/* v0.2.2: the Weekday select added a fourth non-button control to this row
+   -- at phone widths, six flex:1/2 children with min-width:0 shrank to
+   illegible slivers (~40px) rather than actually overflowing (caught live,
+   not by the "no horizontal scroll" check alone, which this row always
+   passed). flex-wrap plus a real minimum width lets narrow viewports wrap
+   onto two lines instead of squeezing every control unreadably thin. */
 .atlas-program-editor__day input {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 140px;
   min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
   border: 1px solid var(--atlas-color-border);
@@ -1070,8 +1088,7 @@ button {
 }
 
 .atlas-program-editor__day select {
-  flex: 2;
-  min-width: 0;
+  flex: 2 1 140px;
   min-height: var(--atlas-touch-target);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
@@ -1168,6 +1185,117 @@ button {
 .atlas-resume-card__confirm p {
   font-size: 0.85rem;
   color: var(--atlas-color-text-secondary);
+}
+
+/* Today card (v0.2.2) -- one resolved card for today's actual workout,
+   replacing the old full-week list. Same accent-card language as
+   .atlas-resume-card for visual consistency. */
+.atlas-today__date {
+  margin: calc(-1 * var(--atlas-space-2)) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.atlas-today__primary {
+  margin-top: var(--atlas-space-4) !important;
+}
+
+.atlas-today__card {
+  padding: var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-accent);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-accent-mist);
+}
+
+.atlas-today__card--rest {
+  border-color: var(--atlas-color-border);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-today__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-today__workout-name {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.atlas-today__workout-meta {
+  margin: var(--atlas-space-1) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.atlas-today__start {
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--atlas-space-3);
+  border: none;
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-accent);
+  color: var(--atlas-color-surface);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.atlas-today__overflow-button {
+  flex: 0 0 auto;
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.atlas-today__overflow-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+  min-width: 160px;
+}
+
+.atlas-today__overflow-menu button {
+  min-height: 44px;
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-today__up-next {
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-today__up-next h2 {
+  margin: 0 0 var(--atlas-space-1);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-today__up-next-day {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-today__up-next-name {
+  margin: 0;
+  font-weight: 600;
 }
 
 /* Gym Mode */
@@ -2244,6 +2372,22 @@ button {
   cursor: pointer;
 }
 
+/* v0.2.2: grouped by movement (see groupMilestones) instead of one flat
+   achieved/active split -- each group is its own labeled cluster so
+   "10, 25, 50, 75, 100 Push-Ups" reads as one ladder. */
+.atlas-progress__milestone-group {
+  margin-bottom: var(--atlas-space-4);
+}
+
+.atlas-progress__milestone-group-title {
+  margin: 0 0 var(--atlas-space-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--atlas-color-text-secondary);
+}
+
 .atlas-progress__milestone-list {
   list-style: none;
   margin: 0 0 var(--atlas-space-3);
@@ -2263,15 +2407,19 @@ button {
   background: var(--atlas-color-surface);
 }
 
-.atlas-progress__milestone-list--achieved li {
+.atlas-progress__milestone--achieved {
   border-color: var(--atlas-color-milestone);
+}
+
+.atlas-progress__milestone--pending {
+  opacity: 0.72;
 }
 
 .atlas-progress__milestone-title {
   font-weight: 600;
 }
 
-.atlas-progress__milestone-list--achieved .atlas-progress__milestone-title {
+.atlas-progress__milestone--achieved .atlas-progress__milestone-title {
   color: var(--atlas-color-milestone);
 }
 

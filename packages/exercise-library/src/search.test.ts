@@ -54,24 +54,47 @@ describe('searchExercises', () => {
     expect(searchExercises(all, { bodyPart: 'chest', equipment: 'barbell' })).toEqual([bench]);
   });
 
-  it('returns everything with no filter', () => {
-    expect(searchExercises(all, {})).toEqual(all);
+  it('defaults to alphabetical order (A-Z), never source/insertion order', () => {
+    // Input order is bench, squat, pushup -- alphabetically it's Back Squat,
+    // Bench Press, Push-Up, a different order, so this actually proves
+    // sorting happens rather than passing by coincidence.
+    expect(searchExercises(all, {})).toEqual([squat, bench, pushup]);
   });
 
-  it('sorts favorites first, preserving relative order within each group', () => {
+  it('sorts favorites first, alphabetical within each group -- not insertion order', () => {
+    // squatFav ("Back Squat") would sort before bench ("Bench Press") on
+    // name alone, but favorite status still wins the top-level split; among
+    // the two non-favorites, pushup ("Push-Up") still comes after bench
+    // alphabetically, proving the non-favorite group isn't just "whatever
+    // was left in input order."
     const squatFav = { ...squat, is_favorite: true };
-    const result = searchExercises([bench, squatFav, pushup], {});
+    const result = searchExercises([pushup, bench, squatFav], {});
     expect(result).toEqual([squatFav, bench, pushup]);
   });
 
-  it('treats a missing is_favorite the same as false (pre-v0.2.0 exercises)', () => {
-    expect(searchExercises(all, {})).toEqual(all); // none set is_favorite at all
+  it('treats a missing is_favorite the same as false (pre-v0.2.0 exercises), still alphabetical', () => {
+    expect(searchExercises(all, {})).toEqual([squat, bench, pushup]); // none set is_favorite at all
+  });
+
+  it('sorts custom exercises alphabetically alongside library ones, not segregated by creation date', () => {
+    const customAaron = makeExercise({ name: 'Aaron Press', is_custom: true });
+    const result = searchExercises([bench, customAaron, squat], {});
+    expect(result).toEqual([customAaron, squat, bench]);
   });
 });
 
 describe('listBodyParts / listEquipment', () => {
-  it('returns distinct sorted values', () => {
+  it('returns distinct alphabetically sorted values', () => {
     expect(listBodyParts(all)).toEqual(['chest', 'upper legs']);
     expect(listEquipment(all)).toEqual(['barbell', 'body weight']);
+  });
+
+  it('sorts case-insensitively', () => {
+    const mixed = [
+      makeExercise({ category: 'zebra' }),
+      makeExercise({ category: 'Apple' }),
+      makeExercise({ category: 'banana' }),
+    ];
+    expect(listBodyParts(mixed)).toEqual(['Apple', 'banana', 'zebra']);
   });
 });

@@ -447,3 +447,86 @@ the owner's own wording (never guessed from a low-confidence candidate --
 same "never silently mapped" rule as the matcher itself), keyed by a
 content-derived stable id so the same phrasing repeated across days
 ("Wall slides" on both Monday and Thursday) is one Exercise, not two.
+
+## Weekly schedule resolution (v0.2.2)
+
+Today used to render the entire active Program (every week, every day) and
+let the owner pick one -- redundant with the Program tab, and not actually
+"today." `todaysScheduleEntry()` (`packages/program-engine/src/todaySchedule.ts`)
+resolves the ONE thing Today should show:
+
+- **Sequential** programs: unchanged, `currentSequentialDay()`.
+- **Fixed** ("Weekday Schedule" in owner-facing UI) programs: the
+  `ProgramDay` whose `weekday` (0=Sun..6=Sat, `Date.getDay()` convention)
+  matches today's device-local weekday. `resolveDayWeekday()` falls back to
+  parsing a recognizable weekday name out of the day's `label` when
+  `weekday` itself is unset, so an existing fixed-mode program (including
+  the owner's own seeded Weekly Workout Guide, whose days are explicitly
+  stamped at seed time) resolves correctly without a forced migration.
+
+A `WorkoutOccurrence` can override the plain weekday match: something moved
+IN to today (by effective_date) takes priority; today's own regularly
+scheduled day can instead resolve to `moved_away`, `skipped`, or
+`completed` depending on its own occurrence's status. `completed`
+specifically was a real bug caught in live testing, not just reasoned
+about: an occurrence moved-and-then-completed onto a later date was being
+treated as an ordinary open "workout" slot (offering "Start Workout" again,
+and even surfacing as a false "Up Next" match) purely because its status
+had never been checked. `resolveUpNext()` walks forward up to 7 days,
+skipping rest/completed/none slots, for the compact "Up Next" summary.
+
+`resolveWeeklySchedule`/`resolveUpNext` are pure functions -- Today does
+not maintain its own copy of "what's scheduled," it recomputes from
+`Program` + `WorkoutOccurrence[]` + today's date on every load.
+
+## Single-week programs (v0.2.2)
+
+A Program with exactly one `ProgramWeek` no longer shows a "Week 1" label
+in normal owner-facing UI (`shouldShowWeekLabel()`,
+`packages/program-engine/src/sequentialProgress.ts`) -- presentation only,
+the underlying model is unchanged, and a genuine second week still shows
+its label immediately.
+
+## Alphabetical sorting (v0.2.2)
+
+Every browse/discovery surface defaults to case-insensitive, locale-aware
+A-Z (`compareByName()` in `@atlas/core`, or the equivalent inline
+`localeCompare` for plain string lists like body-part/equipment filters) --
+`searchExercises()` is still the one shared choke point for every exercise
+list/picker (Library, Add Exercise, Replace Exercise, the Program/Quick
+Workout builders, Freestyle), so this and the pre-existing
+favorites-first behavior fall out of one change rather than five. This is
+strictly a browse-time concern: `WorkoutTemplate.exercises`/
+`PlannedExercise[]` order (what Program days and Gym Mode actually render
+and log against) is never touched by any of this -- programmed order
+(warm-up, then compounds, then accessories) stays exactly as authored.
+
+## Milestone grouping (v0.2.2)
+
+Milestones used to render as two flat lists (achieved, sorted by
+`achieved_at` descending; not-yet-achieved, unsorted) -- readable only by
+coincidence, since two different movements achieved on different days
+interleave arbitrarily. `groupMilestones()`
+(`packages/milestone-engine/src/groupMilestones.ts`) groups by canonical
+`exercise_id` (never by title text), sorts groups alphabetically by
+exercise display name, and sorts each group's milestones ascending by a
+dimension-appropriate **semantic** target value (`target_weight`,
+`target_reps`, `target_duration_seconds`, etc.) rather than the title
+string -- "10, 25, 50, 75, 100 Push-Ups" instead of "100" sorting before
+"25." Achieved and not-yet-achieved milestones of the same movement now
+live in the same group, in the same ascending ladder, rather than two
+separate sections.
+
+The one milestone mapping flagged as possibly wrong ("60-Second Plank" ->
+`weighted front plank`) was audited, not blindly "fixed": the raw seed
+dataset has no plain plank exercise at all, and `weighted front plank` was
+deliberately chosen in `curatedEnrichment.ts` back in v0.0.7 as the closest
+real entry, with its `measurement_type` corrected to `time` specifically so
+it behaves as an ordinary timed plank (no weight field shown) -- "weighted"
+in the name is a dataset-naming artifact. All four built-in mappings
+(bench press, push-up, pull-up, plank) were verified against the real seed
+data and are pinned by a regression test. The plank group's own header
+still literally reads "weighted front plank" (the exercise's real name,
+same as everywhere else in the app) -- a known cosmetic quirk, not
+corrected here since renaming the underlying exercise would touch its
+media-matching and curated-enrichment keys for a purely cosmetic gain.

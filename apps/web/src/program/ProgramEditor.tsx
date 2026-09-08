@@ -1,16 +1,28 @@
 import { useEffect, useState } from 'react';
-import { newId } from '@atlas/core';
+import { compareByName, newId } from '@atlas/core';
 import {
   createProgram,
   createProgramDay,
   createProgramWeek,
   programProgressionMode,
+  resolveDayWeekday,
+  shouldShowWeekLabel,
   setActiveProgram,
 } from '@atlas/program-engine';
 import { reorder, withSequentialOrder } from '@atlas/workout-engine';
 import type { Program, ProgramDay, ProgramWeek, WorkoutTemplate } from '@atlas/data-model';
 import { ProgressionPolicyFields } from './ProgressionPolicyFields';
 import type { AtlasStorage } from '@atlas/storage';
+
+const WEEKDAY_LABELS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
 
 interface ProgramEditorProps {
   storage: AtlasStorage;
@@ -21,6 +33,9 @@ interface ProgramEditorProps {
 
 export function ProgramEditor({ storage, programId, templates, onDone }: ProgramEditorProps) {
   const [program, setProgram] = useState<Program | null>(null);
+  // Management/discovery ordering only (v0.2.2) -- picking which template a
+  // day uses, not the day's own programmed exercise order.
+  const sortedTemplates = [...templates].sort(compareByName);
 
   useEffect(() => {
     void (async () => {
@@ -68,7 +83,7 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
   }
 
   function addDay(weekIndex: number) {
-    const firstTemplate = templates[0];
+    const firstTemplate = sortedTemplates[0];
     if (!firstTemplate) return;
     setProgram((prev) => {
       if (!prev) return prev;
@@ -175,7 +190,7 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
       />
 
       <fieldset className="atlas-program-editor__mode">
-        <legend>Progression</legend>
+        <legend>Schedule Type</legend>
         <label>
           <input
             type="radio"
@@ -183,7 +198,8 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
             checked={programProgressionMode(program) === 'fixed'}
             onChange={() => setProgram({ ...program, progression_mode: 'fixed' })}
           />
-          Fixed Schedule &mdash; every day is always available to start
+          Weekday Schedule &mdash; workouts repeat on the weekdays you assign; Today shows whichever
+          one matches today
         </label>
         <label>
           <input
@@ -192,8 +208,8 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
             checked={programProgressionMode(program) === 'sequential'}
             onChange={() => setProgram({ ...program, progression_mode: 'sequential' })}
           />
-          Sequential &mdash; Today shows only the next workout in order; a missed day stays next, it
-          isn&rsquo;t skipped
+          Sequential &mdash; workouts advance in order regardless of weekday; a missed day stays
+          next, it isn&rsquo;t skipped
         </label>
       </fieldset>
 
@@ -203,70 +219,98 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
         onChange={(policy) => setProgram({ ...program, default_progression_policy: policy })}
       />
 
-      {program.weeks.map((week, weekIndex) => (
-        <div key={week.id} className="atlas-program-editor__week">
-          <div className="atlas-program-editor__week-header">
-            <h2>Week {weekIndex + 1}</h2>
-            <div className="atlas-template-editor__exercise-actions">
-              <button type="button" onClick={() => duplicateWeek(weekIndex)}>
-                Duplicate
-              </button>
-              <button type="button" onClick={() => removeWeek(weekIndex)}>
-                Remove
-              </button>
+      {(() => {
+        const showWeekLabel = shouldShowWeekLabel(program);
+        const isWeekly = programProgressionMode(program) === 'fixed';
+        return program.weeks.map((week, weekIndex) => (
+          <div key={week.id} className="atlas-program-editor__week">
+            <div className="atlas-program-editor__week-header">
+              {showWeekLabel && <h2>{week.label || `Week ${weekIndex + 1}`}</h2>}
+              <div className="atlas-template-editor__exercise-actions">
+                <button type="button" onClick={() => duplicateWeek(weekIndex)}>
+                  Duplicate
+                </button>
+                <button type="button" onClick={() => removeWeek(weekIndex)}>
+                  Remove
+                </button>
+              </div>
             </div>
+            <ul className="atlas-program-editor__days">
+              {week.days.map((day, dayIndex) => (
+                <li key={day.id} className="atlas-program-editor__day">
+                  <input
+                    aria-label="Day label"
+                    placeholder="Day"
+                    value={day.label}
+                    onChange={(e) => updateDay(weekIndex, dayIndex, { label: e.target.value })}
+                  />
+                  {isWeekly && (
+                    <select
+                      aria-label="Weekday"
+                      value={resolveDayWeekday(day) ?? ''}
+                      onChange={(e) =>
+                        updateDay(weekIndex, dayIndex, {
+                          weekday: e.target.value === '' ? null : Number(e.target.value),
+                        })
+                      }
+                    >
+                      <option value="">Not scheduled</option>
+                      {WEEKDAY_LABELS.map((label, i) => (
+                        <option key={label} value={i}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <select
+                    aria-label="Workout"
+                    value={day.template_id}
+                    onChange={(e) =>
+                      updateDay(weekIndex, dayIndex, { template_id: e.target.value })
+                    }
+                  >
+                    {sortedTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    aria-label="Move day up"
+                    disabled={dayIndex === 0}
+                    onClick={() => moveDay(weekIndex, dayIndex, -1)}
+                  >
+                    &uarr;
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move day down"
+                    disabled={dayIndex === week.days.length - 1}
+                    onClick={() => moveDay(weekIndex, dayIndex, 1)}
+                  >
+                    &darr;
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Remove day"
+                    onClick={() => removeDay(weekIndex, dayIndex)}
+                  >
+                    &times;
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => addDay(weekIndex)}
+              disabled={templates.length === 0}
+            >
+              + Add Day
+            </button>
           </div>
-          <ul className="atlas-program-editor__days">
-            {week.days.map((day, dayIndex) => (
-              <li key={day.id} className="atlas-program-editor__day">
-                <input
-                  aria-label="Day label"
-                  placeholder="Day"
-                  value={day.label}
-                  onChange={(e) => updateDay(weekIndex, dayIndex, { label: e.target.value })}
-                />
-                <select
-                  aria-label="Workout"
-                  value={day.template_id}
-                  onChange={(e) => updateDay(weekIndex, dayIndex, { template_id: e.target.value })}
-                >
-                  {templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  aria-label="Move day up"
-                  disabled={dayIndex === 0}
-                  onClick={() => moveDay(weekIndex, dayIndex, -1)}
-                >
-                  &uarr;
-                </button>
-                <button
-                  type="button"
-                  aria-label="Move day down"
-                  disabled={dayIndex === week.days.length - 1}
-                  onClick={() => moveDay(weekIndex, dayIndex, 1)}
-                >
-                  &darr;
-                </button>
-                <button
-                  type="button"
-                  aria-label="Remove day"
-                  onClick={() => removeDay(weekIndex, dayIndex)}
-                >
-                  &times;
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => addDay(weekIndex)} disabled={templates.length === 0}>
-            + Add Day
-          </button>
-        </div>
-      ))}
+        ));
+      })()}
 
       <button type="button" className="atlas-library__create" onClick={addWeek}>
         + Add Week

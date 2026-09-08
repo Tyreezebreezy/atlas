@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ExerciseGroup, PerformedSet, PlannedExercise } from '@atlas/data-model';
-import { buildGymSlots, currentGroupRound, groupExercisesInSession, isGroupComplete } from './groups';
+import {
+  buildGymSlots,
+  currentGroupRound,
+  groupExercisesInSession,
+  isGroupComplete,
+} from './groups';
 import { createPlannedExercise } from './createPlannedExercise';
 import { addPerformedSet, createPerformedSet, startWorkoutSession } from './session';
 

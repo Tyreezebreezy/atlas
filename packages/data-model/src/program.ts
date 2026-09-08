@@ -6,6 +6,18 @@ export interface ProgramDay {
   order: number;
   label: string;
   template_id: string;
+  /** v0.2.2. Explicit calendar-weekday assignment for a Weekly/Calendar
+   * ("fixed") program -- `Date.getDay()` convention (0 = Sunday .. 6 =
+   * Saturday). Null/absent means "not scheduled to a specific weekday": a
+   * day authored before this field existed, a day deliberately left
+   * unscheduled, or any day in a Sequential program (where weekday is
+   * irrelevant -- order is what matters there). `resolveDayWeekday()`
+   * (packages/program-engine) falls back to parsing a recognizable weekday
+   * name out of `label` for a day with no explicit value, so existing
+   * fixed-mode programs whose day labels already read "Monday · Upper A"
+   * (every real one seen in practice) resolve correctly without a forced
+   * migration -- see docs/DATA_MODEL.md "Weekly schedule resolution." */
+  weekday?: number | null;
 }
 
 export interface ProgramWeek {
@@ -15,11 +27,15 @@ export interface ProgramWeek {
   days: ProgramDay[];
 }
 
-/** Fixed: Today shows every week/day, the user picks any of them, same as
- * v0.0.1-v0.0.8. Sequential: Today shows only the day at `sequence_position`
- * -- the next workout stays "next" until it's completed or intentionally
- * skipped, regardless of what day of the week it actually is; a missed day
- * is not auto-skipped. See docs/DATA_MODEL.md. */
+/** Fixed ("Weekly/Calendar Schedule" in owner-facing UI, v0.2.2): Today
+ * resolves the ONE day whose weekday matches today's local date (see
+ * `todaysScheduledDay()`) -- v0.0.1-v0.1.5's original behavior ("Today
+ * shows every week/day, the user picks any of them") is now the Program
+ * tab's job, not Today's; Today shows exactly one card. Sequential: Today
+ * shows only the day at `sequence_position` -- the next workout stays
+ * "next" until it's completed or intentionally skipped, regardless of what
+ * day of the week it actually is; a missed day is not auto-skipped. See
+ * docs/DATA_MODEL.md. */
 export type ProgramProgressionMode = 'fixed' | 'sequential';
 
 export interface Program extends SyncMeta {

@@ -6,6 +6,7 @@ import {
   currentSequentialDay,
   programProgressionMode,
   programSequencePosition,
+  shouldShowWeekLabel,
 } from './sequentialProgress';
 
 function sequentialProgram(dayCount: number): Program {
@@ -25,6 +26,29 @@ describe('programProgressionMode / programSequencePosition', () => {
     delete legacy.sequence_position;
     expect(programProgressionMode(legacy)).toBe('fixed');
     expect(programSequencePosition(legacy)).toBe(0);
+  });
+});
+
+describe('shouldShowWeekLabel', () => {
+  it('hides the week label for a single repeating week', () => {
+    const program = {
+      ...createProgram('Weekly Workout Guide', null),
+      weeks: [createProgramWeek(1, null)],
+    };
+    expect(shouldShowWeekLabel(program)).toBe(false);
+  });
+
+  it('shows week labels once a program has more than one real week', () => {
+    const program = {
+      ...createProgram('Block Program', null),
+      weeks: [createProgramWeek(1, 'Week 1'), createProgramWeek(2, 'Week 2 · Deload')],
+    };
+    expect(shouldShowWeekLabel(program)).toBe(true);
+  });
+
+  it('hides the label for a program with zero weeks yet (a brand new, unsaved program)', () => {
+    const program = createProgram('New Program', null);
+    expect(shouldShowWeekLabel(program)).toBe(false);
   });
 });
 
