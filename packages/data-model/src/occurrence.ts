@@ -33,4 +33,10 @@ export interface WorkoutOccurrence extends SyncMeta {
    * immutable performed record; this is just the pointer to it. */
   session_id: string | null;
   notes: string | null;
+  /** v0.2.5. "Dismiss from Today" -- stops surfacing this missed occurrence
+   * in Today's missed-workout reminder section WITHOUT changing its
+   * scheduling status (still `planned`/`moved`/etc.). Distinct from skip,
+   * complete, or move: this is purely a Today-surfacing preference. The
+   * occurrence stays discoverable through week navigation and Program. */
+  dismissed_from_today?: boolean;
 }

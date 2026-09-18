@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Program, ProgramDay, WorkoutTemplate } from '@atlas/data-model';
 import { createProgram, createProgramDay, createProgramWeek } from './createProgram';
-import { completeOccurrence, moveOccurrence, skipOccurrence } from './workoutOccurrence';
+import {
+  completeOccurrence,
+  dismissOccurrence,
+  moveOccurrence,
+  skipOccurrence,
+} from './workoutOccurrence';
 import {
   resolveDayWeekday,
   resolveMissedWorkouts,
@@ -264,15 +269,24 @@ describe('resolveMissedWorkouts', () => {
     expect(missed).toHaveLength(0);
   });
 
+  it('excludes a day that was dismissed from Today, without changing its status', () => {
+    const { program, templates } = weeklyProgram();
+    const mondayDay = program.weeks[0]!.days[0]!;
+    const dismissed = dismissOccurrence(null, program.id, mondayDay.id, MONDAY);
+    expect(dismissed.status).toBe('planned'); // dismissal is not skip/complete
+    const missed = resolveMissedWorkouts(program, templates, [dismissed], TUESDAY, 1);
+    expect(missed).toHaveLength(0);
+  });
+
   it('never flags a rest day as missed', () => {
     const { program, templates } = weeklyProgram();
     // Looking back from the following Monday (2026-09-14) across a full
     // week hits the prior Sunday (rest, 2026-09-13) and Sat (none) among
     // real missed workout days -- rest/none must never appear.
     const missed = resolveMissedWorkouts(program, templates, [], '2026-09-14', 7);
-    expect(missed.every((m) => m.resolved.template && m.resolved.template.exercises.length > 0)).toBe(
-      true,
-    );
+    expect(
+      missed.every((m) => m.resolved.template && m.resolved.template.exercises.length > 0),
+    ).toBe(true);
   });
 
   it('sorts most-recently-missed first', () => {
@@ -322,7 +336,8 @@ describe('resolveWeekSchedule', () => {
     const tuesday = week.find((d) => d.date === TUESDAY);
     const sunday = week.find((d) => d.date === SUNDAY);
     expect(monday?.entry.kind).toBe('workout');
-    if (monday?.entry.kind === 'workout') expect(monday.entry.resolved.template?.name).toBe('Upper A');
+    if (monday?.entry.kind === 'workout')
+      expect(monday.entry.resolved.template?.name).toBe('Upper A');
     expect(tuesday?.entry.kind).toBe('workout');
     expect(sunday?.entry).toMatchObject({ kind: 'rest' });
   });

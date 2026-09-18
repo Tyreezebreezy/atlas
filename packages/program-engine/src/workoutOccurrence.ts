@@ -128,6 +128,33 @@ export function completeOccurrence(
 }
 
 /**
+ * v0.2.5. "Dismiss from Today" -- stops surfacing this missed occurrence in
+ * Today's reminder section WITHOUT changing its scheduling status (still
+ * `planned`/`moved`/etc., still discoverable via week navigation and
+ * Program, still startable later). Deliberately NOT `skipOccurrence` (which
+ * marks it skipped) or `completeOccurrence`: dismissal is a pure
+ * Today-surfacing preference. See `WorkoutOccurrence.dismissed_from_today`.
+ */
+export function dismissOccurrence(
+  existing: WorkoutOccurrence | null,
+  programId: string,
+  programDayId: string,
+  originalDate: string,
+): WorkoutOccurrence {
+  const base = ensureOccurrence(existing, programId, programDayId, originalDate);
+  return { ...base, dismissed_from_today: true, ...touch(base) };
+}
+
+/** Whether the owner has dismissed this occurrence from Today's missed
+ * reminder -- read through this (never `.dismissed_from_today` directly) so
+ * an occurrence from before the field existed classifies correctly. */
+export function isDismissedFromToday(
+  occurrence: Pick<WorkoutOccurrence, 'dismissed_from_today'> | null,
+): boolean {
+  return occurrence?.dismissed_from_today === true;
+}
+
+/**
  * v0.2.4. What finishing a workout should do to occurrences, decided
  * purely from the just-completed session -- extracted out of
  * GymModeScreen's Finish handler so the critical scheduled-vs-performed

@@ -3,14 +3,7 @@ import type { TodayScheduleEntry, WeekDayEntry } from '@atlas/program-engine';
 const LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']; // Date.getDay() order: 0=Sun..6=Sat
 
 type DayStatus =
-  | 'completed'
-  | 'missed'
-  | 'rest'
-  | 'moved'
-  | 'skipped'
-  | 'scheduled'
-  | 'future'
-  | 'none';
+  'completed' | 'missed' | 'rest' | 'moved' | 'skipped' | 'scheduled' | 'future' | 'none';
 
 /** A day's occurrence-state badge, independent of whether it's also
  * "today" or "selected" -- those are separate visual layers (v0.2.4 Part
@@ -81,7 +74,12 @@ export function WeekNavigator({
 }: WeekNavigatorProps) {
   return (
     <div className="atlas-week-nav">
-      <button type="button" className="atlas-week-nav__arrow" onClick={onPrevWeek} aria-label="Previous week">
+      <button
+        type="button"
+        className="atlas-week-nav__arrow"
+        onClick={onPrevWeek}
+        aria-label="Previous week"
+      >
         &lsaquo;
       </button>
       <div className="atlas-week-nav__days">
@@ -111,7 +109,10 @@ export function WeekNavigator({
               <span aria-hidden="true" className="atlas-week-nav__daynum">
                 {date.slice(-2).replace(/^0/, '')}
               </span>
-              <span aria-hidden="true" className={`atlas-week-nav__dot atlas-week-nav__dot--${status}`} />
+              <span
+                aria-hidden="true"
+                className={`atlas-week-nav__dot atlas-week-nav__dot--${status}`}
+              />
               {isToday && (
                 <span aria-hidden="true" className="atlas-week-nav__today-label">
                   Today
@@ -121,7 +122,12 @@ export function WeekNavigator({
           );
         })}
       </div>
-      <button type="button" className="atlas-week-nav__arrow" onClick={onNextWeek} aria-label="Next week">
+      <button
+        type="button"
+        className="atlas-week-nav__arrow"
+        onClick={onNextWeek}
+        aria-label="Next week"
+      >
         &rsaquo;
       </button>
     </div>

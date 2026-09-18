@@ -11,3 +11,4 @@ export * from './groups';
 export * from './addExercise';
 export * from './setClassification';
 export * from './plateCalculator';
+export * from './slotCompletion';

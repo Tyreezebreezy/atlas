@@ -9,14 +9,21 @@ import {
   clearActiveTimer,
   completeWorkoutSession,
   createPerformedSet,
+  executionModeOf,
   isGroupComplete,
+  isOptionalExercise,
+  orGroupMembers,
   previousPerformance,
   removePerformedSet,
   replaceExercise,
   groupExercisesInSession,
   resolveGroupRestSeconds,
   resolveRestSeconds,
+  resolveWorkTimerSeconds,
+  restTimerEnabled,
   applyExerciseReplacementToTemplate,
+  setExecutionMode,
+  setExerciseGoal,
   setSessionNote,
   skipExerciseInSession,
   startExerciseTimer,
@@ -29,9 +36,11 @@ import { newPRsFromSession } from '@atlas/pr-engine';
 import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
 import type {
   Exercise,
+  ExerciseGroup,
   ExerciseReplacement,
   Milestone,
   PersonalRecord,
+  PlannedExercise,
   Program,
   WorkoutOccurrence,
   WorkoutSession,
@@ -50,6 +59,7 @@ import { RestTimer } from './RestTimer';
 import { SupersetRound } from './SupersetRound';
 import { useWakeLock } from './useWakeLock';
 import { WorkoutSummary } from './WorkoutSummary';
+import { GymModeHint, hasSeenGymHint, markGymHintSeen } from '../onboarding/Onboarding';
 
 interface GymModeScreenProps {
   sessionId: string;
@@ -73,6 +83,25 @@ function firstIncompleteSlotIndex(session: WorkoutSession, slots: GymSlot[]): nu
   return index === -1 ? 0 : index;
 }
 
+/** v0.2.5. The paired-block position label ("A1", "B2", ...) for a planned
+ * exercise, derived from its position within its superset/circuit group --
+ * null when ungrouped. Shown in both Normal and Paired modes so the owner
+ * always knows which block an exercise belongs to, even when running the
+ * pair exercise-by-exercise. */
+function pairLabelFor(
+  snapshot: PlannedExercise[],
+  groups: ExerciseGroup[],
+  planned: PlannedExercise,
+): string | null {
+  if (!planned.group_id) return null;
+  const group = groups.find((g) => g.id === planned.group_id);
+  if (!group) return null;
+  const members = snapshot.filter((p) => p.group_id === planned.group_id);
+  const index = members.findIndex((m) => m.id === planned.id);
+  if (index < 0) return null;
+  return String.fromCharCode(65 + Math.floor(index / 26)) + (index + 1);
+}
+
 export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const storage = useStorage();
   const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -91,6 +120,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [newPRs, setNewPRs] = useState<PersonalRecord[]>([]);
   const [newMilestones, setNewMilestones] = useState<Milestone[]>([]);
+  const [showGymHint, setShowGymHint] = useState(() => !hasSeenGymHint());
 
   useEffect(() => {
     if (!storage) return;
@@ -112,12 +142,11 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       if (existing) {
         setSession(existing);
         setNoteDraft(existing.session_note ?? '');
-        setExerciseIndex(
-          firstIncompleteSlotIndex(
-            existing,
-            buildGymSlots(existing.planned_snapshot, existing.groups),
-          ),
-        );
+        const resumeSlots =
+          executionModeOf(existing) === 'paired'
+            ? buildGymSlots(existing.planned_snapshot, existing.groups)
+            : existing.planned_snapshot.map((planned) => ({ kind: 'single' as const, planned }));
+        setExerciseIndex(firstIncompleteSlotIndex(existing, resumeSlots));
       }
       setExercises(new Map(allExercises.map((e) => [e.id, e])));
       setPriorSessions(allSessions);
@@ -142,13 +171,34 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   // after the guard above -- these consts capture the known-non-null values.
   const currentSession = session;
   const activeStorage = storage;
-  const slots = buildGymSlots(currentSession.planned_snapshot, currentSession.groups);
+  const executionMode = executionModeOf(currentSession);
+  const hasGroups = currentSession.groups.length > 0;
+  // v0.2.5. Normal mode flattens superset/circuit groups so the same planned
+  // exercises run one at a time -- the Program's group metadata is untouched,
+  // and logged sets (keyed by exercise_id) are preserved either way.
+  const slots =
+    executionMode === 'paired'
+      ? buildGymSlots(currentSession.planned_snapshot, currentSession.groups)
+      : currentSession.planned_snapshot.map((planned) => ({ kind: 'single' as const, planned }));
   const currentSlot = slots[exerciseIndex];
   const currentPlanned = currentSlot?.kind === 'single' ? currentSlot.planned : undefined;
 
   async function persist(updated: WorkoutSession) {
     await activeStorage.workoutSessions.put(updated);
     setSession(updated);
+  }
+
+  async function handleSetExecutionMode(mode: 'normal' | 'paired') {
+    await persist(setExecutionMode(currentSession, mode));
+    setExerciseIndex(0);
+  }
+
+  async function handleSetGoal(goal: {
+    goal_reps?: number | null;
+    goal_duration_seconds?: number | null;
+  }) {
+    if (!currentPlanned) return;
+    await persist(setExerciseGoal(currentSession, currentPlanned.exercise_id, goal));
   }
 
   async function handleCompleteSet(input: LogSetInput) {
@@ -162,6 +212,13 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     );
     const planned = currentSession.planned_snapshot.find((p) => p.exercise_id === input.exerciseId);
     if (planned) {
+      // v0.2.5. A plan slot with rest_timer_enabled === false does not
+      // auto-start a rest timer (mobility holds, easy warm-up work).
+      if (!restTimerEnabled(planned)) {
+        updated = clearActiveTimer(updated);
+        await persist(updated);
+        return;
+      }
       const rest = resolveRestSeconds({
         planned,
         session: currentSession,
@@ -324,7 +381,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     // between members within a round -- keyed to the last member so the
     // rest timer's exercise_id still points at a real planned exercise.
     const lastMember = slot.members[slot.members.length - 1];
-    if (lastMember) {
+    if (lastMember && restTimerEnabled(lastMember)) {
       const rest = resolveGroupRestSeconds({
         group: slot.group,
         members: slot.members,
@@ -365,6 +422,28 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         </span>
       </div>
 
+      {hasGroups && (
+        <div className="atlas-gym-mode__execution-row">
+          <span className="atlas-gym-mode__execution-label">Execution</span>
+          <div className="atlas-gym-mode__execution" role="group" aria-label="Execution mode">
+            <button
+              type="button"
+              aria-pressed={executionMode === 'normal'}
+              onClick={() => void handleSetExecutionMode('normal')}
+            >
+              Normal
+            </button>
+            <button
+              type="button"
+              aria-pressed={executionMode === 'paired'}
+              onClick={() => void handleSetExecutionMode('paired')}
+            >
+              Paired
+            </button>
+          </div>
+        </div>
+      )}
+
       {session.active_timer?.kind === 'rest' && (
         <RestTimer
           timer={session.active_timer}
@@ -375,6 +454,15 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
             void handleClearTimer();
           }}
           flashEnabled={loadSettings().timerFlashEnabled}
+        />
+      )}
+
+      {showGymHint && (
+        <GymModeHint
+          onDismiss={() => {
+            markGymHintSeen();
+            setShowGymHint(false);
+          }}
         />
       )}
 
@@ -389,7 +477,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
       ) : currentPlanned ? (
         skippedEntry ? (
           <div className="atlas-gym-exercise atlas-gym-exercise--skipped">
-            <h2>{formatExerciseName(exercises.get(currentPlanned.exercise_id)?.name ?? 'Exercise')}</h2>
+            <h2>
+              {formatExerciseName(exercises.get(currentPlanned.exercise_id)?.name ?? 'Exercise')}
+            </h2>
             <p className="atlas-gym-exercise__skipped-note">
               Skipped{skippedEntry.reason ? ` — ${skippedEntry.reason}` : ''}
             </p>
@@ -410,9 +500,29 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
               ? previousPerformance(priorSessions, exercise.id, session.id)
               : [];
             const bestPR = exercise ? bestPRForExercise(personalRecords, exercise) : null;
+            const isOptional = isOptionalExercise(currentPlanned);
+            const orMembers = currentPlanned.or_group
+              ? orGroupMembers(session.planned_snapshot, currentPlanned.or_group)
+              : [];
+            const orGroupCount = orMembers.length >= 2 ? orMembers.length : null;
+            const workTimerSeconds = resolveWorkTimerSeconds(currentPlanned);
+            const pairLabel = pairLabelFor(
+              session.planned_snapshot,
+              session.groups,
+              currentPlanned,
+            );
             return exercise ? (
               <>
                 <ExerciseLogger
+                  // v0.2.5. Key by exercise id so navigating between
+                  // exercises REMOUNTS the logger (fresh draft state) --
+                  // without this, React reuses the same component instance
+                  // across different movements and the typed weight/reps
+                  // from Chest Press stay visible on Pull-Up (the confirmed
+                  // cross-exercise carryover bug). Same-exercise prefill
+                  // still works: initialDraftValues re-derives from that
+                  // exercise's own performed/previous sets on mount.
+                  key={currentPlanned.exercise_id}
                   exercise={exercise}
                   planned={currentPlanned}
                   performedSets={performedForExercise}
@@ -421,6 +531,11 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                   activeTimer={session.active_timer}
                   allSessions={priorSessions}
                   library={[...exercises.values()]}
+                  isOptional={isOptional}
+                  orGroupCount={orGroupCount}
+                  workTimerSeconds={workTimerSeconds}
+                  pairLabel={pairLabel}
+                  onSetGoal={(goal) => void handleSetGoal(goal)}
                   canGroupWithNext={
                     slots[exerciseIndex + 1]?.kind === 'single' && performedForExercise.length === 0
                   }

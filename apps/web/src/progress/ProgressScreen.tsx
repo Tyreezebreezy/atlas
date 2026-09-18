@@ -47,6 +47,17 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** v0.2.5. Body-part labels come from the exercise dataset lowercase
+ * ("back", "upper arms", "mobility"). Title-case them for display so a
+ * distribution/recency row never reads as raw slugs -- part of the fix for
+ * the "backToday"/"UncategorizedToday" presentation bug. */
+function titleCase(label: string): string {
+  return label
+    .split(' ')
+    .map((word) => (word ? word[0]!.toUpperCase() + word.slice(1) : word))
+    .join(' ');
+}
+
 /** Plain proportional bar list -- no charting dependency for a handful of
  * category totals. Assumes non-empty entries; callers gate on that. */
 function DistributionList({ entries }: { entries: DistributionEntry[] }) {
@@ -55,7 +66,7 @@ function DistributionList({ entries }: { entries: DistributionEntry[] }) {
     <ul className="atlas-progress__distribution-list">
       {entries.map((e) => (
         <li key={e.label} className="atlas-progress__distribution-item">
-          <span className="atlas-progress__distribution-label">{e.label}</span>
+          <span className="atlas-progress__distribution-label">{titleCase(e.label)}</span>
           <span className="atlas-progress__distribution-bar-track">
             <span
               className="atlas-progress__distribution-bar"
@@ -210,7 +221,11 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     [milestones, exercises],
   );
   const achievedMilestoneGroups = useMemo(
-    () => groupMilestones(milestones.filter((m) => m.achieved_at != null), exercises),
+    () =>
+      groupMilestones(
+        milestones.filter((m) => m.achieved_at != null),
+        exercises,
+      ),
     [milestones, exercises],
   );
   // The catalog only ever shows built-ins still worth pursuing -- an
@@ -434,7 +449,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
           <ul className="atlas-progress__recency-list">
             {recency.map((entry) => (
               <li key={entry.label}>
-                <span>{entry.label}</span>
+                <span>{titleCase(entry.label)}</span>
                 <span>
                   {entry.daysSinceTrained === 0 ? 'Today' : `${entry.daysSinceTrained}d ago`}
                 </span>

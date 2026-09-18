@@ -9,6 +9,8 @@ import {
   remainingSeconds,
   resolveGroupRestSeconds,
   resolveRestSeconds,
+  resolveWorkTimerSeconds,
+  restTimerEnabled,
   startExerciseTimer,
   startRestTimer,
 } from './timer';
@@ -156,5 +158,50 @@ describe('rest and exercise timers', () => {
     const session = startRestTimer(makeSession(), 'ex-1', 90);
     const cleared = clearActiveTimer(session);
     expect(cleared.active_timer).toBeNull();
+  });
+});
+
+describe('restTimerEnabled', () => {
+  it('defaults to true for a plan without the field', () => {
+    expect(restTimerEnabled(createPlannedExercise('ex-1', 0))).toBe(true);
+  });
+
+  it('is false only when explicitly disabled', () => {
+    expect(
+      restTimerEnabled({ ...createPlannedExercise('ex-1', 0), rest_timer_enabled: false }),
+    ).toBe(false);
+    expect(
+      restTimerEnabled({ ...createPlannedExercise('ex-1', 0), rest_timer_enabled: true }),
+    ).toBe(true);
+  });
+});
+
+describe('resolveWorkTimerSeconds', () => {
+  it('returns null for an ordinary exercise with no timed target', () => {
+    expect(resolveWorkTimerSeconds(createPlannedExercise('ex-1', 0))).toBeNull();
+  });
+
+  it('falls back to target_duration_seconds for a timed exercise without an explicit toggle', () => {
+    const planned = { ...createPlannedExercise('ex-1', 0), target_duration_seconds: 30 };
+    expect(resolveWorkTimerSeconds(planned)).toBe(30);
+  });
+
+  it('prefers work_timer_seconds when a work timer is explicitly enabled', () => {
+    const planned = {
+      ...createPlannedExercise('ex-1', 0),
+      target_duration_seconds: 40,
+      work_timer_enabled: true,
+      work_timer_seconds: 30,
+    };
+    expect(resolveWorkTimerSeconds(planned)).toBe(30);
+  });
+
+  it('a disabled work timer still yields the timed target (pre-existing timed behavior)', () => {
+    const planned = {
+      ...createPlannedExercise('ex-1', 0),
+      target_duration_seconds: 30,
+      work_timer_enabled: false,
+    };
+    expect(resolveWorkTimerSeconds(planned)).toBe(30);
   });
 });

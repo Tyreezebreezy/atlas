@@ -6,6 +6,11 @@ import { EmptyScreen } from '../screens/EmptyScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { TodayScreen } from '../today/TodayScreen';
 import { BodyScreen } from '../body/BodyScreen';
+import {
+  HowAtlasWorksScreen,
+  OnboardingModal,
+  hasCompletedOnboarding,
+} from '../onboarding/Onboarding';
 import { NAV_TABS, NAV_TAB_LABELS, type NavTab } from './tabs';
 
 // Lazy: all pull in the exercise library (and its ~1.3MB seed data), so they
@@ -26,7 +31,7 @@ const ImportExportScreen = lazy(() =>
   import('../importexport/ImportExportScreen').then((m) => ({ default: m.ImportExportScreen })),
 );
 
-type MoreView = 'menu' | 'history' | 'log-past' | 'settings' | 'body' | 'import-export';
+type MoreView = 'menu' | 'history' | 'log-past' | 'settings' | 'body' | 'import-export' | 'help';
 
 function MoreTab() {
   const [view, setView] = useState<MoreView>('menu');
@@ -34,6 +39,7 @@ function MoreTab() {
   if (view === 'log-past') return <LogPastWorkoutScreen onBack={() => setView('menu')} />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
   if (view === 'body') return <BodyScreen onBack={() => setView('menu')} />;
+  if (view === 'help') return <HowAtlasWorksScreen onBack={() => setView('menu')} />;
   if (view === 'import-export')
     return (
       <Suspense fallback={<EmptyScreen title="Import / Export" description="Loading…" />}>
@@ -83,6 +89,13 @@ function MoreTab() {
             </span>
           </button>
         </li>
+        <li>
+          <button type="button" onClick={() => setView('help')} aria-label="How ATLAS Works">
+            <span className="atlas-library__item-name" aria-hidden="true">
+              How ATLAS Works
+            </span>
+          </button>
+        </li>
       </ul>
     </div>
   );
@@ -91,6 +104,7 @@ function MoreTab() {
 export function NavShell() {
   const [activeTab, setActiveTab] = useState<NavTab>('today');
   const { activeSessionId, exitGymMode } = useGymMode();
+  const [showOnboarding, setShowOnboarding] = useState(() => !hasCompletedOnboarding());
 
   // An active workout takes over the whole app -- no tab bar, no context
   // switching mid-set. Exiting (finish or back) returns to the normal tabs.
@@ -142,6 +156,7 @@ export function NavShell() {
           </button>
         ))}
       </nav>
+      {showOnboarding && <OnboardingModal onDone={() => setShowOnboarding(false)} />}
     </div>
   );
 }

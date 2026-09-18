@@ -80,6 +80,39 @@ function timerFrom(
   return { kind, exercise_id: exerciseId, started_at, duration_seconds: durationSeconds, ends_at };
 }
 
+/**
+ * v0.2.5. Whether completing a set for this exercise should auto-start a
+ * rest timer. False only when the plan explicitly disables it
+ * (`rest_timer_enabled === false`) -- mobility holds, easy warm-up work,
+ * etc. Absent = true (auto-rest fires, the pre-v0.2.5 behavior). Distinct
+ * from the rest DURATION (see `resolveRestSeconds`): this is whether a rest
+ * timer runs at all, not how long it runs.
+ */
+export function restTimerEnabled(planned: Pick<PlannedExercise, 'rest_timer_enabled'>): boolean {
+  return planned.rest_timer_enabled !== false;
+}
+
+/**
+ * v0.2.5. The explicit Work Timer duration for this slot, or null when
+ * there is no work timer. `work_timer_seconds` wins over the exercise's
+ * `target_duration_seconds` when both are set, so a timed hold can carry a
+ * target (for progression) AND a distinct work-timer length. Only non-null
+ * when `work_timer_enabled === true` OR the exercise is a timed hold with a
+ * target duration -- matching the pre-v0.2.5 behavior where a `time`
+ * exercise's `target_duration_seconds` already drove a work timer.
+ */
+export function resolveWorkTimerSeconds(
+  planned: Pick<
+    PlannedExercise,
+    'work_timer_enabled' | 'work_timer_seconds' | 'target_duration_seconds'
+  >,
+): number | null {
+  if (planned.work_timer_enabled === true) {
+    return planned.work_timer_seconds ?? planned.target_duration_seconds ?? null;
+  }
+  return planned.target_duration_seconds ?? null;
+}
+
 export function startRestTimer(
   session: WorkoutSession,
   exerciseId: string,

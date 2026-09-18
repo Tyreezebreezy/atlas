@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { type LogSetInput, remainingSeconds, setPhaseOf, setTypeOf } from '@atlas/workout-engine';
+import {
+  type LogSetInput,
+  remainingSeconds,
+  restTimerEnabled,
+  setPhaseOf,
+  setTypeOf,
+} from '@atlas/workout-engine';
 import { formatExerciseName } from '@atlas/exercise-library';
 import type {
   Exercise,
@@ -15,6 +21,7 @@ import { describePR } from '../progress/formatPR';
 import { loadSettings } from '../settings/settings';
 import { ExerciseMedia } from '../library/ExerciseMedia';
 import { ExerciseContextSheet } from './ExerciseContextSheet';
+import { initialDraftValues, type DraftSetKind, type DraftValues } from './draftValues';
 
 /** One user-facing choice per row, covering both the phase (warmup/work)
  * and sub-type (normal/amrap/drop/failure/rest_pause) dimensions the
@@ -22,28 +29,6 @@ import { ExerciseContextSheet } from './ExerciseContextSheet';
  * owner never needs to pick phase and type independently in practice: a
  * warm-up set is never also an AMRAP or drop set. See
  * docs/PROGRESSION.md "Set phase migration." */
-type DraftSetKind = 'warmup' | 'normal' | 'amrap' | 'drop' | 'failure' | 'rest_pause';
-
-interface DraftValues {
-  weight: string;
-  /** v0.2.0. Added load for a weighted bodyweight movement -- see
-   * `PerformedSet.external_load`'s doc comment. Only shown/read for a
-   * `reps_bodyweight` exercise, never alongside `weight`. */
-  externalLoad: string;
-  reps: string;
-  duration: string;
-  distance: string;
-  kind: DraftSetKind;
-}
-
-const EMPTY_DRAFT: DraftValues = {
-  weight: '',
-  externalLoad: '',
-  reps: '',
-  duration: '',
-  distance: '',
-  kind: 'normal',
-};
 
 const DRAFT_KIND_LABELS: Record<DraftSetKind, string> = {
   normal: 'Working',
@@ -165,6 +150,18 @@ interface ExerciseLoggerProps {
   activeTimer: TimerState | null;
   allSessions: WorkoutSession[];
   library: Exercise[];
+  /** v0.2.5. Optional-exercise status badge. */
+  isOptional?: boolean;
+  /** v0.2.5. Size of this exercise's OR-slot ("Choose 1 of N"), if any. */
+  orGroupCount?: number | null;
+  /** v0.2.5. Explicit work-timer length, if this slot has one. */
+  workTimerSeconds?: number | null;
+  /** v0.2.5. Paired-block position label ("A1", "B2", ...) when this
+   * exercise is a member of a superset/circuit group. */
+  pairLabel?: string | null;
+  /** v0.2.5. Persist the owner's editable goal (reps or duration) for this
+   * exercise, separately from logged actuals. */
+  onSetGoal?: (goal: { goal_reps?: number | null; goal_duration_seconds?: number | null }) => void;
   canGroupWithNext?: boolean;
   onGroupWithNext?: () => void;
   onCompleteSet: (input: LogSetInput) => void;
@@ -181,6 +178,29 @@ function formatSet(set: PerformedSet): string {
   return '—';
 }
 
+function formatSeconds(seconds: number): string {
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return rest === 0 ? `${minutes}:00` : `${minutes}:${String(rest).padStart(2, '0')}`;
+  }
+  return `0:${String(seconds).padStart(2, '0')}`;
+}
+
+/** v0.2.5. The Program prescription as a plain range/target string -- the
+ * "Program: 6–10 reps" or "Program: 30 sec" line, distinct from the owner's
+ * editable Goal and from the Actual they actually hit. */
+function programRange(planned: PlannedExercise): string {
+  if (planned.target_duration_seconds != null) return `${planned.target_duration_seconds} sec`;
+  if (planned.target_distance_meters != null) return `${planned.target_distance_meters} m`;
+  const min = planned.target_reps_min;
+  const max = planned.target_reps_max;
+  if (min != null && max != null && max !== min) return `${min}–${max} reps`;
+  if (min != null) return `${min} reps`;
+  if (max != null) return `${max} reps`;
+  return '—';
+}
+
 export function ExerciseLogger({
   exercise,
   planned,
@@ -190,6 +210,11 @@ export function ExerciseLogger({
   activeTimer,
   allSessions,
   library,
+  isOptional,
+  orGroupCount,
+  workTimerSeconds,
+  pairLabel,
+  onSetGoal,
   canGroupWithNext,
   onGroupWithNext,
   onCompleteSet,
@@ -220,24 +245,39 @@ export function ExerciseLogger({
   const showsDistance =
     exercise.measurement_type === 'distance' || exercise.measurement_type === 'distance_time';
 
+  // v0.2.5. Editable Goal, kept as local string state for smooth typing and
+  // committed to the session on each change via onSetGoal. Initialized from
+  // the plan's own goal (goal_reps for reps, goal_duration_seconds for
+  // timed); empty = "no goal chosen yet", never silently defaulted to the
+  // top of the rep range.
+  const [goalDraft, setGoalDraft] = useState<string>(() => {
+    if (showsDuration) {
+      return planned.goal_duration_seconds != null ? String(planned.goal_duration_seconds) : '';
+    }
+    return planned.goal_reps != null ? String(planned.goal_reps) : '';
+  });
+
+  function handleGoalChange(value: string) {
+    setGoalDraft(value);
+    if (!onSetGoal) return;
+    const parsed = value === '' ? null : Number(value);
+    const goal = Number.isFinite(parsed) ? parsed : null;
+    if (showsDuration) onSetGoal({ goal_duration_seconds: goal });
+    else onSetGoal({ goal_reps: goal });
+  }
+
+  /** v0.2.5. The goal shown per row (shared, one goal per exercise). */
+  function goalForRow(): string {
+    if (showsDuration) {
+      return planned.goal_duration_seconds != null ? String(planned.goal_duration_seconds) : '—';
+    }
+    return planned.goal_reps != null ? String(planned.goal_reps) : '—';
+  }
+
   function draftFor(index: number): DraftValues {
     const existing = drafts[index];
     if (existing) return existing;
-    const lastCompleted = performedSets[performedSets.length - 1];
-    const lastPrevious = previousSets[previousSets.length - 1];
-    const weight = lastCompleted?.weight ?? lastPrevious?.weight ?? planned.target_weight;
-    const externalLoad =
-      lastCompleted?.external_load ?? lastPrevious?.external_load ?? planned.target_external_load;
-    return {
-      ...EMPTY_DRAFT,
-      weight: weight != null ? String(weight) : '',
-      externalLoad: externalLoad != null ? String(externalLoad) : '',
-      reps: planned.target_reps_min != null ? String(planned.target_reps_min) : '',
-      duration:
-        planned.target_duration_seconds != null ? String(planned.target_duration_seconds) : '',
-      distance:
-        planned.target_distance_meters != null ? String(planned.target_distance_meters) : '',
-    };
+    return initialDraftValues(exercise, planned, performedSets, previousSets);
   }
 
   function updateDraft(index: number, patch: Partial<DraftValues>) {
@@ -297,6 +337,27 @@ export function ExerciseLogger({
           &hellip;
         </button>
       </div>
+      {(isOptional ||
+        orGroupCount ||
+        planned.warmup_execution ||
+        workTimerSeconds != null ||
+        !restTimerEnabled(planned) ||
+        pairLabel) && (
+        <div className="atlas-gym-exercise__status">
+          {pairLabel && <span className="atlas-gym-exercise__chip">{pairLabel}</span>}
+          {isOptional && <span className="atlas-gym-exercise__chip">Optional</span>}
+          {orGroupCount != null && (
+            <span className="atlas-gym-exercise__chip">Choose 1 of {orGroupCount}</span>
+          )}
+          {planned.warmup_execution && <span className="atlas-gym-exercise__chip">Warm-Up</span>}
+          {workTimerSeconds != null && (
+            <span className="atlas-gym-exercise__chip">Work {formatSeconds(workTimerSeconds)}</span>
+          )}
+          {!restTimerEnabled(planned) && (
+            <span className="atlas-gym-exercise__chip">No rest timer</span>
+          )}
+        </div>
+      )}
       {showContextSheet && (
         <ExerciseContextSheet
           exercise={exercise}
@@ -354,14 +415,41 @@ export function ExerciseLogger({
         );
       })()}
 
+      {(showsReps || showsDuration || showsDistance) && (
+        <div className="atlas-gym-goal">
+          <div className="atlas-gym-goal__line">
+            <span className="atlas-gym-goal__sets">
+              {planned.target_sets ?? 1} working set{planned.target_sets === 1 ? '' : 's'}
+            </span>
+            <span className="atlas-gym-goal__program">Program: {programRange(planned)}</span>
+          </div>
+          {(showsReps || showsDuration) && onSetGoal && (
+            <label className="atlas-gym-goal__field">
+              <span className="atlas-gym-goal__field-label">Goal</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                aria-label="Goal"
+                value={goalDraft}
+                placeholder={showsDuration ? '— sec' : '— reps'}
+                onChange={(e) => handleGoalChange(e.target.value)}
+                onFocus={(e) => e.target.select()}
+              />
+              <span className="atlas-gym-goal__unit">{showsDuration ? 'sec' : 'reps'}</span>
+            </label>
+          )}
+        </div>
+      )}
+
       <table className="atlas-gym-exercise__sets">
         <thead>
           <tr>
             <th scope="col">Set</th>
             {showsWeight && <th scope="col">Weight</th>}
             {showsExternalLoad && <th scope="col">Added lb</th>}
-            {showsReps && <th scope="col">Reps</th>}
-            {showsDuration && <th scope="col">Sec</th>}
+            {(showsReps || showsDuration) && <th scope="col">Goal</th>}
+            {showsReps && <th scope="col">Actual</th>}
+            {showsDuration && <th scope="col">Actual</th>}
             {showsDistance && <th scope="col">Meters</th>}
             <th scope="col">
               <span className="atlas-sr-only">Done</span>
@@ -386,6 +474,10 @@ export function ExerciseLogger({
                   {showsWeight && <td>{performed.weight ?? '—'}</td>}
                   {showsExternalLoad && (
                     <td>{performed.external_load != null ? `+${performed.external_load}` : '—'}</td>
+                  )}
+                  {showsReps && <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>}
+                  {showsDuration && (
+                    <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>
                   )}
                   {showsReps && <td>{performed.reps ?? '—'}</td>}
                   {showsDuration && <td>{performed.duration_seconds ?? '—'}</td>}
@@ -485,6 +577,8 @@ export function ExerciseLogger({
                     />
                   </td>
                 )}
+                {showsReps && <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>}
+                {showsDuration && <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>}
                 {showsReps && (
                   <td>
                     <input

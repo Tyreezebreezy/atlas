@@ -94,6 +94,53 @@ export interface PlannedExercise {
    * specific session's target, not a reusable plan. See
    * docs/PROGRESSION.md. */
   progression_decision?: ProgressionDecision | null;
+
+  /** v0.2.5. Optional exercise -- visible in Gym Mode but does NOT count
+   * toward workout completion. Absent = required (the pre-v0.2.5 default,
+   * and every ordinary exercise). Read via `isOptionalExercise()`
+   * (packages/workout-engine/src/slotCompletion.ts), never directly. */
+  is_optional?: boolean;
+
+  /** v0.2.5. OR-slot membership -- exercises sharing one non-null
+   * `or_group` are equivalent selections ("Assisted Pull-Up OR Lat
+   * Pulldown"): completing any ONE member satisfies the whole slot, the
+   * others become satisfied-by-delegation. Mirrors `group_id`'s
+   * "consecutive entries sharing an id" convention without introducing a
+   * parallel array. Read via `orGroupMembers()`/`exerciseSlotComplete()`
+   * (packages/workout-engine/src/slotCompletion.ts). */
+  or_group?: string | null;
+
+  /** v0.2.5. Warm-up execution vocabulary. Warm-up slots don't always have
+   * a meaningful reps target -- "Bike 4 min" is timed, "Scapular push-ups
+   * x10" is reps, "brief shoulder/lat stretch" is simply done/not-done.
+   * Absent = no explicit mode (treat like a normal exercise). Warm-ups are
+   * still excluded from PRs/progression/volume regardless of this field --
+   * see `setPhaseOf` and `eligibleSets`. */
+  warmup_execution?: 'done' | 'reps' | 'timed';
+
+  /** v0.2.5. Work Timer toggle + optional explicit duration. When true the
+   * exercise has a work timer (the timed hold itself -- plank, dead hang,
+   * mobility hold). `work_timer_seconds` wins over
+   * `target_duration_seconds` as the timer length when set. Absent = no
+   * explicit work timer (the pre-v0.2.5 default: only `time`-measured
+   * exercises had one, implicitly via `target_duration_seconds`). */
+  work_timer_enabled?: boolean;
+  work_timer_seconds?: number | null;
+
+  /** v0.2.5. Rest Timer toggle. When false, completing a set for this
+   * exercise does NOT auto-start a rest timer (mobility holds, easy warm-up
+   * work). Absent = true (auto-rest fires, the pre-v0.2.5 default). */
+  rest_timer_enabled?: boolean;
+
+  /** v0.2.5. Per-set goal for the "Goal vs Actual" display -- the number
+   * the owner aims for within `target_reps_min/max` (the program range).
+   * Null/absent = no goal chosen yet (the range is shown, the owner picks).
+   * Distinct from the program prescription: the range is what's programmed,
+   * the goal is today's intent, the performed set is the actual. */
+  goal_reps?: number | null;
+  /** v0.2.5. Same as `goal_reps` for a timed hold -- goal duration in
+   * seconds (e.g. Side Plank 30s goal within a 20-40s program range). */
+  goal_duration_seconds?: number | null;
 }
 
 export type ExerciseGroupType = 'superset' | 'circuit';
@@ -199,6 +246,14 @@ export interface WorkoutSession extends SyncMeta {
    * remainder of this one session only, never written back to the
    * template/program. See docs/DATA_MODEL.md "Rest hierarchy." */
   rest_override_seconds?: number | null;
+  /** v0.2.5. Execution mode for this session -- 'paired' runs superset/circuit
+   * groups round-by-round (the pre-v0.2.5 and default behavior); 'normal'
+   * runs the same planned exercises one at a time even when the Program
+   * authoring defines A1/A2 blocks, without deleting or rewriting the
+   * group metadata. Absent = 'paired' (see `executionModeOf`). Logged sets
+   * are keyed by exercise_id, so switching modes mid-workout never loses
+   * work. */
+  execution_mode?: 'normal' | 'paired';
 }
 
 export interface PerformedSet {

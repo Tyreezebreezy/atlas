@@ -1,5 +1,9 @@
 import type { Program, ProgramDay, WorkoutOccurrence, WorkoutTemplate } from '@atlas/data-model';
-import { findOccurrence, findOccurrenceByEffectiveDate } from './workoutOccurrence';
+import {
+  findOccurrence,
+  findOccurrenceByEffectiveDate,
+  isDismissedFromToday,
+} from './workoutOccurrence';
 import {
   currentSequentialDay,
   flattenProgramDays,
@@ -206,6 +210,10 @@ export function resolveMissedWorkouts(
     const iso = toIsoDate(candidate);
     const entry = resolveWeeklySchedule(program, templates, occurrences, iso);
     if (entry.kind === 'workout') {
+      // v0.2.5. A dismissed occurrence still resolves to 'workout' (its
+      // status is unchanged), but it must not clutter the missed list --
+      // "Dismiss from Today" only suppresses this reminder surface.
+      if (isDismissedFromToday(entry.resolved.occurrence)) continue;
       results.push({ date: iso, resolved: entry.resolved });
     }
   }

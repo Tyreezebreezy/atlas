@@ -250,9 +250,8 @@ export function ExerciseContextSheet({
           <div>
             <h3>Alternatives -- {activeProfile.name}</h3>
             <p>
-              {formatExerciseName(exercise.name)} needs {exercise.equipment.join(', ')}, not in
-              your active equipment
-              profile.
+              {formatExerciseName(exercise.name)} needs {exercise.equipment.join(', ')}, not in your
+              active equipment profile.
             </p>
             {alternatives.length === 0 ? (
               <p>No alternative found with your available equipment.</p>

@@ -1441,6 +1441,12 @@ button {
   font-size: 0.85rem;
 }
 
+.atlas-today__missed-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--atlas-space-2);
+}
+
 .atlas-today__missed-row button {
   flex: 0 0 auto;
   min-height: 36px;
@@ -1594,6 +1600,135 @@ button {
 .atlas-gym-exercise h2 {
   font-size: 1.4rem;
   margin: 0 0 var(--atlas-space-2);
+}
+
+/* v0.2.5. Execution-semantics chips (Optional / Choose 1 of N / Warm-Up /
+   Work 0:30 / No rest timer) -- made visible, not hidden behind automation. */
+.atlas-gym-exercise__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+  margin-bottom: var(--atlas-space-3);
+}
+
+.atlas-gym-exercise__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--atlas-color-text-secondary);
+}
+
+/* v0.2.5. Program prescription + editable Goal (Goal vs Actual). */
+.atlas-gym-goal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+  margin-bottom: var(--atlas-space-3);
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-gym-goal__line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.atlas-gym-goal__sets {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--atlas-color-accent);
+}
+
+.atlas-gym-goal__program {
+  font-size: 0.85rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-gym-goal__field {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gym-goal__field-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-gym-goal__field input {
+  width: 56px;
+  min-height: 36px;
+  text-align: center;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text);
+}
+
+.atlas-gym-goal__unit {
+  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-gym-exercise__goal-cell {
+  color: var(--atlas-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* v0.2.5. Normal / Paired execution-mode toggle. */
+.atlas-gym-mode__execution-row {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-3);
+  margin: var(--atlas-space-3) var(--atlas-space-4) 0;
+}
+
+.atlas-gym-mode__execution-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-gym-mode__execution {
+  display: inline-flex;
+  gap: var(--atlas-space-1);
+  padding: 2px;
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+}
+
+.atlas-gym-mode__execution button {
+  min-height: 32px;
+  padding: 0 var(--atlas-space-3);
+  border: none;
+  border-radius: calc(var(--atlas-radius-sm) - 2px);
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.atlas-gym-mode__execution button[aria-pressed='true'] {
+  background: var(--atlas-color-accent);
+  color: var(--atlas-color-surface);
 }
 
 /* Last / Best / Target -- one compact row, not three separate blocks.
@@ -2541,6 +2676,30 @@ button {
   margin-top: var(--atlas-space-2);
 }
 
+.atlas-progress__recency-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-progress__recency-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-2);
+  min-height: 32px;
+  font-size: 0.85rem;
+}
+
+.atlas-progress__recency-list li span:last-child {
+  color: var(--atlas-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
 .atlas-progress__view-exercises {
   width: 100%;
   min-height: 48px;
@@ -2975,4 +3134,139 @@ button {
   gap: var(--atlas-space-3);
   padding: var(--atlas-space-2) 0;
   border-bottom: 1px solid var(--atlas-color-border);
+}
+
+/* v0.2.5 Onboarding (first-run) + How ATLAS Works + Gym Mode hint */
+.atlas-onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--atlas-space-4);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.atlas-onboarding__panel {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--atlas-space-5);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-lg);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-onboarding__eyebrow {
+  margin: 0 0 var(--atlas-space-1);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--atlas-color-accent);
+}
+
+.atlas-onboarding__title {
+  margin: 0 0 var(--atlas-space-2);
+  font-size: 1.5rem;
+}
+
+.atlas-onboarding__body {
+  margin: 0 0 var(--atlas-space-4);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-onboarding__dots {
+  display: flex;
+  gap: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-4);
+}
+
+.atlas-onboarding__dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--atlas-color-border);
+}
+
+.atlas-onboarding__dots .atlas-onboarding__dot--active {
+  background: var(--atlas-color-accent);
+}
+
+.atlas-onboarding__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-onboarding__actions button {
+  min-height: 40px;
+  padding: 0 var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-text);
+  cursor: pointer;
+}
+
+.atlas-onboarding__actions .atlas-onboarding__next {
+  border-color: var(--atlas-color-accent);
+  background: var(--atlas-color-accent);
+  color: var(--atlas-color-surface);
+  font-weight: 600;
+}
+
+.atlas-help {
+  padding: var(--atlas-space-4);
+}
+
+.atlas-help h1 {
+  margin-bottom: var(--atlas-space-4);
+}
+
+.atlas-help__section {
+  padding: var(--atlas-space-3) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
+}
+
+.atlas-help__section h2 {
+  margin: 0 0 var(--atlas-space-1);
+  font-size: 1rem;
+}
+
+.atlas-help__section p {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+  line-height: 1.5;
+}
+
+.atlas-gym-hint {
+  margin: var(--atlas-space-3) var(--atlas-space-4);
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-accent);
+  border-radius: var(--atlas-radius-md);
+  background: color-mix(in srgb, var(--atlas-color-accent) 8%, var(--atlas-color-surface));
+}
+
+.atlas-gym-hint__title {
+  margin: 0 0 var(--atlas-space-2);
+  font-weight: 700;
+}
+
+.atlas-gym-hint ul {
+  margin: 0 0 var(--atlas-space-3);
+  padding-left: var(--atlas-space-4);
+  color: var(--atlas-color-text-secondary);
+  line-height: 1.5;
+}
+
+.atlas-gym-hint button {
+  min-height: 36px;
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-accent);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: var(--atlas-color-accent);
+  font-weight: 600;
+  cursor: pointer;
 }

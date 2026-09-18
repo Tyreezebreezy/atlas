@@ -155,3 +155,51 @@ export function completeWorkoutSession(session: WorkoutSession): WorkoutSession 
 export function discardWorkoutSession(session: WorkoutSession): WorkoutSession {
   return { ...session, status: 'discarded', active_timer: null, ...touch(session) };
 }
+
+/**
+ * v0.2.5. Resolves the session's execution mode, defaulting to 'paired' --
+ * a session from before the field existed, or one whose mode was never set,
+ * runs superset/circuit groups round-by-round exactly as it always did.
+ */
+export function executionModeOf(
+  session: Pick<WorkoutSession, 'execution_mode'>,
+): 'normal' | 'paired' {
+  return session.execution_mode ?? 'paired';
+}
+
+/** v0.2.5. Sets the execution mode without touching any logged sets --
+ * `performed_sets` are keyed by exercise_id, so switching Normal <-> Paired
+ * mid-workout is a pure view change over the same data. The Program's group
+ * metadata is never modified (this lives on the session only). */
+export function setExecutionMode(
+  session: WorkoutSession,
+  mode: 'normal' | 'paired',
+): WorkoutSession {
+  return { ...session, execution_mode: mode, ...touch(session) };
+}
+
+export interface ExerciseGoal {
+  goal_reps?: number | null;
+  goal_duration_seconds?: number | null;
+}
+
+/**
+ * v0.2.5. Persists the owner's editable per-set GOAL onto this exercise's
+ * plan slot, separately from any ACTUAL logged sets (which live in
+ * `performed_sets`). Only the supplied fields change -- a reps goal doesn't
+ * clobber a duration goal and vice versa. The goal is a plan-slot value, so
+ * it's snapshotted with the session and never mutates the template/program.
+ */
+export function setExerciseGoal(
+  session: WorkoutSession,
+  exerciseId: string,
+  goal: ExerciseGoal,
+): WorkoutSession {
+  return {
+    ...session,
+    planned_snapshot: session.planned_snapshot.map((p) =>
+      p.exercise_id === exerciseId ? { ...p, ...goal } : p,
+    ),
+    ...touch(session),
+  };
+}

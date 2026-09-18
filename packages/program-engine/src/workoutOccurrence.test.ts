@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { startWorkoutSession } from '@atlas/workout-engine';
 import {
   completeOccurrence,
+  dismissOccurrence,
   findOccurrence,
   findOccurrenceByEffectiveDate,
+  isDismissedFromToday,
   moveOccurrence,
   replaceOccurrence,
   resolveOccurrenceCompletion,
@@ -75,6 +77,29 @@ describe('workoutOccurrence', () => {
     expect(occurrence.original_date).toBe('2026-09-07');
     expect(occurrence.effective_date).toBe('2026-09-07');
   });
+
+  it('dismissing does NOT change status -- it only sets the dismissed_from_today flag', () => {
+    const occurrence = dismissOccurrence(null, 'prog-1', 'day-1', '2026-09-07');
+    expect(occurrence.status).toBe('planned');
+    expect(occurrence.dismissed_from_today).toBe(true);
+    expect(occurrence.original_date).toBe('2026-09-07');
+    expect(isDismissedFromToday(occurrence)).toBe(true);
+  });
+
+  it('isDismissedFromToday is false for an occurrence from before the field existed', () => {
+    const occurrence = moveOccurrence(null, 'prog-1', 'day-1', '2026-09-07', '2026-09-08');
+    expect(isDismissedFromToday(occurrence)).toBe(false);
+    expect(isDismissedFromToday(null)).toBe(false);
+  });
+
+  it('dismissing an already-moved occurrence preserves its move', () => {
+    const moved = moveOccurrence(null, 'prog-1', 'day-1', '2026-09-07', '2026-09-08');
+    const dismissed = dismissOccurrence(moved, 'prog-1', 'day-1', '2026-09-07');
+    expect(dismissed.id).toBe(moved.id);
+    expect(dismissed.status).toBe('moved');
+    expect(dismissed.effective_date).toBe('2026-09-08');
+    expect(dismissed.dismissed_from_today).toBe(true);
+  });
 });
 
 describe('resolveOccurrenceCompletion', () => {
@@ -106,7 +131,7 @@ describe('resolveOccurrenceCompletion', () => {
     });
   });
 
-  it('a late completion (missed Monday, performed Tuesday) completes MONDAY\'S occurrence, not Tuesday\'s', () => {
+  it("a late completion (missed Monday, performed Tuesday) completes MONDAY'S occurrence, not Tuesday's", () => {
     // The session's own started_at/completed_at are real Tuesday timestamps
     // (never backdated -- only Log Past Workout does that); scheduled_date
     // alone carries which occurrence this fulfills.
