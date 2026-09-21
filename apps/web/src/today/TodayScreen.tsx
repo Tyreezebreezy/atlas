@@ -797,7 +797,7 @@ export function TodayScreen() {
         Start Freestyle Workout
       </button>
 
-      {isViewingToday && missed.length > 0 && (
+      {isViewingToday && activeProgram && missed.length > 0 && (
         <section className="atlas-today__missed">
           <h2>Missed</h2>
           {(showAllMissed ? missed : missed.slice(0, 2)).map((m) => (

@@ -67,4 +67,86 @@
   --atlas-nav-width: 168px; /* persistent sidebar/rail width at MEDIUM and up */
 
   --atlas-card-gap: var(--atlas-space-3);
+
+  /*
+   * v1.0.0 (H1) — typography roles. Five explicit roles keep the app on
+   * one restrained scale instead of a proliferation of ad hoc font sizes.
+   * Numeric/data surfaces (weights, reps, set tables, timers) should use
+   * `--atlas-font-mono` plus `font-variant-numeric: tabular-nums` so
+   * columns don't jitter as digits change width.
+   */
+  --atlas-font-size-display: 1.75rem; /* 28px — page-level heading */
+  --atlas-font-size-title: 1.25rem; /* 20px — card/section title */
+  --atlas-font-size-body: 1rem; /* 16px — default reading */
+  --atlas-font-size-caption: 0.8125rem; /* 13px — meta/labels */
+  --atlas-font-size-micro: 0.75rem; /* 12px — fine print/timestamps */
+
+  --atlas-font-weight-regular: 400;
+  --atlas-font-weight-medium: 500;
+  --atlas-font-weight-semibold: 600;
+  --atlas-font-weight-bold: 700;
+
+  --atlas-line-height-tight: 1.2;
+  --atlas-line-height-normal: 1.5;
+  --atlas-line-height-relaxed: 1.7;
+
+  --atlas-font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
+
+  /*
+   * v1.0.0 (H1) — elevation. The dark theme's surface steps already carry
+   * the resting hierarchy (background -> surface -> surface-raised); these
+   * shadows exist only for transient overlays (bottom sheets, modals, menus)
+   * that need to read as "above" whatever they cover.
+   */
+  --atlas-shadow-float: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --atlas-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /*
+   * v1.0.0 (H1) — interaction / semantic states. `hover`/`pressed` are
+   * surface tints, not text colors, so they stay coherent across every
+   * control (buttons, rows, list items). `text-disabled` and `focus-ring`
+   * are the only new text/interaction additions; everything else reuses
+   * the existing palette.
+   */
+  --atlas-color-hover: #2a333d;
+  --atlas-color-pressed: #1a2026;
+  --atlas-color-text-disabled: #5a6571;
+  --atlas-color-focus: var(--atlas-color-accent);
+  --atlas-focus-ring: 0 0 0 2px var(--atlas-color-background), 0 0 0 4px var(--atlas-color-accent);
+
+  /*
+   * v1.0.0 (H1) — motion language. Durations + two easings are the whole
+   * vocabulary; do not add new timing values ad hoc. The reduced-motion
+   * block below zeroes them out so `prefers-reduced-motion` users get an
+   * instant (no-animation) experience without per-component branches.
+   */
+  --atlas-duration-fast: 120ms;
+  --atlas-duration-base: 200ms;
+  --atlas-duration-slow: 320ms;
+  --atlas-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --atlas-ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /*
+   * v1.0.0 (H1) — data-viz conventions. One fixed, ordered series palette
+   * (reusing the app's own hues so charts stay on-brand) plus grid/axis
+   * neutrals. Series colors are drawn in order 1..6; when more than six
+   * series are needed, the chart is trying to say too much and should be
+   * restructured rather than given a seventh color.
+   */
+  --atlas-chart-series-1: #3b9eff;
+  --atlas-chart-series-2: #22d3ee;
+  --atlas-chart-series-3: #3ddc84;
+  --atlas-chart-series-4: #d9a441;
+  --atlas-chart-series-5: #f5a524;
+  --atlas-chart-series-6: #ff6b6b;
+  --atlas-chart-grid: #262e37;
+  --atlas-chart-axis: #9aa5b1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --atlas-duration-fast: 0ms;
+    --atlas-duration-base: 0ms;
+    --atlas-duration-slow: 0ms;
+  }
 }

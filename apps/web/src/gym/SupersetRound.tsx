@@ -8,9 +8,20 @@ interface MemberDraft {
   reps: string;
   duration: string;
   distance: string;
+  rpe: string;
+  rir: string;
+  notes: string;
 }
 
-const EMPTY: MemberDraft = { weight: '', reps: '', duration: '', distance: '' };
+const EMPTY: MemberDraft = {
+  weight: '',
+  reps: '',
+  duration: '',
+  distance: '',
+  rpe: '',
+  rir: '',
+  notes: '',
+};
 
 function lastSetFor(performedSets: PerformedSet[], exerciseId: string): PerformedSet | undefined {
   const forExercise = performedSets.filter((s) => s.exercise_id === exerciseId);
@@ -87,9 +98,9 @@ export function SupersetRound({
         reps: showsReps && draft.reps !== '' ? Number(draft.reps) : null,
         durationSeconds: showsDuration && draft.duration !== '' ? Number(draft.duration) : null,
         distanceMeters: showsDistance && draft.distance !== '' ? Number(draft.distance) : null,
-        rpe: null,
-        rir: null,
-        notes: null,
+        rpe: draft.rpe !== '' ? Number(draft.rpe) : null,
+        rir: draft.rir !== '' ? Number(draft.rir) : null,
+        notes: draft.notes.trim() !== '' ? draft.notes.trim() : null,
       };
     });
     onCompleteRound(sets);
@@ -189,6 +200,31 @@ export function SupersetRound({
                     onFocus={(e) => e.target.select()}
                   />
                 )}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} RPE`}
+                  placeholder="RPE"
+                  value={draft.rpe}
+                  onChange={(e) => updateDraft(member.id, { rpe: e.target.value })}
+                  onFocus={(e) => e.target.select()}
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} RIR`}
+                  placeholder="RIR"
+                  value={draft.rir}
+                  onChange={(e) => updateDraft(member.id, { rir: e.target.value })}
+                  onFocus={(e) => e.target.select()}
+                />
+                <input
+                  type="text"
+                  aria-label={`${formatExerciseName(exercise?.name ?? 'Exercise')} notes`}
+                  placeholder="Notes"
+                  value={draft.notes}
+                  onChange={(e) => updateDraft(member.id, { notes: e.target.value })}
+                />
               </div>
             </li>
           );

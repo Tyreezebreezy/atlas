@@ -23,6 +23,12 @@ export interface DraftValues {
   reps: string;
   duration: string;
   distance: string;
+  /** v1.0.0 (H1). Optional per-set effort/notes, previously present in the
+   * data model but never wired to an input. String drafts for smooth
+   * typing; parsed to number|null on complete. */
+  rpe: string;
+  rir: string;
+  notes: string;
   kind: DraftSetKind;
 }
 
@@ -32,6 +38,9 @@ export const EMPTY_DRAFT: DraftValues = {
   reps: '',
   duration: '',
   distance: '',
+  rpe: '',
+  rir: '',
+  notes: '',
   kind: 'normal',
 };
 

@@ -27,6 +27,8 @@ import type {
   WorkoutSession,
 } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
+import { BodyScreen } from '../body/BodyScreen';
+import { HistoryScreen } from '../history/HistoryScreen';
 import { ActivityHeatmap } from './ActivityHeatmap';
 import { describePR } from './formatPR';
 import { evaluateMilestonesForSession } from './evaluateMilestonesForSession';
@@ -36,6 +38,20 @@ import { MilestoneForm } from './MilestoneForm';
 interface ProgressScreenProps {
   onViewExercises: () => void;
 }
+
+/** v1.0.0 (H1). Progress is the home for five sub-views: Trends (the
+ * dashboard), Muscles (distribution/recency -- upgraded to the canonical
+ * taxonomy + Body Map in H2/H3), History, Body, and Milestones. History and
+ * Body moved here from the old "More" menu. */
+type ProgressSegment = 'trends' | 'muscles' | 'history' | 'body' | 'milestones';
+
+const PROGRESS_SEGMENTS: { key: ProgressSegment; label: string }[] = [
+  { key: 'trends', label: 'Trends' },
+  { key: 'muscles', label: 'Muscles' },
+  { key: 'history', label: 'History' },
+  { key: 'body', label: 'Body' },
+  { key: 'milestones', label: 'Milestones' },
+];
 
 function isThisMonth(iso: string): boolean {
   const d = new Date(iso);
@@ -120,6 +136,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   /** Null when the catalog is closed; a string (possibly empty) is its initial search text. */
   const [catalogQuery, setCatalogQuery] = useState<string | null>(null);
+  const [segment, setSegment] = useState<ProgressSegment>('trends');
 
   useEffect(() => {
     if (!storage) return;
@@ -369,214 +386,269 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
 
   return (
     <div className="atlas-progress">
-      <h1>Progress</h1>
-
-      <section className="atlas-progress__month">
-        <h2>This Month</h2>
-        <div className="atlas-progress__month-row">
-          <div className="atlas-progress__month-stat">
-            <span className="atlas-progress__month-count">{thisMonthPRs}</span>
-            <span className="atlas-progress__month-label">{thisMonthPRs === 1 ? 'PR' : 'PRs'}</span>
-          </div>
-          <div className="atlas-progress__month-stat">
-            <span className="atlas-progress__month-count atlas-progress__month-count--milestone">
-              {thisMonthMilestones}
-            </span>
-            <span className="atlas-progress__month-label">
-              {thisMonthMilestones === 1 ? 'Milestone' : 'Milestones'}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <ActivityHeatmap sessions={sessions} />
-
-      <section>
-        <h2>Recent</h2>
-        {recent.length === 0 ? (
-          <p className="atlas-program-screen__empty">
-            Finish a workout to start tracking personal records and milestones.
-          </p>
-        ) : (
-          <ul className="atlas-progress__recent-list">
-            {recent.map((item) => (
-              <li
-                key={item.key}
-                className={
-                  item.kind === 'milestone' ? 'atlas-progress__recent-item--milestone' : undefined
-                }
-              >
-                <span className="atlas-progress__recent-exercise">{item.exerciseName}</span>
-                {item.value && <span className="atlas-progress__recent-value">{item.value}</span>}
-                <span className="atlas-progress__recent-meta">
-                  {item.kind === 'milestone' ? 'Milestone' : 'New'} {item.title} &middot;{' '}
-                  {formatDate(item.date)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {distribution.byMuscleGroup.length > 0 && (
-        <section className="atlas-progress__distribution">
-          <h2>Training Distribution</h2>
-          <p className="atlas-progress__distribution-window">Last {distribution.windowDays} days</p>
-          <h3>By Muscle Group</h3>
-          <DistributionList entries={distribution.byMuscleGroup} />
-          {distribution.byMovementFamily.length > 0 && (
-            <>
-              <h3>By Movement Family</h3>
-              <DistributionList entries={distribution.byMovementFamily} />
-              {distribution.uncategorizedMovementFamilySets > 0 && (
-                <p className="atlas-progress__distribution-note">
-                  +{distribution.uncategorizedMovementFamilySets} working set
-                  {distribution.uncategorizedMovementFamilySets === 1 ? '' : 's'} not yet classified
-                  by movement family.
-                </p>
-              )}
-            </>
-          )}
-        </section>
-      )}
-
-      {recency.length > 0 && (
-        <section className="atlas-progress__distribution">
-          <h2>Training Recency</h2>
-          <p className="atlas-progress__distribution-window">
-            Days since each muscle group was last trained -- a plain tally, not a recovery estimate.
-          </p>
-          <ul className="atlas-progress__recency-list">
-            {recency.map((entry) => (
-              <li key={entry.label}>
-                <span>{titleCase(entry.label)}</span>
-                <span>
-                  {entry.daysSinceTrained === 0 ? 'Today' : `${entry.daysSinceTrained}d ago`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {strengthTrends.length > 0 && (
-        <section>
-          <h2>Estimated Strength</h2>
-          <ul className="atlas-progress__trend-list">
-            {strengthTrends.map((t) => (
-              <li key={t.exerciseId}>
-                <span className="atlas-progress__trend-exercise">
-                  {formatExerciseName(exercises.get(t.exerciseId)?.name ?? 'Exercise')}
-                </span>
-                <span className="atlas-progress__trend-value">
-                  {Math.round(t.first)} &rarr; {Math.round(t.last)} e1RM
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="atlas-progress__milestones">
-        <h2>My Milestones</h2>
-        {myMilestoneGroups.length === 0 && (
-          <p className="atlas-program-screen__empty">
-            No active goals yet -- add one from the catalog below.
-          </p>
-        )}
-        {myMilestoneGroups.map((group) => (
-          <div
-            key={group.exerciseId ?? group.displayName}
-            className="atlas-progress__milestone-group"
+      <div className="atlas-progress__segments" role="tablist" aria-label="Progress">
+        {PROGRESS_SEGMENTS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            role="tab"
+            aria-selected={segment === s.key}
+            className={
+              segment === s.key
+                ? 'atlas-progress__segment atlas-progress__segment--active'
+                : 'atlas-progress__segment'
+            }
+            onClick={() => setSegment(s.key)}
           >
-            <h3 className="atlas-progress__milestone-group-title">
-              {formatExerciseName(group.displayName)}
-            </h3>
-            <ul className="atlas-progress__milestone-list">
-              {group.milestones.map((m) => {
-                const progress = describeMilestoneProgress(m, prs);
-                return (
-                  <li key={m.id}>
-                    <div className="atlas-progress__milestone-main">
-                      <span className="atlas-progress__milestone-title">{m.title}</span>
-                      <span className="atlas-progress__milestone-date">{progress.text}</span>
-                    </div>
-                    <div className="atlas-progress__milestone-actions">
-                      <button type="button" onClick={() => setEditingMilestone(m)}>
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => void handleRemoveMilestone(m)}>
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+            {s.label}
+          </button>
         ))}
-        <button type="button" onClick={() => setCatalogQuery('')}>
-          + Add Milestone
-        </button>
-      </section>
+      </div>
 
-      <section className="atlas-progress__milestones">
-        <h2>Achieved</h2>
-        {achievedMilestoneGroups.length === 0 ? (
-          <p className="atlas-program-screen__empty">Nothing achieved yet.</p>
-        ) : (
-          achievedMilestoneGroups.map((group) => (
-            <div
-              key={group.exerciseId ?? group.displayName}
-              className="atlas-progress__milestone-group"
-            >
-              <h3 className="atlas-progress__milestone-group-title">
-                {formatExerciseName(group.displayName)}
-              </h3>
-              <ul className="atlas-progress__milestone-list">
-                {group.milestones.map((m) => (
-                  <li key={m.id} className="atlas-progress__milestone--achieved">
-                    <div className="atlas-progress__milestone-main">
-                      <span className="atlas-progress__milestone-title">{m.title}</span>
-                      <span className="atlas-progress__milestone-date">
-                        {formatDate(m.achieved_at!)}
-                      </span>
-                    </div>
-                    <div className="atlas-progress__milestone-actions">
-                      <button type="button" onClick={() => handleChooseNextGoal(m)}>
-                        Choose Next Goal
-                      </button>
-                    </div>
+      {segment === 'history' && <HistoryScreen onBack={() => setSegment('trends')} />}
+      {segment === 'body' && <BodyScreen onBack={() => setSegment('trends')} />}
+
+      {(segment === 'trends' || segment === 'muscles' || segment === 'milestones') && (
+        <h1>Progress</h1>
+      )}
+
+      {segment === 'trends' && (
+        <>
+          <section className="atlas-progress__month">
+            <h2>This Month</h2>
+            <div className="atlas-progress__month-row">
+              <div className="atlas-progress__month-stat">
+                <span className="atlas-progress__month-count">{thisMonthPRs}</span>
+                <span className="atlas-progress__month-label">
+                  {thisMonthPRs === 1 ? 'PR' : 'PRs'}
+                </span>
+              </div>
+              <div className="atlas-progress__month-stat">
+                <span className="atlas-progress__month-count atlas-progress__month-count--milestone">
+                  {thisMonthMilestones}
+                </span>
+                <span className="atlas-progress__month-label">
+                  {thisMonthMilestones === 1 ? 'Milestone' : 'Milestones'}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <ActivityHeatmap sessions={sessions} />
+
+          <section>
+            <h2>Recent</h2>
+            {recent.length === 0 ? (
+              <p className="atlas-program-screen__empty">
+                Finish a workout to start tracking personal records and milestones.
+              </p>
+            ) : (
+              <ul className="atlas-progress__recent-list">
+                {recent.map((item) => (
+                  <li
+                    key={item.key}
+                    className={
+                      item.kind === 'milestone'
+                        ? 'atlas-progress__recent-item--milestone'
+                        : undefined
+                    }
+                  >
+                    <span className="atlas-progress__recent-exercise">{item.exerciseName}</span>
+                    {item.value && (
+                      <span className="atlas-progress__recent-value">{item.value}</span>
+                    )}
+                    <span className="atlas-progress__recent-meta">
+                      {item.kind === 'milestone' ? 'Milestone' : 'New'} {item.title} &middot;{' '}
+                      {formatDate(item.date)}
+                    </span>
                   </li>
                 ))}
               </ul>
-            </div>
-          ))
-        )}
-      </section>
+            )}
+          </section>
 
-      {benchmarkComparisons.length > 0 && (
-        <section className="atlas-progress__benchmarks">
-          <h2>Benchmarks</h2>
-          <ul className="atlas-progress__benchmark-list">
-            {benchmarkComparisons.map(({ benchmark, exerciseName, display }) => (
-              <li key={benchmark.id}>
-                <span className="atlas-progress__benchmark-exercise">{exerciseName}</span>
-                <span className="atlas-progress__benchmark-display">{display}</span>
-                <details className="atlas-progress__benchmark-details">
-                  <summary>Source</summary>
-                  <p>{benchmark.source}</p>
-                  {benchmark.sample_description && <p>{benchmark.sample_description}</p>}
-                </details>
-              </li>
-            ))}
-          </ul>
-        </section>
+          {strengthTrends.length > 0 && (
+            <section>
+              <h2>Estimated Strength</h2>
+              <ul className="atlas-progress__trend-list">
+                {strengthTrends.map((t) => (
+                  <li key={t.exerciseId}>
+                    <span className="atlas-progress__trend-exercise">
+                      {formatExerciseName(exercises.get(t.exerciseId)?.name ?? 'Exercise')}
+                    </span>
+                    <span className="atlas-progress__trend-value">
+                      {Math.round(t.first)} &rarr; {Math.round(t.last)} e1RM
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {benchmarkComparisons.length > 0 && (
+            <section className="atlas-progress__benchmarks">
+              <h2>Benchmarks</h2>
+              <ul className="atlas-progress__benchmark-list">
+                {benchmarkComparisons.map(({ benchmark, exerciseName, display }) => (
+                  <li key={benchmark.id}>
+                    <span className="atlas-progress__benchmark-exercise">{exerciseName}</span>
+                    <span className="atlas-progress__benchmark-display">{display}</span>
+                    <details className="atlas-progress__benchmark-details">
+                      <summary>Source</summary>
+                      <p>{benchmark.source}</p>
+                      {benchmark.sample_description && <p>{benchmark.sample_description}</p>}
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <button
+            type="button"
+            className="atlas-progress__view-exercises"
+            onClick={onViewExercises}
+          >
+            View Exercises
+          </button>
+        </>
       )}
 
-      <button type="button" className="atlas-progress__view-exercises" onClick={onViewExercises}>
-        View Exercises
-      </button>
+      {segment === 'muscles' && (
+        <>
+          {distribution.byMuscleGroup.length > 0 && (
+            <section className="atlas-progress__distribution">
+              <h2>Training Distribution</h2>
+              <p className="atlas-progress__distribution-window">
+                Last {distribution.windowDays} days
+              </p>
+              <h3>By Muscle Group</h3>
+              <DistributionList entries={distribution.byMuscleGroup} />
+              {distribution.byMovementFamily.length > 0 && (
+                <>
+                  <h3>By Movement Family</h3>
+                  <DistributionList entries={distribution.byMovementFamily} />
+                  {distribution.uncategorizedMovementFamilySets > 0 && (
+                    <p className="atlas-progress__distribution-note">
+                      +{distribution.uncategorizedMovementFamilySets} working set
+                      {distribution.uncategorizedMovementFamilySets === 1 ? '' : 's'} not yet
+                      classified by movement family.
+                    </p>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          {recency.length > 0 && (
+            <section className="atlas-progress__distribution">
+              <h2>Training Recency</h2>
+              <p className="atlas-progress__distribution-window">
+                Days since each muscle group was last trained -- a plain tally, not a recovery
+                estimate.
+              </p>
+              <ul className="atlas-progress__recency-list">
+                {recency.map((entry) => (
+                  <li key={entry.label}>
+                    <span>{titleCase(entry.label)}</span>
+                    <span>
+                      {entry.daysSinceTrained === 0 ? 'Today' : `${entry.daysSinceTrained}d ago`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {distribution.byMuscleGroup.length === 0 && recency.length === 0 && (
+            <p className="atlas-program-screen__empty">
+              Finish a workout to see which muscles you've trained.
+            </p>
+          )}
+        </>
+      )}
+
+      {segment === 'milestones' && (
+        <>
+          <section className="atlas-progress__milestones">
+            <h2>My Milestones</h2>
+            {myMilestoneGroups.length === 0 && (
+              <p className="atlas-program-screen__empty">
+                No active goals yet -- add one from the catalog below.
+              </p>
+            )}
+            {myMilestoneGroups.map((group) => (
+              <div
+                key={group.exerciseId ?? group.displayName}
+                className="atlas-progress__milestone-group"
+              >
+                <h3 className="atlas-progress__milestone-group-title">
+                  {formatExerciseName(group.displayName)}
+                </h3>
+                <ul className="atlas-progress__milestone-list">
+                  {group.milestones.map((m) => {
+                    const progress = describeMilestoneProgress(m, prs);
+                    return (
+                      <li key={m.id}>
+                        <div className="atlas-progress__milestone-main">
+                          <span className="atlas-progress__milestone-title">{m.title}</span>
+                          <span className="atlas-progress__milestone-date">{progress.text}</span>
+                        </div>
+                        <div className="atlas-progress__milestone-actions">
+                          <button type="button" onClick={() => setEditingMilestone(m)}>
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => void handleRemoveMilestone(m)}>
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+            <button type="button" onClick={() => setCatalogQuery('')}>
+              + Add Milestone
+            </button>
+          </section>
+
+          <section className="atlas-progress__milestones">
+            <h2>Achieved</h2>
+            {achievedMilestoneGroups.length === 0 ? (
+              <p className="atlas-program-screen__empty">Nothing achieved yet.</p>
+            ) : (
+              achievedMilestoneGroups.map((group) => (
+                <div
+                  key={group.exerciseId ?? group.displayName}
+                  className="atlas-progress__milestone-group"
+                >
+                  <h3 className="atlas-progress__milestone-group-title">
+                    {formatExerciseName(group.displayName)}
+                  </h3>
+                  <ul className="atlas-progress__milestone-list">
+                    {group.milestones.map((m) => (
+                      <li key={m.id} className="atlas-progress__milestone--achieved">
+                        <div className="atlas-progress__milestone-main">
+                          <span className="atlas-progress__milestone-title">{m.title}</span>
+                          <span className="atlas-progress__milestone-date">
+                            {formatDate(m.achieved_at!)}
+                          </span>
+                        </div>
+                        <div className="atlas-progress__milestone-actions">
+                          <button type="button" onClick={() => handleChooseNextGoal(m)}>
+                            Choose Next Goal
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

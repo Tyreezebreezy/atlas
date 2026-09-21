@@ -13,6 +13,25 @@ export const atlasColors = {
   danger: '#FF6B6B',
   milestone: '#D9A441',
   border: '#626D79',
+  /** v1.0.0 (H1) — interaction surface tints (not text colors). */
+  hover: '#2A333D',
+  pressed: '#1A2026',
+  textDisabled: '#5A6571',
 } as const;
 
 export type AtlasColor = keyof typeof atlasColors;
+
+/** v1.0.0 (H1) — ordered data-viz series palette (mirrors tokens.css). */
+export const chartSeries = [
+  '#3B9EFF',
+  '#22D3EE',
+  '#3DDC84',
+  '#D9A441',
+  '#F5A524',
+  '#FF6B6B',
+] as const;
+
+export const chartNeutrals = {
+  grid: '#262E37',
+  axis: '#9AA5B1',
+} as const;

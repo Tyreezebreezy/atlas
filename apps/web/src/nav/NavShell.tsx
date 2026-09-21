@@ -1,11 +1,10 @@
 import { lazy, Suspense, useState } from 'react';
 import { useGymMode } from '../gym/GymModeContext';
-import { HistoryScreen } from '../history/HistoryScreen';
 import { LogPastWorkoutScreen } from '../history/LogPastWorkoutScreen';
 import { EmptyScreen } from '../screens/EmptyScreen';
+import { EquipmentScreen } from '../settings/EquipmentScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { TodayScreen } from '../today/TodayScreen';
-import { BodyScreen } from '../body/BodyScreen';
 import {
   HowAtlasWorksScreen,
   OnboardingModal,
@@ -31,14 +30,13 @@ const ImportExportScreen = lazy(() =>
   import('../importexport/ImportExportScreen').then((m) => ({ default: m.ImportExportScreen })),
 );
 
-type MoreView = 'menu' | 'history' | 'log-past' | 'settings' | 'body' | 'import-export' | 'help';
+type MoreView = 'menu' | 'equipment' | 'log-past' | 'settings' | 'import-export' | 'help';
 
 function MoreTab() {
   const [view, setView] = useState<MoreView>('menu');
-  if (view === 'history') return <HistoryScreen onBack={() => setView('menu')} />;
+  if (view === 'equipment') return <EquipmentScreen onBack={() => setView('menu')} />;
   if (view === 'log-past') return <LogPastWorkoutScreen onBack={() => setView('menu')} />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
-  if (view === 'body') return <BodyScreen onBack={() => setView('menu')} />;
   if (view === 'help') return <HowAtlasWorksScreen onBack={() => setView('menu')} />;
   if (view === 'import-export')
     return (
@@ -51,9 +49,13 @@ function MoreTab() {
       <h1>More</h1>
       <ul className="atlas-program-screen__list">
         <li>
-          <button type="button" onClick={() => setView('history')} aria-label="History">
+          <button
+            type="button"
+            onClick={() => setView('equipment')}
+            aria-label="Equipment / Places"
+          >
             <span className="atlas-library__item-name" aria-hidden="true">
-              History
+              Equipment / Places
             </span>
           </button>
         </li>
@@ -61,13 +63,6 @@ function MoreTab() {
           <button type="button" onClick={() => setView('log-past')} aria-label="Log Past Workout">
             <span className="atlas-library__item-name" aria-hidden="true">
               Log Past Workout
-            </span>
-          </button>
-        </li>
-        <li>
-          <button type="button" onClick={() => setView('body')} aria-label="Body">
-            <span className="atlas-library__item-name" aria-hidden="true">
-              Body
             </span>
           </button>
         </li>
@@ -126,7 +121,7 @@ export function NavShell() {
         {activeTab === 'today' && <TodayScreen />}
         {activeTab === 'library' && (
           <Suspense
-            fallback={<EmptyScreen title="Library" description="Loading exercise library…" />}
+            fallback={<EmptyScreen title="Exercises" description="Loading exercise library…" />}
           >
             <LibraryScreen />
           </Suspense>

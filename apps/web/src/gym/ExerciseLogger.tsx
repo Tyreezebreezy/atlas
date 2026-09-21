@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   type LogSetInput,
   remainingSeconds,
@@ -233,6 +233,10 @@ export function ExerciseLogger({
 
   const [drafts, setDrafts] = useState<Record<number, DraftValues>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  /** v1.0.0 (H1). Which draft row's optional details (RPE / RIR / notes) are
+   * expanded, if any -- kept collapsed by default so the primary
+   * weight/reps logging path stays fast on a phone. */
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   const showsWeight = exercise.measurement_type === 'reps_weight';
   const showsExternalLoad = exercise.measurement_type === 'reps_bodyweight';
@@ -313,9 +317,9 @@ export function ExerciseLogger({
       reps: showsReps && draft.reps !== '' ? Number(draft.reps) : null,
       durationSeconds: showsDuration ? durationValue : null,
       distanceMeters: showsDistance && draft.distance !== '' ? Number(draft.distance) : null,
-      rpe: null,
-      rir: null,
-      notes: null,
+      rpe: draft.rpe !== '' ? Number(draft.rpe) : null,
+      rir: draft.rir !== '' ? Number(draft.rir) : null,
+      notes: draft.notes.trim() !== '' ? draft.notes.trim() : null,
     });
     setDrafts((prev) => {
       const next = { ...prev };
@@ -518,7 +522,11 @@ export function ExerciseLogger({
               draft.weight !== '' ||
               draft.reps !== '' ||
               draft.duration !== '' ||
-              draft.distance !== '';
+              draft.distance !== '' ||
+              draft.externalLoad !== '' ||
+              draft.rpe !== '' ||
+              draft.rir !== '' ||
+              draft.notes.trim() !== '';
             const hasRunningTimer =
               index === nextDraftIndex &&
               activeTimer?.kind === 'exercise' &&
@@ -536,130 +544,190 @@ export function ExerciseLogger({
               !hasDraftData &&
               !hasRunningTimer;
             return (
-              <tr key={`draft-${index}`}>
-                <td>
-                  {index + 1}
-                  <select
-                    className="atlas-gym-exercise__set-type-select"
-                    aria-label={`Set ${index + 1} type`}
-                    value={draft.kind}
-                    onChange={(e) => updateDraft(index, { kind: e.target.value as DraftSetKind })}
-                  >
-                    {Object.entries(DRAFT_KIND_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                {showsWeight && (
+              <Fragment key={`draft-${index}`}>
+                <tr>
                   <td>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      aria-label={`Set ${index + 1} weight`}
-                      value={draft.weight}
-                      onChange={(e) => updateDraft(index, { weight: e.target.value })}
-                      onFocus={(e) => e.target.select()}
-                    />
+                    {index + 1}
+                    <select
+                      className="atlas-gym-exercise__set-type-select"
+                      aria-label={`Set ${index + 1} type`}
+                      value={draft.kind}
+                      onChange={(e) => updateDraft(index, { kind: e.target.value as DraftSetKind })}
+                    >
+                      {Object.entries(DRAFT_KIND_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="atlas-gym-exercise__details-toggle"
+                      aria-expanded={detailIndex === index}
+                      aria-label={`Set ${index + 1} details (RPE, RIR, notes)`}
+                      onClick={() => setDetailIndex(detailIndex === index ? null : index)}
+                    >
+                      &hellip;
+                    </button>
                   </td>
-                )}
-                {showsExternalLoad && (
-                  <td>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0"
-                      aria-label={`Set ${index + 1} added load`}
-                      value={draft.externalLoad}
-                      onChange={(e) => updateDraft(index, { externalLoad: e.target.value })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                  </td>
-                )}
-                {showsReps && <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>}
-                {showsDuration && <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>}
-                {showsReps && (
-                  <td>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      aria-label={`Set ${index + 1} reps`}
-                      value={draft.reps}
-                      onChange={(e) => updateDraft(index, { reps: e.target.value })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                  </td>
-                )}
-                {showsDuration && index === nextDraftIndex ? (
-                  <td>
-                    <TimedDurationCell
-                      targetSeconds={planned.target_duration_seconds}
-                      activeTimer={
-                        activeTimer?.kind === 'exercise' && activeTimer.exercise_id === exercise.id
-                          ? activeTimer
-                          : null
-                      }
-                      draftValue={draft.duration}
-                      onStart={onStartExerciseTimer}
-                      onStop={() => {
-                        if (activeTimer) {
-                          const elapsed =
-                            activeTimer.duration_seconds - remainingSeconds(activeTimer);
-                          updateDraft(index, { duration: String(elapsed) });
-                        }
-                        onStopExerciseTimer();
-                      }}
-                      onManualChange={(value) => updateDraft(index, { duration: value })}
-                    />
-                  </td>
-                ) : (
-                  showsDuration && (
+                  {showsWeight && (
+                    <td>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        aria-label={`Set ${index + 1} weight`}
+                        value={draft.weight}
+                        onChange={(e) => updateDraft(index, { weight: e.target.value })}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </td>
+                  )}
+                  {showsExternalLoad && (
+                    <td>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="0"
+                        aria-label={`Set ${index + 1} added load`}
+                        value={draft.externalLoad}
+                        onChange={(e) => updateDraft(index, { externalLoad: e.target.value })}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </td>
+                  )}
+                  {showsReps && <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>}
+                  {showsDuration && (
+                    <td className="atlas-gym-exercise__goal-cell">{goalForRow()}</td>
+                  )}
+                  {showsReps && (
                     <td>
                       <input
                         type="number"
                         inputMode="numeric"
-                        aria-label={`Set ${index + 1} seconds`}
-                        value={draft.duration}
-                        onChange={(e) => updateDraft(index, { duration: e.target.value })}
+                        aria-label={`Set ${index + 1} reps`}
+                        value={draft.reps}
+                        onChange={(e) => updateDraft(index, { reps: e.target.value })}
                         onFocus={(e) => e.target.select()}
                       />
                     </td>
-                  )
-                )}
-                {showsDistance && (
-                  <td>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      aria-label={`Set ${index + 1} distance`}
-                      value={draft.distance}
-                      onChange={(e) => updateDraft(index, { distance: e.target.value })}
-                      onFocus={(e) => e.target.select()}
-                    />
-                  </td>
-                )}
-                <td>
-                  {isRemovableDraft ? (
-                    <button
-                      type="button"
-                      aria-label={`Remove set ${index + 1}`}
-                      onClick={() => setExtraRows((n) => Math.max(0, n - 1))}
-                    >
-                      &times;
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="atlas-gym-exercise__complete"
-                      aria-label={`Complete set ${index + 1}`}
-                      onClick={() => handleComplete(index)}
-                    >
-                      &#9675;
-                    </button>
                   )}
-                </td>
-              </tr>
+                  {showsDuration && index === nextDraftIndex ? (
+                    <td>
+                      <TimedDurationCell
+                        targetSeconds={planned.target_duration_seconds}
+                        activeTimer={
+                          activeTimer?.kind === 'exercise' &&
+                          activeTimer.exercise_id === exercise.id
+                            ? activeTimer
+                            : null
+                        }
+                        draftValue={draft.duration}
+                        onStart={onStartExerciseTimer}
+                        onStop={() => {
+                          if (activeTimer) {
+                            const elapsed =
+                              activeTimer.duration_seconds - remainingSeconds(activeTimer);
+                            updateDraft(index, { duration: String(elapsed) });
+                          }
+                          onStopExerciseTimer();
+                        }}
+                        onManualChange={(value) => updateDraft(index, { duration: value })}
+                      />
+                    </td>
+                  ) : (
+                    showsDuration && (
+                      <td>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          aria-label={`Set ${index + 1} seconds`}
+                          value={draft.duration}
+                          onChange={(e) => updateDraft(index, { duration: e.target.value })}
+                          onFocus={(e) => e.target.select()}
+                        />
+                      </td>
+                    )
+                  )}
+                  {showsDistance && (
+                    <td>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        aria-label={`Set ${index + 1} distance`}
+                        value={draft.distance}
+                        onChange={(e) => updateDraft(index, { distance: e.target.value })}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </td>
+                  )}
+                  <td>
+                    {isRemovableDraft ? (
+                      <button
+                        type="button"
+                        aria-label={`Remove set ${index + 1}`}
+                        onClick={() => setExtraRows((n) => Math.max(0, n - 1))}
+                      >
+                        &times;
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="atlas-gym-exercise__complete"
+                        aria-label={`Complete set ${index + 1}`}
+                        onClick={() => handleComplete(index)}
+                      >
+                        &#9675;
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {detailIndex === index && (
+                  <tr className="atlas-gym-exercise__details">
+                    <td colSpan={8}>
+                      <div className="atlas-gym-exercise__details-grid">
+                        <label className="atlas-gym-exercise__details-field">
+                          <span>RPE</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={10}
+                            aria-label={`Set ${index + 1} RPE`}
+                            placeholder="1-10"
+                            value={draft.rpe}
+                            onChange={(e) => updateDraft(index, { rpe: e.target.value })}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </label>
+                        <label className="atlas-gym-exercise__details-field">
+                          <span>RIR</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={10}
+                            aria-label={`Set ${index + 1} RIR`}
+                            placeholder="0-10"
+                            value={draft.rir}
+                            onChange={(e) => updateDraft(index, { rir: e.target.value })}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </label>
+                        <label className="atlas-gym-exercise__details-notes">
+                          <span>Notes</span>
+                          <input
+                            type="text"
+                            aria-label={`Set ${index + 1} notes`}
+                            placeholder="Optional note"
+                            value={draft.notes}
+                            onChange={(e) => updateDraft(index, { notes: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             );
           })}
         </tbody>

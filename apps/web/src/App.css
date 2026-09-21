@@ -1843,6 +1843,56 @@ button {
   cursor: pointer;
 }
 
+/* v1.0.0 (H1) — per-set optional details (RPE / RIR / notes), collapsed by
+ * default so the primary weight/reps path stays fast on a phone. */
+.atlas-gym-exercise__details-toggle {
+  display: inline-block;
+  margin-top: 2px;
+  margin-left: var(--atlas-space-1);
+  min-width: 28px;
+  min-height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.atlas-gym-exercise__details td {
+  padding: var(--atlas-space-2) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
+}
+
+.atlas-gym-exercise__details-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gym-exercise__details-field,
+.atlas-gym-exercise__details-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--atlas-font-size-caption);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-gym-exercise__details-field input {
+  width: 72px;
+  font-size: 1rem;
+}
+
+.atlas-gym-exercise__details-notes {
+  flex: 1 1 160px;
+}
+
+.atlas-gym-exercise__details-notes input {
+  width: 100%;
+  text-align: left;
+  font-size: 1rem;
+}
+
 .atlas-gym-mode__nav {
   display: flex;
   gap: var(--atlas-space-2);
@@ -2510,6 +2560,39 @@ button {
 }
 
 /* Progress screen */
+
+/* v1.0.0 (H1) — sub-view segmented control (Trends / Muscles / History / Body / Milestones). */
+.atlas-progress__segments {
+  display: flex;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-4);
+  background: var(--atlas-color-surface);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.atlas-progress__segment {
+  flex: 1 0 auto;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+  white-space: nowrap;
+}
+
+.atlas-progress__segment:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-progress__segment--active {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
 
 .atlas-progress section {
   margin-top: var(--atlas-space-6);
@@ -3269,4 +3352,35 @@ button {
   color: var(--atlas-color-accent);
   font-weight: 600;
   cursor: pointer;
+}
+
+/* v1.0.0 (H1) — global design refinements. Additive only; these apply the
+ * new interaction/motion tokens without reworking existing component rules.
+ * Focus ring, a reduced-motion-safe press/hover transition on controls, and
+ * tabular numerals on the numeric/data displays that previously jittered as
+ * digits changed width. */
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--atlas-focus-ring);
+}
+
+button,
+input,
+select,
+textarea,
+summary {
+  transition:
+    background-color var(--atlas-duration-fast) var(--atlas-ease-standard),
+    border-color var(--atlas-duration-fast) var(--atlas-ease-standard),
+    color var(--atlas-duration-fast) var(--atlas-ease-standard);
+}
+
+.atlas-gym-mode,
+.atlas-exercise-logger,
+.atlas-rest-timer,
+.atlas-body__history-values,
+.atlas-progress__month-count,
+.atlas-progress__distribution-count {
+  font-variant-numeric: tabular-nums;
 }

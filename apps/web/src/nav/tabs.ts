@@ -5,6 +5,6 @@ export const NAV_TAB_LABELS: Record<NavTab, string> = {
   today: 'Today',
   program: 'Program',
   progress: 'Progress',
-  library: 'Library',
+  library: 'Exercises',
   more: 'More',
 };
