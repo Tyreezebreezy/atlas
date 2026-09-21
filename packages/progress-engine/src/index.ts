@@ -2,5 +2,7 @@ export * from './exerciseSummary';
 export * from './chartSeries';
 export * from './trainingDistribution';
 export * from './plannedMuscleDistribution';
+export * from './plannedMuscleCoverage';
+export * from './trainingExposure';
 export * from './activityHeatmap';
 export * from './trainingRecency';

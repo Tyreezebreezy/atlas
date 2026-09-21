@@ -1,27 +1,20 @@
-/** v0.2.0. A named set of available equipment -- "FIU Gym", "Home", etc.
- * are just examples the owner can rename/delete; nothing hardcodes them.
- * Device-local like the rest of Settings: which gym someone's at right now
- * isn't shared history. */
-export interface EquipmentProfile {
-  id: string;
-  name: string;
-  equipment: string[];
-}
-
+/**
+ * Device-local settings (localStorage). The one "active training location"
+ * selection stays here because "which gym am I at right now" is transient
+ * context, not shared history; the reusable locations themselves are now
+ * first-class `TrainingLocation` entities (see packages/data-model and the
+ * Equipment/Places screen).
+ */
 export interface AtlasSettings {
   preCountdownEnabled: boolean;
   preCountdownSeconds: number;
-  /** v0.2.0. Timer-completion signals -- each independently toggleable
-   * since not every device/owner wants all three (see
-   * docs/DATA_MODEL.md "Timer signals"). */
+  /** v0.2.0. Timer-completion signals -- each independently toggleable. */
   timerSoundEnabled: boolean;
   timerVibrationEnabled: boolean;
   timerFlashEnabled: boolean;
-  /** v0.2.0. Empty by default -- equipment-aware substitutions are simply
-   * off (no filtering) until the owner defines at least one profile and
-   * activates it. */
-  equipmentProfiles: EquipmentProfile[];
-  activeEquipmentProfileId: string | null;
+  /** v1.0.0. Id of the active `TrainingLocation` (used for equipment-aware
+   * substitution and exercise discovery). Null = none active. */
+  activeTrainingLocationId: string | null;
 }
 
 export const DEFAULT_SETTINGS: AtlasSettings = {
@@ -30,26 +23,72 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
   timerSoundEnabled: true,
   timerVibrationEnabled: true,
   timerFlashEnabled: true,
-  equipmentProfiles: [],
-  activeEquipmentProfileId: null,
+  activeTrainingLocationId: null,
 };
+
+/** v1.0.0. The pre-entity equipment-profile shape, kept only to migrate
+ * existing device-local profiles into `TrainingLocation` entities. */
+export interface LegacyEquipmentProfile {
+  id: string;
+  name: string;
+  equipment: string[];
+}
+
+interface LegacySettingsShape {
+  equipmentProfiles?: LegacyEquipmentProfile[];
+  activeEquipmentProfileId?: string | null;
+}
 
 const STORAGE_KEY = 'atlas-settings';
 
-/**
- * Device-local via localStorage, not a synced entity -- Settings can only be
- * read/edited outside Gym Mode (no tab bar during an active session, so
- * nothing needs live cross-component reactivity either) and there's exactly
- * one preference so far. Revisit as a real synced entity if that changes.
- */
 export function loadSettings(): AtlasSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw
-      ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<AtlasSettings>) }
-      : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<AtlasSettings> & LegacySettingsShape;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      activeTrainingLocationId: parsed.activeEquipmentProfileId ?? null,
+    };
   } catch {
     return DEFAULT_SETTINGS;
+  }
+}
+
+/**
+ * v1.0.0. Reads any legacy equipment profiles out of raw localStorage so the
+ * Equipment/Places screen can migrate them into `TrainingLocation` entities.
+ * Returns the legacy profiles (and active id) without mutating storage.
+ */
+export function readLegacyEquipmentProfiles(): {
+  profiles: LegacyEquipmentProfile[];
+  activeId: string | null;
+} {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { profiles: [], activeId: null };
+    const parsed = JSON.parse(raw) as LegacySettingsShape;
+    return {
+      profiles: parsed.equipmentProfiles ?? [],
+      activeId: parsed.activeEquipmentProfileId ?? null,
+    };
+  } catch {
+    return { profiles: [], activeId: null };
+  }
+}
+
+/** Removes the legacy equipment-profile fields once migration has run. */
+export function clearLegacyEquipmentProfiles(): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    delete parsed.equipmentProfiles;
+    delete parsed.activeEquipmentProfileId;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+  } catch {
+    // ignore
   }
 }
 
@@ -57,6 +96,6 @@ export function saveSettings(settings: AtlasSettings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch {
-    // ponytail: private-mode/quota errors just mean the pref doesn't persist this session -- not fatal.
+    // private-mode/quota errors just mean the pref doesn't persist this session -- not fatal.
   }
 }

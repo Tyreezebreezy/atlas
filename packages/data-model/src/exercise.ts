@@ -1,3 +1,4 @@
+import type { ExerciseMuscleMapping } from './muscle';
 import type { SyncMeta } from './sync';
 
 export type MeasurementType =
@@ -106,4 +107,10 @@ export interface Exercise extends SyncMeta {
    * required fallback from its absence. Read via `exercise.is_favorite`
    * with `?? false` at call sites, never assumed present. */
   is_favorite?: boolean;
+  /** v1.0.0 (H2). Structured primary/secondary muscle mapping against the
+   * canonical taxonomy (`packages/anatomy`). Optional, like `media` -- the
+   * legacy `target_muscle`/`secondary_muscles`/`category` strings remain the
+   * fallback for anything not yet mapped. Read via
+   * `muscleMapOf(exercise)` in `packages/anatomy`, never assumed present. */
+  muscle_map?: ExerciseMuscleMapping | null;
 }

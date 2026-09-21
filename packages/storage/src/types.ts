@@ -8,6 +8,7 @@ import type {
   Program,
   ProgramNote,
   SyncMeta,
+  TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
@@ -40,4 +41,6 @@ export interface AtlasStorage {
   bodyMeasurements: Repository<BodyMeasurement>;
   /** v0.2.0. See `WorkoutOccurrence`'s doc comment -- most days never get a row here. */
   workoutOccurrences: Repository<WorkoutOccurrence>;
+  /** v1.0.0. Reusable training locations (formerly device-local equipment profiles). */
+  trainingLocations: Repository<TrainingLocation>;
 }

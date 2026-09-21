@@ -8,6 +8,7 @@ import type {
   PersonalRecord,
   Program,
   ProgramNote,
+  TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
@@ -27,6 +28,7 @@ export class SqliteAdapter implements AtlasStorage {
   readonly benchmarks: SqlRepository<Benchmark>;
   readonly bodyMeasurements: SqlRepository<BodyMeasurement>;
   readonly workoutOccurrences: SqlRepository<WorkoutOccurrence>;
+  readonly trainingLocations: SqlRepository<TrainingLocation>;
 
   private constructor(db: Database) {
     this.exercises = new SqlRepository(db, 'exercises');
@@ -40,6 +42,7 @@ export class SqliteAdapter implements AtlasStorage {
     this.benchmarks = new SqlRepository(db, 'benchmarks');
     this.bodyMeasurements = new SqlRepository(db, 'body_measurements');
     this.workoutOccurrences = new SqlRepository(db, 'workout_occurrences');
+    this.trainingLocations = new SqlRepository(db, 'training_locations');
   }
 
   static async connect(path = 'sqlite:atlas.db'): Promise<SqliteAdapter> {

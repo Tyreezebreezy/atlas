@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@atlas/anatomy": "*",
     "@atlas/data-model": "*",
     "@atlas/pr-engine": "*",
     "@atlas/workout-engine": "*"

@@ -8,8 +8,9 @@ import {
   reorder,
   withSequentialOrder,
 } from '@atlas/workout-engine';
-import { plannedMuscleDistribution } from '@atlas/progress-engine';
+import { plannedMuscleCoverage } from '@atlas/progress-engine';
 import { formatExerciseName } from '@atlas/exercise-library';
+import { BodyMap } from '../anatomy/BodyMap';
 import { ProgressionPolicyFields } from './ProgressionPolicyFields';
 import type {
   Exercise,
@@ -323,7 +324,11 @@ export function TemplateEditor({
   }
 
   const slots = buildGymSlots(template.exercises, template.groups);
-  const muscleDistribution = plannedMuscleDistribution(template.exercises, exercisesById);
+  const coverage = plannedMuscleCoverage(template.exercises, exercisesById);
+  const coverageStates = coverage.byMuscle.map((m) => ({
+    muscleId: m.muscleId,
+    state: (m.directSets > 0 ? 'primary' : 'secondary') as 'primary' | 'secondary',
+  }));
 
   return (
     <div className="atlas-template-editor">
@@ -348,17 +353,21 @@ export function TemplateEditor({
         Show in Quick Workouts
       </label>
 
-      {muscleDistribution.length > 0 && (
-        <ul
-          className="atlas-template-editor__muscle-preview"
-          aria-label="Planned working sets by muscle group"
-        >
-          {muscleDistribution.map((entry) => (
-            <li key={entry.label}>
-              {entry.label} <strong>{entry.workingSets}</strong>
-            </li>
-          ))}
-        </ul>
+      {coverage.byGroup.length > 0 && (
+        <section className="atlas-template-editor__coverage">
+          <h2>Planned Muscle Coverage</h2>
+          <BodyMap states={coverageStates} />
+          <ul
+            className="atlas-template-editor__muscle-preview"
+            aria-label="Planned working sets by muscle group"
+          >
+            {coverage.byGroup.map((entry) => (
+              <li key={entry.label}>
+                {entry.label} <strong>{entry.workingSets}</strong>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {slots.map((slot) =>

@@ -141,6 +141,18 @@
   --atlas-chart-series-6: #ff6b6b;
   --atlas-chart-grid: #262e37;
   --atlas-chart-axis: #9aa5b1;
+
+  /*
+   * v1.0.0 (H2) — anatomy / muscle semantic states. One set of four states
+   * for the Body Map and any muscle list: primary (direct target), secondary
+   * (indirect involvement), selected (active query), heat (exposure, driven
+   * by an intensity value). `idle` is the resting figure/region fill.
+   */
+  --atlas-muscle-primary: var(--atlas-color-accent);
+  --atlas-muscle-secondary: #5a8fc9;
+  --atlas-muscle-selected: var(--atlas-color-success);
+  --atlas-muscle-heat: var(--atlas-color-timer);
+  --atlas-muscle-idle: #2a333d;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getOrCreateDeviceId, newId } from '@atlas/core';
 import { formatExerciseName } from '@atlas/exercise-library';
+import { muscleMapOf, muscleName } from '@atlas/anatomy';
 import type { Exercise, ExerciseNote, WorkoutSession } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
+import { BodyMap, type BodyMapMuscleState } from '../anatomy/BodyMap';
 import { ExerciseMedia } from './ExerciseMedia';
 import { ExerciseProgress } from './ExerciseProgress';
 
@@ -20,6 +22,16 @@ export function ExerciseDetail({ exercise, storage, onBack }: ExerciseDetailProp
   const [draft, setDraft] = useState('');
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [isFavorite, setIsFavorite] = useState(exercise.is_favorite ?? false);
+
+  const muscleStates = useMemo<BodyMapMuscleState[]>(() => {
+    const map = muscleMapOf(exercise);
+    if (!map) return [];
+    return [
+      ...map.primary.map((id) => ({ muscleId: id, state: 'primary' as const })),
+      ...map.secondary.map((id) => ({ muscleId: id, state: 'secondary' as const })),
+    ];
+  }, [exercise]);
+  const muscleMap = useMemo(() => muscleMapOf(exercise), [exercise]);
 
   async function toggleFavorite() {
     const next = !isFavorite;
@@ -109,15 +121,23 @@ export function ExerciseDetail({ exercise, storage, onBack }: ExerciseDetailProp
         <>
           <ExerciseMedia exercise={exercise} />
 
-          {exercise.target_muscle && (
-            <p>
-              <strong>Target:</strong> {exercise.target_muscle}
-            </p>
-          )}
-          {exercise.secondary_muscles.length > 0 && (
-            <p>
-              <strong>Secondary:</strong> {exercise.secondary_muscles.join(', ')}
-            </p>
+          {muscleMap && (
+            <section className="atlas-exercise-detail__muscles">
+              <h2>Muscles</h2>
+              <BodyMap states={muscleStates} />
+              <ul className="atlas-exercise-detail__muscle-list">
+                {muscleMap.primary.length > 0 && (
+                  <li>
+                    <strong>Primary:</strong> {muscleMap.primary.map(muscleName).join(', ')}
+                  </li>
+                )}
+                {muscleMap.secondary.length > 0 && (
+                  <li>
+                    <strong>Secondary:</strong> {muscleMap.secondary.map(muscleName).join(', ')}
+                  </li>
+                )}
+              </ul>
+            </section>
           )}
           {exercise.instructions.length > 0 && (
             <ol className="atlas-exercise-detail__instructions">

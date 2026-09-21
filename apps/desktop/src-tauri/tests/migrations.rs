@@ -3,6 +3,7 @@ use sqlx::sqlite::SqlitePoolOptions;
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_init.sql"),
     include_str!("../migrations/0002_add_workout_occurrences.sql"),
+    include_str!("../migrations/0003_add_training_locations.sql"),
 ];
 
 const EXPECTED_TABLES: &[&str] = &[
@@ -17,6 +18,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "benchmarks",
     "body_measurements",
     "workout_occurrences",
+    "training_locations",
 ];
 
 #[tokio::test]
@@ -92,4 +94,21 @@ async fn migrations_create_expected_tables_and_round_trip() {
         .expect("select should succeed");
 
     assert_eq!(row.0, "{\"status\":\"moved\"}");
+
+    // v1.0.0: the new table from migration 0003 (training locations), same
+    // JSON-blob-row shape, round-tripped to prove the third migration works.
+    sqlx::query("INSERT INTO training_locations (id, deleted_at, data) VALUES ($1, NULL, $2)")
+        .bind("loc-1")
+        .bind("{\"name\":\"Home Gym\"}")
+        .execute(&pool)
+        .await
+        .expect("insert should succeed");
+
+    let row: (String,) = sqlx::query_as("SELECT data FROM training_locations WHERE id = $1")
+        .bind("loc-1")
+        .fetch_one(&pool)
+        .await
+        .expect("select should succeed");
+
+    assert_eq!(row.0, "{\"name\":\"Home Gym\"}");
 }

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { calculatePlateBreakdown, DEFAULT_AVAILABLE_PLATES } from '@atlas/workout-engine';
 import { suggestSubstitutes } from '@atlas/substitution-engine';
 import { formatExerciseName } from '@atlas/exercise-library';
-import type { Exercise, PlannedExercise, WorkoutSession } from '@atlas/data-model';
+import type { Exercise, PlannedExercise, TrainingLocation, WorkoutSession } from '@atlas/data-model';
+import { useStorage } from '../storage/StorageContext';
 import { loadSettings } from '../settings/settings';
 
 type SheetView = 'menu' | 'history' | 'plates' | 'why' | 'alternatives';
@@ -58,8 +59,25 @@ export function ExerciseContextSheet({
   onClose,
 }: ExerciseContextSheetProps) {
   const [view, setView] = useState<SheetView>('menu');
+  const storage = useStorage();
+  const [activeLocation, setActiveLocation] = useState<TrainingLocation | null>(null);
   const isWeighted = exercise.measurement_type === 'reps_weight';
   const decision = planned.progression_decision;
+
+  useEffect(() => {
+    const id = loadSettings().activeTrainingLocationId;
+    if (!storage || !id) {
+      setActiveLocation(null);
+      return;
+    }
+    let cancelled = false;
+    void storage.trainingLocations.get(id).then((loc) => {
+      if (!cancelled) setActiveLocation(loc ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storage]);
 
   const [plateTarget, setPlateTarget] = useState(String(planned.target_weight ?? 135));
   const [barWeight, setBarWeight] = useState('45');
@@ -69,19 +87,15 @@ export function ExerciseContextSheet({
     DEFAULT_AVAILABLE_PLATES,
   );
 
-  const settings = loadSettings();
-  const activeProfile = settings.equipmentProfiles.find(
-    (p) => p.id === settings.activeEquipmentProfileId,
-  );
-  // No profile active: equipment-aware substitutions are simply off (see
+  // No active location: equipment-aware substitutions are simply off (see
   // settings.ts's doc comment) -- every exercise is "available."
   const equipmentUnavailable =
-    !!activeProfile &&
+    !!activeLocation &&
     exercise.equipment.length > 0 &&
-    !exercise.equipment.some((eq) => activeProfile.equipment.includes(eq));
-  const alternatives = activeProfile
+    !exercise.equipment.some((eq) => activeLocation.equipment.includes(eq));
+  const alternatives = activeLocation
     ? suggestSubstitutes(exercise, library, {
-        availableEquipment: activeProfile.equipment,
+        availableEquipment: activeLocation.equipment,
         limit: 5,
       })
     : [];
@@ -246,9 +260,9 @@ export function ExerciseContextSheet({
           </div>
         )}
 
-        {view === 'alternatives' && activeProfile && (
+        {view === 'alternatives' && activeLocation && (
           <div>
-            <h3>Alternatives -- {activeProfile.name}</h3>
+            <h3>Alternatives -- {activeLocation.name}</h3>
             <p>
               {formatExerciseName(exercise.name)} needs {exercise.equipment.join(', ')}, not in your
               active equipment profile.

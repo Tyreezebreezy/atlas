@@ -1,6 +1,6 @@
 [package]
 name = "atlas-desktop"
-version = "0.2.5"
+version = "1.0.0"
 description = "ATLAS desktop shell"
 edition = "2021"
 

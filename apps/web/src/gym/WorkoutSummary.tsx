@@ -1,6 +1,9 @@
 import { summarizeSession } from '@atlas/workout-engine';
 import { formatExerciseName } from '@atlas/exercise-library';
+import { sessionMuscleExposure } from '@atlas/progress-engine';
+import { muscleName } from '@atlas/anatomy';
 import type { Exercise, Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
+import { BodyMap } from '../anatomy/BodyMap';
 import { describePR } from '../progress/formatPR';
 
 interface WorkoutSummaryProps {
@@ -19,6 +22,13 @@ export function WorkoutSummary({
   onDone,
 }: WorkoutSummaryProps) {
   const summary = summarizeSession(session);
+  const muscles = sessionMuscleExposure(session, exercises);
+  const bodyStates = muscles.map((m) => ({
+    muscleId: m.muscleId,
+    state: (m.directSets > 0 ? 'primary' : 'secondary') as 'primary' | 'secondary',
+  }));
+  const directMuscles = muscles.filter((m) => m.directSets > 0);
+  const secondaryOnlyMuscles = muscles.filter((m) => m.directSets === 0 && m.secondarySets > 0);
   return (
     <div className="atlas-workout-summary">
       <h1>Workout Complete</h1>
@@ -49,6 +59,32 @@ export function WorkoutSummary({
           </div>
         )}
       </dl>
+
+      {muscles.length > 0 && (
+        <section className="atlas-workout-summary__muscles">
+          <h2>Muscles Trained</h2>
+          <BodyMap states={bodyStates} />
+          <ul className="atlas-workout-summary__muscle-list">
+            {directMuscles.map((m) => (
+              <li key={m.muscleId}>
+                <span className="atlas-workout-summary__muscle-name">{muscleName(m.muscleId)}</span>
+                <span className="atlas-workout-summary__muscle-count">
+                  {m.directSets} working set{m.directSets === 1 ? '' : 's'}
+                  {m.volume > 0 ? ` · ${m.volume.toLocaleString()} lb` : ''}
+                </span>
+              </li>
+            ))}
+            {secondaryOnlyMuscles.length > 0 && (
+              <li className="atlas-workout-summary__muscle-secondary">
+                <span className="atlas-workout-summary__muscle-name">
+                  {secondaryOnlyMuscles.map((m) => muscleName(m.muscleId)).join(', ')}
+                </span>
+                <span className="atlas-workout-summary__muscle-count">secondary</span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {newPRs.length > 0 && (
         <div className="atlas-workout-summary__prs">

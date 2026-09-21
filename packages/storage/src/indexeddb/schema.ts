@@ -8,6 +8,7 @@ import type {
   PersonalRecord,
   Program,
   ProgramNote,
+  TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
@@ -25,6 +26,7 @@ export class AtlasDexie extends Dexie {
   benchmarks!: Table<Benchmark, string>;
   bodyMeasurements!: Table<BodyMeasurement, string>;
   workoutOccurrences!: Table<WorkoutOccurrence, string>;
+  trainingLocations!: Table<TrainingLocation, string>;
 
   constructor(name: string) {
     super(name);
@@ -48,6 +50,10 @@ export class AtlasDexie extends Dexie {
     // own versioning model.
     this.version(2).stores({
       workoutOccurrences: 'id, program_id, effective_date, original_date, deleted_at',
+    });
+    // v1.0.0: training locations (formerly device-local equipment profiles).
+    this.version(3).stores({
+      trainingLocations: 'id, name, deleted_at',
     });
   }
 }

@@ -1,5 +1,5 @@
 import { getOrCreateDeviceId, newId } from '@atlas/core';
-import type { Exercise } from '@atlas/data-model';
+import type { Exercise, ExerciseMuscleMapping } from '@atlas/data-model';
 
 export interface CustomExerciseInput {
   name: string;
@@ -9,6 +9,8 @@ export interface CustomExerciseInput {
   secondaryMuscles: string[];
   instructions: string[];
   measurementType: Exercise['measurement_type'];
+  /** v1.0.0. Optional user-defined structured muscle mapping (visual picker). */
+  muscleMap?: ExerciseMuscleMapping | null;
 }
 
 export function createCustomExercise(input: CustomExerciseInput): Exercise {
@@ -37,5 +39,6 @@ export function createCustomExercise(input: CustomExerciseInput): Exercise {
     user_notes: null,
     enrichment: null,
     media: null,
+    muscle_map: input.muscleMap ?? null,
   };
 }

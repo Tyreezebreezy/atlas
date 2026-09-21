@@ -7,6 +7,7 @@ import type {
   Exercise,
   Milestone,
   PersonalRecord,
+  TrainingLocation,
   WorkoutOccurrence,
 } from '@atlas/data-model';
 import { IndexedDbAdapter } from './IndexedDbAdapter';
@@ -272,5 +273,63 @@ describe('IndexedDbAdapter: v0.2.0 WorkoutOccurrence (first real Dexie version b
     const occurrence = makeOccurrence();
     await upgraded.workoutOccurrences.put(occurrence);
     expect(await upgraded.workoutOccurrences.get(occurrence.id)).toEqual(occurrence);
+  });
+});
+
+function makeTrainingLocation(overrides: Partial<TrainingLocation> = {}): TrainingLocation {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    created_at: now,
+    updated_at: now,
+    version: 1,
+    device_id: 'test-device',
+    deleted_at: null,
+    name: 'Home Gym',
+    equipment: ['barbell', 'dumbbell', 'bench'],
+    note: 'Basement setup',
+    ...overrides,
+  };
+}
+
+describe('IndexedDbAdapter: v1.0.0 TrainingLocation (second Dexie version bump)', () => {
+  it('round-trips a TrainingLocation', async () => {
+    const adapter = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    const location = makeTrainingLocation();
+    await adapter.trainingLocations.put(location);
+    expect(await adapter.trainingLocations.get(location.id)).toEqual(location);
+    expect(await adapter.trainingLocations.getAll()).toHaveLength(1);
+  });
+
+  it('upgrades a pre-v1.0.0 database (version 2 only) without losing data, and the new store works', async () => {
+    const dbName = `atlas-test-upgrade-${crypto.randomUUID()}`;
+
+    const legacyDb = new Dexie(dbName);
+    legacyDb.version(1).stores({
+      exercises: 'id, name, is_custom, deleted_at',
+      programs: 'id, is_active, deleted_at',
+      workoutTemplates: 'id, is_quick_workout, deleted_at',
+      workoutSessions: 'id, status, started_at, deleted_at',
+      exerciseNotes: 'id, exercise_id, deleted_at',
+      programNotes: 'id, program_id, deleted_at',
+      personalRecords: 'id, exercise_id, kind, deleted_at',
+      milestones: 'id, exercise_id, deleted_at',
+      benchmarks: 'id, metric, deleted_at',
+      bodyMeasurements: 'id, date, deleted_at',
+    });
+    legacyDb.version(2).stores({
+      workoutOccurrences: 'id, program_id, effective_date, original_date, deleted_at',
+    });
+    await legacyDb.open();
+    const preExistingExercise = makeExercise({ name: 'Owner Bench Press' });
+    await legacyDb.table('exercises').put(preExistingExercise);
+    legacyDb.close();
+
+    const upgraded = new IndexedDbAdapter(dbName);
+    expect((await upgraded.exercises.get(preExistingExercise.id))?.name).toBe('Owner Bench Press');
+
+    const location = makeTrainingLocation();
+    await upgraded.trainingLocations.put(location);
+    expect(await upgraded.trainingLocations.get(location.id)).toEqual(location);
   });
 });

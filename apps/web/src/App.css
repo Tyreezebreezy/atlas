@@ -3384,3 +3384,356 @@ summary {
 .atlas-progress__distribution-count {
   font-variant-numeric: tabular-nums;
 }
+
+/* v1.0.0 (H2) — Anatomical Body Map */
+.atlas-body-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-body-map__toolbar {
+  display: flex;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-1);
+  background: var(--atlas-color-surface);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-body-map__toggle {
+  flex: 1;
+  min-height: var(--atlas-touch-target);
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+}
+
+.atlas-body-map__toggle:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-body-map__toggle--active {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-body-map__svg {
+  width: 100%;
+  max-width: 22rem;
+  height: auto;
+  margin: 0 auto;
+}
+
+.atlas-body-map__head {
+  fill: var(--atlas-muscle-idle);
+}
+
+.atlas-body-map__region {
+  fill: var(--atlas-muscle-idle);
+  stroke: var(--atlas-color-background);
+  stroke-width: 3;
+  /* Generous invisible hit area: a thick transparent stroke makes the tiny
+     regions tappable on a phone without changing the drawing. */
+  cursor: default;
+  transition:
+    fill var(--atlas-duration-fast) var(--atlas-ease-standard),
+    opacity var(--atlas-duration-fast) var(--atlas-ease-standard);
+}
+
+.atlas-body-map__region[role='button'] {
+  cursor: pointer;
+}
+
+.atlas-body-map__region[role='button']:hover {
+  fill: var(--atlas-muscle-secondary);
+}
+
+.atlas-body-map__region:focus-visible {
+  outline: none;
+  stroke: var(--atlas-color-focus);
+  stroke-width: 3;
+}
+
+.atlas-body-map__region--primary {
+  fill: var(--atlas-muscle-primary);
+}
+
+.atlas-body-map__region--secondary {
+  fill: var(--atlas-muscle-secondary);
+}
+
+.atlas-body-map__region--selected {
+  fill: var(--atlas-muscle-selected);
+}
+
+.atlas-body-map__region--heat {
+  fill: var(--atlas-muscle-heat);
+}
+
+/* v1.0.0 (H2) — Exercise Library Body exploration + detail anatomy */
+.atlas-library__view-toggle {
+  display: flex;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-3);
+  background: var(--atlas-color-surface);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-library__view-button {
+  flex: 1;
+  min-height: var(--atlas-touch-target);
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+}
+
+.atlas-library__view-button--active {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-library__body-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+  margin: var(--atlas-space-3) 0;
+}
+
+.atlas-library__body-group {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: 999px;
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-library__body-group:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-exercise-detail__muscles {
+  margin-top: var(--atlas-space-4);
+}
+
+.atlas-exercise-detail__muscle-list {
+  margin: var(--atlas-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-exercise-detail__muscle-list li {
+  margin-bottom: var(--atlas-space-1);
+}
+
+/* v1.0.0 (H2) — Custom exercise muscle mapping */
+.atlas-custom-exercise-form__mode {
+  display: flex;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-2);
+  background: var(--atlas-color-surface);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-custom-exercise-form__mode-button {
+  flex: 1;
+  min-height: var(--atlas-touch-target);
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+}
+
+.atlas-custom-exercise-form__mode-button--active {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-custom-exercise-form__hint {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  margin: 0 0 var(--atlas-space-2);
+}
+
+.atlas-custom-exercise-form__groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+  margin: var(--atlas-space-3) 0;
+}
+
+.atlas-custom-exercise-form__group {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: 999px;
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-custom-exercise-form__group:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-custom-exercise-form__summary {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  margin: 0 0 var(--atlas-space-3);
+}
+
+/* v1.0.0 (H3) — Muscle Explorer */
+.atlas-muscle-explorer__ranges {
+  display: flex;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-3);
+  background: var(--atlas-color-surface);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.atlas-muscle-explorer__range {
+  flex: 1 0 auto;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+  white-space: nowrap;
+}
+
+.atlas-muscle-explorer__range:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-muscle-explorer__range--active {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-muscle-explorer__custom {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  margin-bottom: var(--atlas-space-3);
+}
+
+.atlas-muscle-explorer__custom input {
+  width: 72px;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  text-align: center;
+}
+
+.atlas-muscle-explorer__list {
+  list-style: none;
+  margin: var(--atlas-space-3) 0 0;
+  padding: 0;
+}
+
+.atlas-muscle-explorer__muscle {
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--atlas-space-2) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
+  text-align: left;
+}
+
+.atlas-muscle-explorer__muscle:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-muscle-explorer__muscle--active {
+  background: var(--atlas-color-accent-mist);
+}
+
+.atlas-muscle-explorer__detail {
+  margin-top: var(--atlas-space-3);
+  padding: var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-muscle-explorer__detail dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-4);
+  margin: 0;
+}
+
+.atlas-muscle-explorer__detail dt {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-muscle-explorer__detail dd {
+  margin: 0;
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-muscle-explorer__exercises {
+  margin-top: var(--atlas-space-2);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+/* v1.0.0 (H3) — Workout summary anatomy */
+.atlas-workout-summary__muscles {
+  margin-top: var(--atlas-space-4);
+}
+
+.atlas-workout-summary__muscle-list {
+  list-style: none;
+  margin: var(--atlas-space-2) 0 0;
+  padding: 0;
+}
+
+.atlas-workout-summary__muscle-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--atlas-space-1) 0;
+  border-bottom: 1px solid var(--atlas-color-border);
+}
+
+.atlas-workout-summary__muscle-count {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-workout-summary__muscle-secondary {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+/* v1.0.0 (H3) — Program Builder planned coverage */
+.atlas-template-editor__coverage {
+  margin: var(--atlas-space-4) 0;
+}
+
+.atlas-template-editor__coverage h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--atlas-color-text-secondary);
+  margin-bottom: var(--atlas-space-2);
+}

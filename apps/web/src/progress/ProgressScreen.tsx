@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  estimated1RMSeries,
-  trainingDistribution,
-  trainingRecency,
-  type DistributionEntry,
-} from '@atlas/progress-engine';
+import { estimated1RMSeries } from '@atlas/progress-engine';
 import {
   describeMilestoneProgress,
   ensureBuiltInMilestonesSeeded,
@@ -34,6 +29,7 @@ import { describePR } from './formatPR';
 import { evaluateMilestonesForSession } from './evaluateMilestonesForSession';
 import { MilestoneCatalog } from './MilestoneCatalog';
 import { MilestoneForm } from './MilestoneForm';
+import { MuscleExplorer } from './MuscleExplorer';
 
 interface ProgressScreenProps {
   onViewExercises: () => void;
@@ -61,39 +57,6 @@ function isThisMonth(iso: string): boolean {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-/** v0.2.5. Body-part labels come from the exercise dataset lowercase
- * ("back", "upper arms", "mobility"). Title-case them for display so a
- * distribution/recency row never reads as raw slugs -- part of the fix for
- * the "backToday"/"UncategorizedToday" presentation bug. */
-function titleCase(label: string): string {
-  return label
-    .split(' ')
-    .map((word) => (word ? word[0]!.toUpperCase() + word.slice(1) : word))
-    .join(' ');
-}
-
-/** Plain proportional bar list -- no charting dependency for a handful of
- * category totals. Assumes non-empty entries; callers gate on that. */
-function DistributionList({ entries }: { entries: DistributionEntry[] }) {
-  const max = Math.max(...entries.map((e) => e.workingSets));
-  return (
-    <ul className="atlas-progress__distribution-list">
-      {entries.map((e) => (
-        <li key={e.label} className="atlas-progress__distribution-item">
-          <span className="atlas-progress__distribution-label">{titleCase(e.label)}</span>
-          <span className="atlas-progress__distribution-bar-track">
-            <span
-              className="atlas-progress__distribution-bar"
-              style={{ width: `${(e.workingSets / max) * 100}%` }}
-            />
-          </span>
-          <span className="atlas-progress__distribution-count">{e.workingSets}</span>
-        </li>
-      ))}
-    </ul>
-  );
 }
 
 // Which PR kind demonstrates a benchmark metric, e.g. "pushups" is measured
@@ -197,13 +160,6 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       }));
     return [...prItems, ...milestoneItems].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
   }, [prs, milestones, exercises]);
-
-  const distribution = useMemo(
-    () => trainingDistribution(sessions, exercises),
-    [sessions, exercises],
-  );
-
-  const recency = useMemo(() => trainingRecency(sessions, exercises), [sessions, exercises]);
 
   const strengthTrends = useMemo(() => {
     const trends: { exerciseId: string; first: number; last: number }[] = [];
@@ -514,59 +470,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
         </>
       )}
 
-      {segment === 'muscles' && (
-        <>
-          {distribution.byMuscleGroup.length > 0 && (
-            <section className="atlas-progress__distribution">
-              <h2>Training Distribution</h2>
-              <p className="atlas-progress__distribution-window">
-                Last {distribution.windowDays} days
-              </p>
-              <h3>By Muscle Group</h3>
-              <DistributionList entries={distribution.byMuscleGroup} />
-              {distribution.byMovementFamily.length > 0 && (
-                <>
-                  <h3>By Movement Family</h3>
-                  <DistributionList entries={distribution.byMovementFamily} />
-                  {distribution.uncategorizedMovementFamilySets > 0 && (
-                    <p className="atlas-progress__distribution-note">
-                      +{distribution.uncategorizedMovementFamilySets} working set
-                      {distribution.uncategorizedMovementFamilySets === 1 ? '' : 's'} not yet
-                      classified by movement family.
-                    </p>
-                  )}
-                </>
-              )}
-            </section>
-          )}
-
-          {recency.length > 0 && (
-            <section className="atlas-progress__distribution">
-              <h2>Training Recency</h2>
-              <p className="atlas-progress__distribution-window">
-                Days since each muscle group was last trained -- a plain tally, not a recovery
-                estimate.
-              </p>
-              <ul className="atlas-progress__recency-list">
-                {recency.map((entry) => (
-                  <li key={entry.label}>
-                    <span>{titleCase(entry.label)}</span>
-                    <span>
-                      {entry.daysSinceTrained === 0 ? 'Today' : `${entry.daysSinceTrained}d ago`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {distribution.byMuscleGroup.length === 0 && recency.length === 0 && (
-            <p className="atlas-program-screen__empty">
-              Finish a workout to see which muscles you've trained.
-            </p>
-          )}
-        </>
-      )}
+      {segment === 'muscles' && <MuscleExplorer sessions={sessions} exercises={exercises} />}
 
       {segment === 'milestones' && (
         <>
