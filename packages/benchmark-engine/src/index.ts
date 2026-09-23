@@ -5,3 +5,7 @@ export { findBenchmark } from './findBenchmark';
 export { BENCHMARK_SPECS, BENCHMARK_DATASET_VERSION } from './benchmarkData';
 export type { BenchmarkSpec } from './benchmarkData';
 export { ensureBenchmarksSeeded } from './ensureBenchmarksSeeded';
+export { matchProtocol } from './matchProtocol';
+export type { ProtocolMatchResult } from './matchProtocol';
+export { evaluateBenchmarkStrict } from './evaluateBenchmarkStrict';
+export type { StrictBenchmarkEvaluation } from './evaluateBenchmarkStrict';

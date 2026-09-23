@@ -10,6 +10,7 @@ import { createGymEquipmentInstance, type CreateGymEquipmentInstanceInput } from
 import type { Exercise, ProgressionPolicy, WorkoutSession } from '@atlas/data-model';
 import { NO_PROGRESSION } from '@atlas/data-model';
 import { recommendProgression } from './recommendProgression';
+import { refineForCurrentSession } from './refineForCurrentSession';
 
 let exerciseCounter = 0;
 function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
@@ -391,5 +392,36 @@ describe('recommendProgression', () => {
     });
     expect(result.action).toBe('establish_baseline');
     expect(result.data_state).toBe('first_exposure');
+  });
+});
+
+describe('vNext Handoff 02: recommendProgression + refineForCurrentSession composed', () => {
+  it('current-session refinement never overrides an equipment-constrained target_load from recommendProgression', () => {
+    const exercise = makeExercise();
+    const previousSession = sessionWithTarget(
+      exercise.id,
+      { target_weight: 160, target_reps_min: 8, target_reps_max: 12 },
+      [set({ exerciseId: exercise.id, weight: 160, reps: 12 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    // Equipment tops out at 170 -- the base recommendation should land on 170, not a bigger arithmetic jump.
+    const base = recommendProgression({
+      exercise,
+      policy: doubleProgression,
+      currentTarget: { ...currentTarget, target_weight: 160, target_reps_min: 8, target_reps_max: 12 },
+      previousSession,
+      equipment: chestPress({ maxLoad: 170 }),
+    });
+    expect(base.target_load).toBe(170);
+
+    // A weak first set this session must not change target_load -- only refineForCurrentSession's
+    // one allowed field (target_reps) can move, and equipment already bounded target_load upstream.
+    const refined = refineForCurrentSession(
+      base,
+      [set({ exerciseId: exercise.id, weight: 170, reps: 3 })],
+      doubleProgression,
+    );
+    expect(refined.target_load).toBe(170);
+    expect(refined.reason_code).toBe('CURRENT_SESSION_BELOW_TARGET');
   });
 });

@@ -161,10 +161,10 @@ describe('chart series', () => {
     expect(series[1]?.value).toBe(185 * 5);
   });
 
-  it('estimated1RMSeries picks the best e1RM per session', () => {
+  it('estimated1RMSeries picks the best e1RM per session, using the same default (Brzycki) estimator as pr-engine', () => {
     const series = estimated1RMSeries(sessions, 'bench');
-    // session 1 best e1RM: 155*(1+5/30)=180.83 vs 135*(1+10/30)=180 -- 155x5 wins
-    expect(series[0]?.value).toBeCloseTo(180.833, 2);
+    // session 1 best e1RM (Brzycki, weight*36/(37-reps)): 135x10 -> 135*36/27=180 vs 155x5 -> 155*36/32=174.375 -- 135x10 wins
+    expect(series[0]?.value).toBeCloseTo(180, 2);
   });
 
   it('handles a single data point gracefully (no crash, one-item array)', () => {

@@ -11,3 +11,4 @@ export * from './occurrence';
 export * from './notes';
 export * from './records';
 export * from './body';
+export * from './testProtocol';

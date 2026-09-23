@@ -27,6 +27,12 @@ pub fn run() {
             sql: include_str!("../migrations/0004_add_vnext_foundations.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "add_test_protocols",
+            sql: include_str!("../migrations/0005_add_test_protocols.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

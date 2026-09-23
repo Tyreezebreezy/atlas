@@ -7,3 +7,5 @@ export * from './applyProgressionToSession';
 export * from './workoutOccurrence';
 export * from './todaySchedule';
 export * from './recommendProgression';
+export * from './refineForCurrentSession';
+export * from './validateRir';

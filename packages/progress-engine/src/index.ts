@@ -6,3 +6,5 @@ export * from './plannedMuscleCoverage';
 export * from './trainingExposure';
 export * from './activityHeatmap';
 export * from './trainingRecency';
+export * from './detectStagnation';
+export * from './buildWeeklyReview';

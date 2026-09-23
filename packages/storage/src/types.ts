@@ -12,6 +12,7 @@ import type {
   Program,
   ProgramNote,
   SyncMeta,
+  TestProtocol,
   TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
@@ -55,4 +56,6 @@ export interface AtlasStorage {
   gymEquipment: Repository<GymEquipmentInstance>;
   /** vNext Handoff 01. See `ExerciseEquipmentContext`'s doc comment. */
   exerciseEquipmentContext: Repository<ExerciseEquipmentContext>;
+  /** vNext Handoff 02. See `TestProtocol`'s doc comment. */
+  testProtocols: Repository<TestProtocol>;
 }

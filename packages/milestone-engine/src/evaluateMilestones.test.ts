@@ -8,10 +8,34 @@ import {
   type LogSetInput,
 } from '@atlas/workout-engine';
 import { createBodyMeasurement } from '@atlas/body-composition';
-import type { BodyMeasurement, WorkoutSession } from '@atlas/data-model';
+import type { BodyMeasurement, Program, WorkoutSession } from '@atlas/data-model';
 import { createMilestone } from './createMilestone';
-import { evaluateMilestone, evaluateMilestones } from './evaluateMilestones';
+import { evaluateMilestone, evaluateMilestones, type BenchmarkAchievementInput } from './evaluateMilestones';
 import { newlyAchievedMilestones } from './detectNewMilestones';
+
+function makeProgram(overrides: { id: string; dayIds: string[] }): Program {
+  return {
+    id: overrides.id,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    version: 1,
+    device_id: 'seed',
+    deleted_at: null,
+    name: 'Program',
+    description: null,
+    is_active: true,
+    progression_mode: 'fixed',
+    sequence_position: 0,
+    weeks: [
+      {
+        id: 'week-1',
+        order: 0,
+        label: null,
+        days: overrides.dayIds.map((id, i) => ({ id, order: i, label: `Day ${i + 1}`, template_id: 'tpl' })),
+      },
+    ],
+  };
+}
 
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
@@ -542,5 +566,145 @@ describe('evaluateMilestones (batch) and newlyAchievedMilestones', () => {
     const newlyAchieved = newlyAchievedMilestones(before, after);
     expect(newlyAchieved).toHaveLength(1);
     expect(newlyAchieved[0]?.title).toBe('225 Bench');
+  });
+});
+
+describe('vNext Handoff 02: body_weight dimension (no exercise_id required)', () => {
+  it('achieves once a BodyMeasurement reaches the target, and is never blocked by a missing exercise_id', () => {
+    const milestone = createMilestone({
+      title: 'Reach 180 lb',
+      exerciseId: null,
+      dimension: 'body_weight',
+      targetBodyWeight: 180,
+    });
+    const notYet = evaluateMilestone(milestone, [], [weighIn('2026-08-01', 175)]);
+    expect(notYet.achieved_at).toBeNull();
+
+    const achieved = evaluateMilestone(milestone, [], [weighIn('2026-08-01', 175), weighIn('2026-08-15', 181)]);
+    expect(achieved.achieved_at).toBe('2026-08-15');
+    expect(achieved.origin_session_id).toBeNull();
+  });
+});
+
+describe('vNext Handoff 02: consistency dimension (no exercise_id required)', () => {
+  it('target_total_sessions: achieves on the Nth lifetime completed session', () => {
+    const milestone = createMilestone({
+      title: '50 Workouts',
+      exerciseId: null,
+      dimension: 'consistency',
+      targetTotalSessions: 3,
+    });
+    const sessions = [
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-01T10:00:00.000Z'),
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-02T10:00:00.000Z'),
+    ];
+    expect(evaluateMilestone(milestone, sessions, []).achieved_at).toBeNull();
+
+    const third = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-03T10:00:00.000Z');
+    const result = evaluateMilestone(milestone, [...sessions, third], []);
+    expect(result.achieved_at).toBe('2026-08-03T10:00:00.000Z');
+    expect(result.origin_session_id).toBe(third.id);
+  });
+
+  it('target_consecutive_weeks: requires N consecutive weeks each with >=1 completed session', () => {
+    const milestone = createMilestone({
+      title: '3-Week Streak',
+      exerciseId: null,
+      dimension: 'consistency',
+      targetConsecutiveWeeks: 3,
+    });
+    // Three sessions one week apart -- three consecutive weekly buckets.
+    const threeInARow = [
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-03T10:00:00.000Z'),
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-10T10:00:00.000Z'),
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-17T10:00:00.000Z'),
+    ];
+    expect(evaluateMilestone(milestone, threeInARow, []).achieved_at).not.toBeNull();
+  });
+
+  it('target_consecutive_weeks: a gap week resets the streak', () => {
+    const milestone = createMilestone({
+      title: '3-Week Streak',
+      exerciseId: null,
+      dimension: 'consistency',
+      targetConsecutiveWeeks: 3,
+    });
+    // Week 1, skip week 2, weeks 3-4 -- never 3 in a row.
+    const withGap = [
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-03T10:00:00.000Z'),
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-17T10:00:00.000Z'),
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-24T10:00:00.000Z'),
+    ];
+    expect(evaluateMilestone(milestone, withGap, []).achieved_at).toBeNull();
+  });
+});
+
+describe('vNext Handoff 02: program_completion dimension (no exercise_id required)', () => {
+  it('achieves once every ProgramDay has at least one completed session, attributed to whichever day completes coverage last', () => {
+    const program = makeProgram({ id: 'prog-1', dayIds: ['day-a', 'day-b'] });
+    const milestone = createMilestone({
+      title: 'Finish Block 1',
+      exerciseId: null,
+      dimension: 'program_completion',
+      targetProgramId: program.id,
+    });
+
+    const dayA = { ...completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-01T10:00:00.000Z'), program_id: program.id, program_day_id: 'day-a' };
+    expect(evaluateMilestone(milestone, [dayA], [], { programs: [program] }).achieved_at).toBeNull();
+
+    const dayB = { ...completedSession('squat', [set({ exerciseId: 'squat', weight: 100, reps: 5 })], '2026-08-03T10:00:00.000Z'), program_id: program.id, program_day_id: 'day-b' };
+    const result = evaluateMilestone(milestone, [dayA, dayB], [], { programs: [program] });
+    expect(result.achieved_at).toBe('2026-08-03T10:00:00.000Z');
+    expect(result.origin_session_id).toBe(dayB.id);
+  });
+
+  it('a session for a different program never counts toward this one', () => {
+    const program = makeProgram({ id: 'prog-1', dayIds: ['day-a'] });
+    const milestone = createMilestone({
+      title: 'Finish Block 1',
+      exerciseId: null,
+      dimension: 'program_completion',
+      targetProgramId: program.id,
+    });
+    const otherProgramSession = {
+      ...completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-01T10:00:00.000Z'),
+      program_id: 'some-other-program',
+      program_day_id: 'day-a',
+    };
+    expect(evaluateMilestone(milestone, [otherProgramSession], [], { programs: [program] }).achieved_at).toBeNull();
+  });
+});
+
+describe('vNext Handoff 02: benchmark_threshold dimension (no exercise_id required)', () => {
+  it('achieves once a precomputed benchmark achievement crosses the target percentile', () => {
+    const milestone = createMilestone({
+      title: 'Top 25% Push-Ups',
+      exerciseId: null,
+      dimension: 'benchmark_threshold',
+      targetBenchmarkId: 'pushups',
+      targetPercentile: 75,
+    });
+    const below: BenchmarkAchievementInput[] = [{ benchmark_id: 'pushups', percentile: 60, achieved_at: '2026-08-01T00:00:00.000Z' }];
+    expect(evaluateMilestone(milestone, [], [], { benchmarkAchievements: below }).achieved_at).toBeNull();
+
+    const crossing: BenchmarkAchievementInput[] = [
+      ...below,
+      { benchmark_id: 'pushups', percentile: 80, achieved_at: '2026-09-01T00:00:00.000Z', session_id: 'sess-1' },
+    ];
+    const result = evaluateMilestone(milestone, [], [], { benchmarkAchievements: crossing });
+    expect(result.achieved_at).toBe('2026-09-01T00:00:00.000Z');
+    expect(result.origin_session_id).toBe('sess-1');
+  });
+
+  it('milestone-engine does not depend on benchmark-engine -- an unrelated benchmark_id never matches', () => {
+    const milestone = createMilestone({
+      title: 'Top 25% Push-Ups',
+      exerciseId: null,
+      dimension: 'benchmark_threshold',
+      targetBenchmarkId: 'pushups',
+      targetPercentile: 75,
+    });
+    const unrelated: BenchmarkAchievementInput[] = [{ benchmark_id: 'pullups', percentile: 99, achieved_at: '2026-08-01T00:00:00.000Z' }];
+    expect(evaluateMilestone(milestone, [], [], { benchmarkAchievements: unrelated }).achieved_at).toBeNull();
   });
 });

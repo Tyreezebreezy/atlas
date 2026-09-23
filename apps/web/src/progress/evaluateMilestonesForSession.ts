@@ -10,12 +10,19 @@ import type { AtlasStorage } from '@atlas/storage';
  * enough to just re-run in full on every workout finish at this scale.
  */
 export async function evaluateMilestonesForSession(storage: AtlasStorage): Promise<Milestone[]> {
-  const [milestones, sessions, bodyMeasurements] = await Promise.all([
+  const [milestones, sessions, bodyMeasurements, programs] = await Promise.all([
     storage.milestones.getAll(),
     storage.workoutSessions.getAll(),
     storage.bodyMeasurements.getAll(),
+    storage.programs.getAll(),
   ]);
-  const updated = evaluateMilestones(milestones, sessions, bodyMeasurements);
+  // vNext Handoff 02: `programs` enables 'program_completion' milestones.
+  // `benchmarkAchievements` is deliberately left unwired here -- per
+  // docs/BENCHMARKS.md, a benchmark comparison is computed live wherever
+  // it's shown, not evaluated at workout-finish time like a PR/streak, so
+  // 'benchmark_threshold' milestones are checked from that live path
+  // instead (not built this phase -- see completion report).
+  const updated = evaluateMilestones(milestones, sessions, bodyMeasurements, { programs });
   const changed = updated.filter((m, i) => m !== milestones[i]);
   if (changed.length > 0) await storage.milestones.putMany(changed);
   return newlyAchievedMilestones(milestones, updated);

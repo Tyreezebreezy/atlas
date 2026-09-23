@@ -28,6 +28,15 @@ function semanticTarget(milestone: Milestone): number {
       return milestone.target_bodyweight_multiplier ?? 0;
     case 'custom':
       return milestone.target_weight ?? milestone.reference_value ?? 0;
+    // vNext Handoff 02.
+    case 'body_weight':
+      return milestone.target_body_weight ?? 0;
+    case 'consistency':
+      return milestone.target_consecutive_weeks ?? milestone.target_total_sessions ?? 0;
+    case 'program_completion':
+      return 0; // no single meaningful numeric ladder -- typically one per program anyway.
+    case 'benchmark_threshold':
+      return milestone.target_percentile ?? 0;
   }
 }
 

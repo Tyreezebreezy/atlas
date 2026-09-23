@@ -5,6 +5,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0002_add_workout_occurrences.sql"),
     include_str!("../migrations/0003_add_training_locations.sql"),
     include_str!("../migrations/0004_add_vnext_foundations.sql"),
+    include_str!("../migrations/0005_add_test_protocols.sql"),
 ];
 
 const EXPECTED_TABLES: &[&str] = &[
@@ -24,6 +25,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "equipment_definitions",
     "gym_equipment",
     "exercise_equipment_context",
+    "test_protocols",
 ];
 
 #[tokio::test]
@@ -136,4 +138,22 @@ async fn migrations_create_expected_tables_and_round_trip() {
         .expect("select should succeed");
 
     assert_eq!(row.0, "{\"display_alias\":\"DB Incline Bench\"}");
+
+    // vNext Handoff 02: the one new table from migration 0005, same
+    // JSON-blob-row shape, round-tripped to prove the fifth migration
+    // actually works.
+    sqlx::query("INSERT INTO test_protocols (id, deleted_at, data) VALUES ($1, NULL, $2)")
+        .bind("protocol-1")
+        .bind("{\"name\":\"Continuous Push-Up to Failure\"}")
+        .execute(&pool)
+        .await
+        .expect("insert should succeed");
+
+    let row: (String,) = sqlx::query_as("SELECT data FROM test_protocols WHERE id = $1")
+        .bind("protocol-1")
+        .fetch_one(&pool)
+        .await
+        .expect("select should succeed");
+
+    assert_eq!(row.0, "{\"name\":\"Continuous Push-Up to Failure\"}");
 }

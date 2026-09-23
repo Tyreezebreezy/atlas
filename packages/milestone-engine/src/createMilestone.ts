@@ -15,6 +15,16 @@ export interface CreateMilestoneInput {
   referenceValue?: number | null;
   /** For 'custom' (with referenceValue) and 'bodyweight_multiplier' (alone). */
   multiplier?: number | null;
+  /** vNext Handoff 02. 'body_weight' dimension only. */
+  targetBodyWeight?: number | null;
+  /** vNext Handoff 02. 'consistency' dimension only -- set exactly one of this or targetTotalSessions. */
+  targetConsecutiveWeeks?: number | null;
+  targetTotalSessions?: number | null;
+  /** vNext Handoff 02. 'program_completion' dimension only. */
+  targetProgramId?: string | null;
+  /** vNext Handoff 02. 'benchmark_threshold' dimension only -- set both together. */
+  targetBenchmarkId?: string | null;
+  targetPercentile?: number | null;
   isBuiltin?: boolean;
   /** Whether this counts toward "My Milestones" (evaluated, surfaced as an
    * active goal) vs catalog-only (see evaluateMilestone's own `!active`
@@ -56,6 +66,12 @@ export function createMilestone(input: CreateMilestoneInput): Milestone {
     target_bodyweight_multiplier: input.targetBodyweightMultiplier ?? null,
     reference_value: input.referenceValue ?? null,
     multiplier: input.multiplier ?? null,
+    target_body_weight: input.targetBodyWeight ?? null,
+    target_consecutive_weeks: input.targetConsecutiveWeeks ?? null,
+    target_total_sessions: input.targetTotalSessions ?? null,
+    target_program_id: input.targetProgramId ?? null,
+    target_benchmark_id: input.targetBenchmarkId ?? null,
+    target_percentile: input.targetPercentile ?? null,
     is_builtin: input.isBuiltin ?? false,
     active: input.active ?? true,
     achieved_at: null,

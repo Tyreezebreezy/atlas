@@ -254,6 +254,16 @@ export interface WorkoutSession extends SyncMeta {
    * are keyed by exercise_id, so switching modes mid-workout never loses
    * work. */
   execution_mode?: 'normal' | 'paired';
+  /** vNext Handoff 02. Which `TrainingLocation` this session happened at,
+   * when known -- session-level granularity (matches real gym usage: one
+   * location for the whole session), not per-set. Absent/null for every
+   * session before this field existed and for any session where the owner
+   * never recorded one. Drives equipment-scoped PR/rep-at-load series (see
+   * docs/PRS.md); a session with no location simply falls into the
+   * legacy/unscoped series alongside all pre-existing history, exactly like
+   * "no equipment data" is never treated as "at max" in the Handoff 01
+   * progression work. */
+  training_location_id?: string | null;
 }
 
 export interface PerformedSet {
@@ -280,4 +290,26 @@ export interface PerformedSet {
    * every `reps_weight` set and for an unweighted `reps_bodyweight` set.
    * See docs/PROGRESSION.md "Bodyweight." */
   external_load?: number | null;
+  /** vNext Handoff 02 (research pack v2 §6/§22). How `weight` should be
+   * interpreted -- absent/null means "unknown, treat as displayed/total
+   * load" (every set logged before this field existed, and any set logged
+   * without an opinion). Never inferred or backfilled from exercise name;
+   * only ever set when something upstream actually knows. Comparison logic
+   * (PR series, e1RM eligibility) treats two sets with differing non-null
+   * semantics as incompatible rather than silently merging or doubling
+   * either value. */
+  load_semantics?: LoadSemantics | null;
 }
+
+/** `dumbbell_per_hand`: `weight` is the load in ONE hand, never doubled for
+ * display or comparison. `assistance_load`: lower is better (an assisted
+ * pull-up/dip machine) -- inverted-direction comparison, not yet consumed
+ * by pr-engine (no assisted `MeasurementType` exists yet, see
+ * docs/PRS.md "Deferred: assisted bodyweight"). */
+export type LoadSemantics =
+  | 'barbell_total'
+  | 'dumbbell_per_hand'
+  | 'machine_displayed'
+  | 'cable_displayed'
+  | 'added_bodyweight'
+  | 'assistance_load';

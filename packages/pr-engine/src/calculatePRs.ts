@@ -2,7 +2,7 @@ import { getOrCreateDeviceId, newId } from '@atlas/core';
 import type { Exercise, PersonalRecord, PrKind } from '@atlas/data-model';
 import type { WorkoutSession } from '@atlas/data-model';
 import { eligibleSetsForExercise, type EligibleSet } from './eligibility';
-import { estimated1RM } from './estimate1RM';
+import { DEFAULT_E1RM_ESTIMATOR } from './e1rmEstimators';
 
 /** Highest keyFn value wins; on a tie, the FIRST item in array order wins -- pass items pre-sorted ascending by achieved_at so ties resolve to "first achieved." Items where keyFn returns null are skipped. */
 function pickBest<T>(
@@ -24,6 +24,8 @@ function makePR(
   value: number,
   reps: number | null,
   source: EligibleSet,
+  trainingLocationId: string | null,
+  extra?: { estimator_id?: string; estimator_version?: string; load?: number },
 ): PersonalRecord {
   const now = new Date().toISOString();
   return {
@@ -40,28 +42,44 @@ function makePR(
     achieved_at: source.set.completed_at,
     source_session_id: source.session.id,
     source_set_id: source.set.id,
+    training_location_id: trainingLocationId,
+    estimator_id: extra?.estimator_id ?? null,
+    estimator_version: extra?.estimator_version ?? null,
+    load: extra?.load ?? null,
   };
 }
 
 /**
- * Deterministically recomputes the full current set of PersonalRecord rows
- * for one exercise from completed workout history -- callable at any time
- * (an older/newer/stronger session inserted, an exercise replaced, history
- * corrected) with no dependency on what was previously stored. This IS the
- * recalculation mechanism the historical-integrity requirement asks for.
- *
- * Ties resolve to "first achieved": eligible sets are sorted ascending by
- * `completed_at` before comparison, and `pickBest` keeps the first item on
- * a tie, so two equal performances credit whichever happened earlier.
- *
- * Which kinds get computed is gated by `measurement_type` -- see
- * docs/PRS.md for the full table.
+ * vNext Handoff 02. Groups already-eligible sets by their session's
+ * `training_location_id` -- absent/null (every session before that field
+ * existed, and any session the owner never tagged) is its own group, so
+ * legacy history always resolves to exactly one group and this grouping is
+ * a complete no-op for it. Only once real sessions start recording a
+ * location do weight-bearing series actually split -- "170 lb at Gym A"
+ * never silently merges with or overwrites "170 lb at Gym B." See
+ * docs/PRS.md "Equipment-scoped series."
  */
-export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): PersonalRecord[] {
-  const eligible = eligibleSetsForExercise(sessions, exercise.id);
-  if (eligible.length === 0) return [];
+function groupByLocation(sorted: EligibleSet[]): Map<string | null, EligibleSet[]> {
+  const groups = new Map<string | null, EligibleSet[]>();
+  for (const e of sorted) {
+    const key = e.session.training_location_id ?? null;
+    const list = groups.get(key);
+    if (list) list.push(e);
+    else groups.set(key, [e]);
+  }
+  return groups;
+}
 
-  const sorted = [...eligible].sort((a, b) => a.set.completed_at.localeCompare(b.set.completed_at));
+/** The exact v0.0.6-v1.0.0 per-exercise PR computation, now run once per
+ * location group instead of once over the whole history -- see
+ * `groupByLocation`. Identical output to before this handoff for any
+ * exercise whose sessions carry no `training_location_id` (today, all of
+ * them), since that's a single group containing every eligible set. */
+function calculatePRsForGroup(
+  sorted: EligibleSet[],
+  exercise: Exercise,
+  trainingLocationId: string | null,
+): PersonalRecord[] {
   const records: PersonalRecord[] = [];
 
   const hasWeight = exercise.measurement_type === 'reps_weight';
@@ -76,11 +94,19 @@ export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): Pe
     const maxLoad = pickBest(sorted, (e) => e.set.weight);
     if (maxLoad)
       records.push(
-        makePR(exercise.id, 'max_load', maxLoad.value, maxLoad.item.set.reps, maxLoad.item),
+        makePR(
+          exercise.id,
+          'max_load',
+          maxLoad.value,
+          maxLoad.item.set.reps,
+          maxLoad.item,
+          trainingLocationId,
+        ),
       );
 
     const bestRep = pickBest(sorted, (e) => e.set.reps);
-    if (bestRep) records.push(makePR(exercise.id, 'rep', bestRep.value, null, bestRep.item));
+    if (bestRep)
+      records.push(makePR(exercise.id, 'rep', bestRep.value, null, bestRep.item, trainingLocationId));
 
     // rep_range: best weight per exact observed rep count -- generic over
     // whatever rep counts actually appear, not a hardcoded list of Ns.
@@ -91,15 +117,47 @@ export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): Pe
       if (!existing || e.set.weight > (existing.set.weight ?? -Infinity)) byReps.set(e.set.reps, e);
     }
     for (const [reps, e] of byReps) {
-      records.push(makePR(exercise.id, 'rep_range', e.set.weight ?? 0, reps, e));
+      records.push(
+        makePR(exercise.id, 'rep_range', e.set.weight ?? 0, reps, e, trainingLocationId),
+      );
     }
 
+    // vNext Handoff 02. rep_at_load: the dual of rep_range -- best reps per
+    // exact observed load, generic over whatever loads actually appear.
+    // This is what registers "170x12 -> 170x15 -> 170x18" as three genuine
+    // records even though the load itself never changes (an equipment
+    // ceiling with no heavier implement available). See docs/PRS.md.
+    const byLoad = new Map<number, EligibleSet>();
+    for (const e of sorted) {
+      if (e.set.weight == null || e.set.reps == null) continue;
+      const existing = byLoad.get(e.set.weight);
+      if (!existing || e.set.reps > (existing.set.reps ?? -Infinity)) byLoad.set(e.set.weight, e);
+    }
+    for (const [load, e] of byLoad) {
+      records.push(
+        makePR(exercise.id, 'rep_at_load', e.set.reps ?? 0, null, e, trainingLocationId, { load }),
+      );
+    }
+
+    // vNext Handoff 02: Brzycki replaces Epley as the default estimator
+    // (owner decision, research pack recommendation) -- see
+    // e1rmEstimators.ts. Provenance is stored on every computed row so a
+    // future default change is again a recorded fact, not a silent rewrite.
+    const estimator = DEFAULT_E1RM_ESTIMATOR;
     const bestE1rm = pickBest(sorted, (e) =>
-      e.set.weight != null && e.set.reps != null ? estimated1RM(e.set.weight, e.set.reps) : null,
+      e.set.weight != null && e.set.reps != null ? estimator.estimate(e.set.weight, e.set.reps) : null,
     );
     if (bestE1rm)
       records.push(
-        makePR(exercise.id, 'estimated_1rm', bestE1rm.value, bestE1rm.item.set.reps, bestE1rm.item),
+        makePR(
+          exercise.id,
+          'estimated_1rm',
+          bestE1rm.value,
+          bestE1rm.item.set.reps,
+          bestE1rm.item,
+          trainingLocationId,
+          { estimator_id: estimator.id, estimator_version: estimator.version },
+        ),
       );
 
     // volume: best single SESSION total (not per-set) -- sum(weight * reps)
@@ -125,12 +183,17 @@ export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): Pe
       if (last && (!bestVolume || total > bestVolume.value)) bestVolume = { value: total, last };
     }
     if (bestVolume)
-      records.push(makePR(exercise.id, 'volume', bestVolume.value, null, bestVolume.last));
+      records.push(
+        makePR(exercise.id, 'volume', bestVolume.value, null, bestVolume.last, trainingLocationId),
+      );
   }
 
   if (isBodyweightOnly) {
     const bestBw = pickBest(sorted, (e) => e.set.reps);
-    if (bestBw) records.push(makePR(exercise.id, 'bodyweight', bestBw.value, null, bestBw.item));
+    if (bestBw)
+      records.push(
+        makePR(exercise.id, 'bodyweight', bestBw.value, null, bestBw.item, trainingLocationId),
+      );
 
     // v0.2.0. Only ever computed when at least one eligible set actually
     // used added load -- most reps_bodyweight history never does, and a
@@ -146,6 +209,7 @@ export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): Pe
           bestWeighted.value,
           bestWeighted.item.set.reps,
           bestWeighted.item,
+          trainingLocationId,
         ),
       );
   }
@@ -153,14 +217,56 @@ export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): Pe
   if (hasDuration) {
     const bestTimed = pickBest(sorted, (e) => e.set.duration_seconds);
     if (bestTimed)
-      records.push(makePR(exercise.id, 'timed', bestTimed.value, null, bestTimed.item));
+      records.push(
+        makePR(exercise.id, 'timed', bestTimed.value, null, bestTimed.item, trainingLocationId),
+      );
   }
 
   if (hasDistance) {
     const bestDistance = pickBest(sorted, (e) => e.set.distance_meters);
     if (bestDistance)
-      records.push(makePR(exercise.id, 'distance', bestDistance.value, null, bestDistance.item));
+      records.push(
+        makePR(
+          exercise.id,
+          'distance',
+          bestDistance.value,
+          null,
+          bestDistance.item,
+          trainingLocationId,
+        ),
+      );
   }
 
+  return records;
+}
+
+/**
+ * Deterministically recomputes the full current set of PersonalRecord rows
+ * for one exercise from completed workout history -- callable at any time
+ * (an older/newer/stronger session inserted, an exercise replaced, history
+ * corrected) with no dependency on what was previously stored. This IS the
+ * recalculation mechanism the historical-integrity requirement asks for.
+ *
+ * Ties resolve to "first achieved": eligible sets are sorted ascending by
+ * `completed_at` before comparison, and `pickBest` keeps the first item on
+ * a tie, so two equal performances credit whichever happened earlier.
+ *
+ * Which kinds get computed is gated by `measurement_type` -- see
+ * docs/PRS.md for the full table. vNext Handoff 02: sets are additionally
+ * grouped by the source session's `training_location_id` before any kind
+ * is computed (see `groupByLocation`) -- a no-op for any exercise whose
+ * history has no recorded location.
+ */
+export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): PersonalRecord[] {
+  const eligible = eligibleSetsForExercise(sessions, exercise.id);
+  if (eligible.length === 0) return [];
+
+  const sorted = [...eligible].sort((a, b) => a.set.completed_at.localeCompare(b.set.completed_at));
+  const groups = groupByLocation(sorted);
+
+  const records: PersonalRecord[] = [];
+  for (const [trainingLocationId, group] of groups) {
+    records.push(...calculatePRsForGroup(group, exercise, trainingLocationId));
+  }
   return records;
 }

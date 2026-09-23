@@ -45,6 +45,16 @@ export interface ProgressionPolicy {
    * ceiling on jump size (any next available load is offered as-is).
    */
   max_acceptable_load_jump?: number | null;
+  /**
+   * vNext Handoff 02 (research pack v2 §9). How many reps short of the
+   * planned target an earlier set in the SAME session must fall before a
+   * later set's target is reduced to match demonstrated capacity -- e.g. a
+   * planned "80x15, 80x14, 80x13" where Set 1 actually comes in at 80x10
+   * (5 short) should not leave Set 2's target sitting at a now-unrealistic
+   * 14. Null/absent uses a restrained default (3 reps) rather than reacting
+   * to ordinary set-to-set variance of a rep or two.
+   */
+  current_session_shortfall_reps?: number | null;
 }
 
 export const NO_PROGRESSION: ProgressionPolicy = {
@@ -108,7 +118,14 @@ export type ProgressionReasonCode =
   | 'EQUIPMENT_MAX_REACHED'
   | 'BELOW_TARGET_RANGE'
   | 'CURRENT_SESSION_FATIGUE'
-  | 'PROGRAM_REVIEW_REQUIRED';
+  | 'PROGRAM_REVIEW_REQUIRED'
+  /** vNext Handoff 02 (research pack v2 §9). Distinct from
+   * `CURRENT_SESSION_FATIGUE` (which marks a whole session `is_deload`,
+   * excluding it from NEXT session's baseline lookup) -- this fires WITHIN
+   * a session, adjusting a later set's target reps down after an earlier
+   * set in the SAME session came in meaningfully short, so the next target
+   * reflects demonstrated capacity rather than a now-unrealistic plan. */
+  | 'CURRENT_SESSION_BELOW_TARGET';
 
 export type ProgressionAction =
   | 'increase_load'

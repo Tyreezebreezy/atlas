@@ -1,9 +1,21 @@
 import { calculatePRs } from '@atlas/pr-engine';
-import type { Exercise } from '@atlas/data-model';
+import type { Exercise, PersonalRecord } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
 
-function prKey(kind: string, reps: number | null): string {
-  return `${kind}:${reps ?? 'null'}`;
+/**
+ * vNext Handoff 02: extended for two new dimensions the original kind+reps
+ * key didn't need to distinguish. `rep_at_load`'s stable identity is its
+ * `load`, not `reps` (which is the improving metric for that kind, the
+ * inverse of every other kind) -- see calculatePRs.ts's doc comment on
+ * `PersonalRecord.load`. `training_location_id` is folded in so two real
+ * gyms' series never collide once sessions start recording one; every
+ * pre-Handoff-02 row has `training_location_id: null`, so this is a no-op
+ * for existing history.
+ */
+function prKey(record: Pick<PersonalRecord, 'kind' | 'reps' | 'load' | 'training_location_id'>): string {
+  const dimension =
+    record.kind === 'rep_at_load' ? `L${record.load ?? 'null'}` : `R${record.reps ?? 'null'}`;
+  return `${record.kind}:${dimension}:${record.training_location_id ?? 'none'}`;
 }
 
 /**
@@ -25,11 +37,11 @@ export async function recalculatePRsForExercise(
 
   const fresh = calculatePRs(allSessions, exercise);
   const existingForExercise = allPRs.filter((p) => p.exercise_id === exercise.id);
-  const existingByKey = new Map(existingForExercise.map((p) => [prKey(p.kind, p.reps), p]));
-  const freshKeys = new Set(fresh.map((p) => prKey(p.kind, p.reps)));
+  const existingByKey = new Map(existingForExercise.map((p) => [prKey(p), p]));
+  const freshKeys = new Set(fresh.map((p) => prKey(p)));
 
   const toSave = fresh.map((computed) => {
-    const existing = existingByKey.get(prKey(computed.kind, computed.reps));
+    const existing = existingByKey.get(prKey(computed));
     if (!existing) return computed;
     if (
       existing.value === computed.value &&
@@ -44,7 +56,7 @@ export async function recalculatePRsForExercise(
       version: existing.version + 1,
     };
   });
-  const toRemove = existingForExercise.filter((p) => !freshKeys.has(prKey(p.kind, p.reps)));
+  const toRemove = existingForExercise.filter((p) => !freshKeys.has(prKey(p)));
 
   await Promise.all([
     toSave.length > 0 ? storage.personalRecords.putMany(toSave) : Promise.resolve(),

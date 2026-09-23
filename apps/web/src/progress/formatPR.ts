@@ -36,6 +36,10 @@ export function describePR(pr: PersonalRecord): PRDescription {
         title: 'Added Load PR',
         value: `+${pr.value} lb${pr.reps ? ` × ${pr.reps}` : ''}`,
       };
+    case 'rep_at_load':
+      // vNext Handoff 02: the equipment-ceiling case -- the load itself
+      // never changes, so the PR being celebrated is more reps at it.
+      return { title: `${pr.load ?? '?'} lb Rep PR`, value: `${pr.value} reps` };
     default: {
       const exhaustive: never = pr.kind;
       throw new Error(`Unhandled PR kind: ${String(exhaustive)}`);

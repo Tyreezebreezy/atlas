@@ -12,6 +12,7 @@ import type {
   PersonalRecord,
   Program,
   ProgramNote,
+  TestProtocol,
   TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
@@ -35,6 +36,7 @@ export class AtlasDexie extends Dexie {
   equipmentDefinitions!: Table<EquipmentDefinition, string>;
   gymEquipment!: Table<GymEquipmentInstance, string>;
   exerciseEquipmentContext!: Table<ExerciseEquipmentContext, string>;
+  testProtocols!: Table<TestProtocol, string>;
 
   constructor(name: string) {
     super(name);
@@ -71,6 +73,15 @@ export class AtlasDexie extends Dexie {
       equipmentDefinitions: 'id, type, deleted_at',
       gymEquipment: 'id, training_location_id, equipment_definition_id, deleted_at',
       exerciseEquipmentContext: 'id, exercise_id, gym_equipment_id, deleted_at',
+    });
+    // vNext Handoff 02: performance-intelligence foundations. The only
+    // genuinely new store this handoff needs -- PersonalRecord/Milestone/
+    // Benchmark/WorkoutSession/PerformedSet all grow new fields on their
+    // existing whole-document rows instead, which Dexie doesn't need a
+    // schema version for (only declared index columns matter here, and none
+    // of those new fields are indexed).
+    this.version(5).stores({
+      testProtocols: 'id, measurement_type, deleted_at',
     });
   }
 }

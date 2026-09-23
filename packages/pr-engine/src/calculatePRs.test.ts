@@ -128,11 +128,15 @@ describe('calculatePRs: weighted exercise (bench press style history)', () => {
     expect(byReps.get(6)).toBe(175); // best of 165x6 and 175x6
   });
 
-  it('estimated_1rm picks the highest e1RM across all eligible sets, capped at the rep cutoff', () => {
+  it('estimated_1rm picks the highest e1RM across all eligible sets, using the default (Brzycki) estimator', () => {
     const prs = calculatePRs(sessions, bench);
     const e1rm = prs.find((p) => p.kind === 'estimated_1rm');
-    // 225x1 -> 225 (special-cased); 205x5 -> 205*(1+5/30)=239.16; 185x8 -> 185*(1+8/30)=234.33
-    expect(e1rm?.value).toBeCloseTo(239.166, 2);
+    // 225x1 -> 225 (reps=1 always resolves to weight unchanged, both estimators);
+    // 205x5 -> 205*36/32=230.625; 185x8 -> 185*36/29=229.655 -- 205x5 wins.
+    expect(e1rm?.value).toBeCloseTo(230.625, 2);
+    expect(e1rm?.source_session_id).toBe(session3.id);
+    expect(e1rm?.estimator_id).toBe('brzycki');
+    expect(e1rm?.estimator_version).toBe('v1');
   });
 
   it('volume PR is the best single SESSION total, not a per-set value', () => {
@@ -154,8 +158,82 @@ describe('calculatePRs: weighted exercise (bench press style history)', () => {
   it('a bodyweight/timed/distance exercise never emits weighted-only kinds', () => {
     const prs = calculatePRs(sessions, bench).map((p) => p.kind);
     expect(new Set(prs)).toEqual(
-      new Set(['max_load', 'rep', 'rep_range', 'estimated_1rm', 'volume']),
+      new Set(['max_load', 'rep', 'rep_range', 'rep_at_load', 'estimated_1rm', 'volume']),
     );
+  });
+
+  it('rep_at_load is generic per observed load -- the dual of rep_range', () => {
+    const prs = calculatePRs(sessions, bench).filter((p) => p.kind === 'rep_at_load');
+    const byLoad = new Map(prs.map((p) => [p.load, p.value]));
+    expect(byLoad.get(165)).toBe(8); // best reps at 165 across 165x6 (session1) and 165x8 (session2)
+    expect(byLoad.get(185)).toBe(8); // best reps at 185 across 185x5 (session2) and 185x8 (session3)
+    expect(byLoad.get(225)).toBe(1);
+    // rep_at_load stores its metric (reps) in `value` and its identity in
+    // `load`, never in `reps` -- avoids overloading that field with two
+    // meanings depending on kind.
+    const at185 = prs.find((p) => p.load === 185);
+    expect(at185?.reps).toBeNull();
+  });
+
+  it('an equipment ceiling (same load, climbing reps across sessions) registers a new rep_at_load record each time', () => {
+    const ceilingExercise = makeExercise({ id: 'chest-press-machine', measurement_type: 'reps_weight' });
+    const ceilingSessions = [
+      completedSession(ceilingExercise.id, [set({ exerciseId: ceilingExercise.id, weight: 170, reps: 12 })], '2026-09-01T10:00:00.000Z'),
+      completedSession(ceilingExercise.id, [set({ exerciseId: ceilingExercise.id, weight: 170, reps: 15 })], '2026-09-08T10:00:00.000Z'),
+      completedSession(ceilingExercise.id, [set({ exerciseId: ceilingExercise.id, weight: 170, reps: 18 })], '2026-09-15T10:00:00.000Z'),
+    ];
+    const repAtLoad = calculatePRs(ceilingSessions, ceilingExercise).find((p) => p.kind === 'rep_at_load');
+    expect(repAtLoad?.load).toBe(170);
+    expect(repAtLoad?.value).toBe(18);
+    expect(repAtLoad?.source_session_id).toBe(ceilingSessions[2]?.id);
+  });
+});
+
+describe('calculatePRs: vNext Handoff 02 load_semantics is inert (no active conversion built yet)', () => {
+  it('a dumbbell_per_hand-tagged set contributes its logged weight as-is, never doubled', () => {
+    const exercise = makeExercise({ id: 'db-press', measurement_type: 'reps_weight' });
+    const tagged = set({ exerciseId: exercise.id, weight: 70, reps: 8 });
+    const session = completedSession(exercise.id, [{ ...tagged, load_semantics: 'dumbbell_per_hand' }], '2026-08-01T10:00:00.000Z');
+    const maxLoad = calculatePRs([session], exercise).find((p) => p.kind === 'max_load');
+    expect(maxLoad?.value).toBe(70);
+  });
+});
+
+describe('calculatePRs: vNext Handoff 02 equipment-context (training_location_id) scoping', () => {
+  const chestPress = makeExercise({ id: 'chest-press', measurement_type: 'reps_weight' });
+
+  it('does not scope PRs when no session records a location -- identical to pre-Handoff-02 behavior', () => {
+    const unscoped = [
+      completedSession(chestPress.id, [set({ exerciseId: chestPress.id, weight: 150, reps: 10 })], '2026-08-01T10:00:00.000Z'),
+    ];
+    const prs = calculatePRs(unscoped, chestPress);
+    expect(prs.every((p) => p.training_location_id == null)).toBe(true);
+  });
+
+  it('keeps two locations\' max_load series independent -- a harder machine at Gym A never overwrites Gym B\'s max', () => {
+    const gymA = completedSession(chestPress.id, [set({ exerciseId: chestPress.id, weight: 150, reps: 10 })], '2026-08-01T10:00:00.000Z');
+    const gymB = completedSession(chestPress.id, [set({ exerciseId: chestPress.id, weight: 170, reps: 10 })], '2026-08-08T10:00:00.000Z');
+    const sessions: WorkoutSession[] = [
+      { ...gymA, training_location_id: 'loc-a' },
+      { ...gymB, training_location_id: 'loc-b' },
+    ];
+    const maxLoads = calculatePRs(sessions, chestPress).filter((p) => p.kind === 'max_load');
+    expect(maxLoads).toHaveLength(2);
+    const byLocation = new Map(maxLoads.map((p) => [p.training_location_id, p.value]));
+    expect(byLocation.get('loc-a')).toBe(150);
+    expect(byLocation.get('loc-b')).toBe(170);
+  });
+
+  it('a session with no recorded location and a session with one never merge into the same series', () => {
+    const unlocated = completedSession(chestPress.id, [set({ exerciseId: chestPress.id, weight: 150, reps: 10 })], '2026-08-01T10:00:00.000Z');
+    const located = completedSession(chestPress.id, [set({ exerciseId: chestPress.id, weight: 200, reps: 10 })], '2026-08-08T10:00:00.000Z');
+    const sessions: WorkoutSession[] = [unlocated, { ...located, training_location_id: 'loc-a' }];
+    const maxLoads = calculatePRs(sessions, chestPress).filter((p) => p.kind === 'max_load');
+    expect(maxLoads).toHaveLength(2);
+    const unscopedRecord = maxLoads.find((p) => p.training_location_id == null);
+    const scopedRecord = maxLoads.find((p) => p.training_location_id === 'loc-a');
+    expect(unscopedRecord?.value).toBe(150);
+    expect(scopedRecord?.value).toBe(200);
   });
 });
 
