@@ -1,5 +1,7 @@
 export * from './sync';
 export * from './exercise';
+export * from './exerciseAlias';
+export * from './equipment';
 export * from './muscle';
 export * from './location';
 export * from './progression';

@@ -11,6 +11,7 @@
   "dependencies": {
     "@atlas/core": "*",
     "@atlas/data-model": "*",
+    "@atlas/equipment-engine": "*",
     "@atlas/storage": "*",
     "@atlas/workout-engine": "*"
   },

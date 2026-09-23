@@ -21,6 +21,12 @@ pub fn run() {
             sql: include_str!("../migrations/0003_add_training_locations.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_vnext_foundations",
+            sql: include_str!("../migrations/0004_add_vnext_foundations.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

@@ -15,13 +15,17 @@ import { setPhaseOf } from '@atlas/workout-engine';
  * (nothing to auto-increment -- see the ceiling-hit branches below) and
  * for duration/distance exercises, which progress on duration instead via
  * the 'timed' policy. */
-function progressableLoadField(exercise: Exercise): 'weight' | 'external_load' | null {
+/** Exported for `recommendProgression` (vNext Handoff 01 §7-8), which needs
+ * the exact same "which field does this exercise progress on" rule to
+ * consult equipment data for the right field -- never a second copy of
+ * this decision. */
+export function progressableLoadField(exercise: Exercise): 'weight' | 'external_load' | null {
   if (exercise.measurement_type === 'reps_weight') return 'weight';
   if (exercise.measurement_type === 'reps_bodyweight') return 'external_load';
   return null;
 }
 
-function loadValue(target: ProgressionTargetSnapshot, field: 'weight' | 'external_load'): number {
+export function loadValue(target: ProgressionTargetSnapshot, field: 'weight' | 'external_load'): number {
   return (field === 'weight' ? target.target_weight : target.target_external_load) ?? 0;
 }
 

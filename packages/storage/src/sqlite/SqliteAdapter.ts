@@ -2,8 +2,12 @@ import Database from '@tauri-apps/plugin-sql';
 import type {
   Benchmark,
   BodyMeasurement,
+  EquipmentDefinition,
   Exercise,
+  ExerciseAlias,
+  ExerciseEquipmentContext,
   ExerciseNote,
+  GymEquipmentInstance,
   Milestone,
   PersonalRecord,
   Program,
@@ -29,6 +33,10 @@ export class SqliteAdapter implements AtlasStorage {
   readonly bodyMeasurements: SqlRepository<BodyMeasurement>;
   readonly workoutOccurrences: SqlRepository<WorkoutOccurrence>;
   readonly trainingLocations: SqlRepository<TrainingLocation>;
+  readonly exerciseAliases: SqlRepository<ExerciseAlias>;
+  readonly equipmentDefinitions: SqlRepository<EquipmentDefinition>;
+  readonly gymEquipment: SqlRepository<GymEquipmentInstance>;
+  readonly exerciseEquipmentContext: SqlRepository<ExerciseEquipmentContext>;
 
   private constructor(db: Database) {
     this.exercises = new SqlRepository(db, 'exercises');
@@ -43,6 +51,10 @@ export class SqliteAdapter implements AtlasStorage {
     this.bodyMeasurements = new SqlRepository(db, 'body_measurements');
     this.workoutOccurrences = new SqlRepository(db, 'workout_occurrences');
     this.trainingLocations = new SqlRepository(db, 'training_locations');
+    this.exerciseAliases = new SqlRepository(db, 'exercise_aliases');
+    this.equipmentDefinitions = new SqlRepository(db, 'equipment_definitions');
+    this.gymEquipment = new SqlRepository(db, 'gym_equipment');
+    this.exerciseEquipmentContext = new SqlRepository(db, 'exercise_equipment_context');
   }
 
   static async connect(path = 'sqlite:atlas.db'): Promise<SqliteAdapter> {

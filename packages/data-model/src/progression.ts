@@ -20,6 +20,31 @@ export interface ProgressionPolicy {
    * beyond it, another progression mechanism is required (handoff's own
    * wording) -- ATLAS just holds the target rather than picking one. */
   duration_ceiling_seconds: number | null;
+  /**
+   * vNext Handoff 01 (§8). Extended rep range used ONLY once equipment
+   * has no next available load (see `@atlas/program-engine`'s
+   * `recommendProgression`) -- e.g. normal range 8-12, ceiling extension
+   * to 15-20. Null means no configured extension: hitting the equipment
+   * max with the normal range already exhausted goes straight to
+   * `PROGRAM_REVIEW_REQUIRED` instead of a made-up cap. Deliberately a
+   * per-policy field, not a hardcoded engine constant (research pack §4.2:
+   * "do not hard-code one universal ceiling rep cap"). Optional (like
+   * `is_deload`/`media` elsewhere in this codebase) so every
+   * `ProgressionPolicy` literal that predates this field keeps compiling
+   * unchanged; read via `?? null`, never assumed present.
+   */
+  ceiling_reps_max?: number | null;
+  /**
+   * vNext Handoff 01 (§4.1/§8.4): the largest single-step load increase
+   * `recommendProgression` (in `@atlas/program-engine`) will suggest from
+   * equipment data before treating it as "too large" and falling back to
+   * rep progression instead -- e.g. a next available load 25 lb above the
+   * last one might be a bigger single jump than the owner wants
+   * recommended even though the equipment technically offers it. Optional
+   * and null-safe like `ceiling_reps_max`; null means no configured
+   * ceiling on jump size (any next available load is offered as-is).
+   */
+  max_acceptable_load_jump?: number | null;
 }
 
 export const NO_PROGRESSION: ProgressionPolicy = {
@@ -27,6 +52,7 @@ export const NO_PROGRESSION: ProgressionPolicy = {
   load_increment: null,
   duration_increment_seconds: null,
   duration_ceiling_seconds: null,
+  ceiling_reps_max: null,
 };
 
 /**
@@ -63,4 +89,50 @@ export interface ProgressionDecision {
   decision_summary: string;
   resulting_target: ProgressionTargetSnapshot;
   computed_at: string;
+}
+
+/**
+ * vNext Handoff 01 (§7). Structured reason codes, never generated prose --
+ * research pack §1: "No LLM is required for normal workout progression."
+ * `computeProgressionDecision`'s own `ProgressionResult` is the proven,
+ * tested source of truth underneath; these are the richer, equipment-aware
+ * vocabulary `recommendProgression` (in `@atlas/program-engine`) maps it
+ * onto -- see that function's doc comment for the exact mapping.
+ */
+export type ProgressionReasonCode =
+  | 'FIRST_EXPOSURE'
+  | 'WITHIN_REP_RANGE'
+  | 'TOP_OF_RANGE'
+  | 'NEXT_LOAD_AVAILABLE'
+  | 'NEXT_LOAD_TOO_LARGE'
+  | 'EQUIPMENT_MAX_REACHED'
+  | 'BELOW_TARGET_RANGE'
+  | 'CURRENT_SESSION_FATIGUE'
+  | 'PROGRAM_REVIEW_REQUIRED';
+
+export type ProgressionAction =
+  | 'increase_load'
+  | 'increase_reps'
+  | 'hold'
+  | 'reduce'
+  | 'establish_baseline'
+  | 'review';
+
+/** How much this recommendation should be trusted -- 'none' when the
+ * exercise's measurement type has no implemented strategy yet (§9: "a
+ * typed 'not yet supported' path is preferable" over a faked one). */
+export type ProgressionDataState = 'normal' | 'first_exposure' | 'not_yet_supported';
+
+export interface ProgressionRecommendation {
+  strategy_id: ProgressionPolicyKind;
+  target_load: number | null;
+  target_reps: number | null;
+  target_duration: number | null;
+  target_distance: number | null;
+  action: ProgressionAction;
+  reason_code: ProgressionReasonCode;
+  data_state: ProgressionDataState;
+  /** Set only when an equipment constraint (a max, or "next load too far
+   * off") actually changed the outcome versus the unconstrained decision. */
+  constraint_applied: string | null;
 }

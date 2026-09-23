@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createExerciseAlias } from '@atlas/exercise-library';
 import type { Exercise } from '@atlas/data-model';
 import { matchExercise } from './matchExercise';
 
@@ -66,5 +67,39 @@ describe('matchExercise', () => {
     const result = matchExercise('Zzyzx Contraption', library);
     expect(result.confidence).toBe('unresolved');
     expect(result.candidates).toEqual([]);
+  });
+
+  describe('vNext Handoff 01: canonical ExerciseAlias table', () => {
+    it('resolves a canonical alias when the legacy Exercise.aliases array has nothing', () => {
+      const pullUp = library.find((e) => e.name === 'Pull-Up')!;
+      const aliases = [
+        createExerciseAlias({ exerciseId: pullUp.id, displayAlias: 'Dead Hang Pull-Up', source: 'import' }),
+      ];
+      const result = matchExercise('Dead Hang Pull-Up', library, aliases);
+      expect(result.confidence).toBe('alias');
+      expect(result.matched_exercise?.name).toBe('Pull-Up');
+    });
+
+    it('does not silently choose when a canonical alias was registered for two different exercises', () => {
+      const pullUp = library.find((e) => e.name === 'Pull-Up')!;
+      const chinUp = library.find((e) => e.name === 'Chin-Up')!;
+      const aliases = [
+        createExerciseAlias({ exerciseId: pullUp.id, displayAlias: 'Vertical Pull', source: 'user' }),
+        createExerciseAlias({ exerciseId: chinUp.id, displayAlias: 'Vertical Pull', source: 'user' }),
+      ];
+      const result = matchExercise('Vertical Pull', library, aliases);
+      expect(result.confidence).toBe('unresolved');
+      expect(result.matched_exercise).toBeNull();
+    });
+
+    it('an exact/normalized match still wins over a conflicting canonical alias', () => {
+      const chinUp = library.find((e) => e.name === 'Chin-Up')!;
+      const aliases = [
+        createExerciseAlias({ exerciseId: chinUp.id, displayAlias: 'Barbell Bench Press', source: 'import' }),
+      ];
+      const result = matchExercise('Barbell Bench Press', library, aliases);
+      expect(result.confidence).toBe('exact');
+      expect(result.matched_exercise?.name).toBe('Barbell Bench Press');
+    });
   });
 });

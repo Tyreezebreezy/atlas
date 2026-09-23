@@ -214,26 +214,31 @@ export function TodayScreen() {
 
   async function reload() {
     if (!storage) return;
-    // Today is the screen every install lands on first, so the owner's
-    // built-in starter Program/Quick Workouts (v0.2.1) are backfilled here
-    // rather than waiting on Library/ExercisePicker to have been visited --
-    // "I open ATLAS and my workouts are already there," not "after I first
-    // browse the exercise library." Exercises must be seeded first so the
-    // starter data's name/id matching has a real library to resolve
-    // against; both are no-ops once already applied. Dynamically imported,
-    // not a static top-level import: both pull in the ~1,300-exercise seed
-    // dataset, and unlike LibraryScreen/ExercisePicker (already their own
-    // lazy route chunks, so a static import there is fine) Today is part of
-    // the app's eagerly-loaded shell -- a static import here previously
-    // pulled that whole dataset into the main bundle (confirmed via a
-    // build-size regression: precache 29 entries/342 KB main chunk went to
-    // 25 entries/3 MB).
-    const [{ ensureExercisesSeeded }, { ensureOwnerStarterDataSeeded }] = await Promise.all([
-      import('@atlas/exercise-library'),
-      import('@atlas/import-export'),
-    ]);
+    // Today is the screen every install lands on first, so the generic
+    // built-in exercise catalog is backfilled here rather than waiting on
+    // Library/ExercisePicker to have been visited -- "I open ATLAS and the
+    // exercise library is already there," not "after I first browse the
+    // library." Dynamically imported, not a static top-level import: it
+    // pulls in the ~1,300-exercise seed dataset, and unlike
+    // LibraryScreen/ExercisePicker (already their own lazy route chunks, so
+    // a static import there is fine) Today is part of the app's eagerly-
+    // loaded shell -- a static import here previously pulled that whole
+    // dataset into the main bundle (confirmed via a build-size regression:
+    // precache 29 entries/342 KB main chunk went to 25 entries/3 MB).
+    //
+    // vNext Handoff 01 (§3, "blank-slate product separation"): this used to
+    // ALSO auto-seed the owner's personal "Weekly Workout Guide" (v0.2.1's
+    // `ensureOwnerStarterDataSeeded`) into every fresh install -- real,
+    // personal training-split content shipping as if it were generic
+    // product seed data. That call is deliberately removed: a fresh
+    // profile now gets only the generic catalog above and starts with zero
+    // programs/history. This does NOT touch any install that already has
+    // that data (the seeder was idempotent and is simply never invoked
+    // again; nothing here deletes or rewrites an existing Program/
+    // WorkoutTemplate row) -- see `blankSlate.test.ts` for the exact
+    // invariant this preserves.
+    const { ensureExercisesSeeded } = await import('@atlas/exercise-library');
     await ensureExercisesSeeded(storage);
-    await ensureOwnerStarterDataSeeded(storage);
     const [sessions, programs, allTemplates, exercises, allOccurrences] = await Promise.all([
       storage.workoutSessions.getAll(),
       storage.programs.getAll(),

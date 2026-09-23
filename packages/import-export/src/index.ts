@@ -4,6 +4,7 @@ export * from './matchExercise';
 export * from './parsePasteText';
 export * from './parseHtmlPlan';
 export * from './buildImportPreview';
+export * from './buildImportCompatibilityReport';
 export * from './applyImport';
 export * from './importFingerprint';
 export * from './exportWorkout';

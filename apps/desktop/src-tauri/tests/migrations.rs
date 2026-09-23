@@ -4,6 +4,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_init.sql"),
     include_str!("../migrations/0002_add_workout_occurrences.sql"),
     include_str!("../migrations/0003_add_training_locations.sql"),
+    include_str!("../migrations/0004_add_vnext_foundations.sql"),
 ];
 
 const EXPECTED_TABLES: &[&str] = &[
@@ -19,6 +20,10 @@ const EXPECTED_TABLES: &[&str] = &[
     "body_measurements",
     "workout_occurrences",
     "training_locations",
+    "exercise_aliases",
+    "equipment_definitions",
+    "gym_equipment",
+    "exercise_equipment_context",
 ];
 
 #[tokio::test]
@@ -111,4 +116,24 @@ async fn migrations_create_expected_tables_and_round_trip() {
         .expect("select should succeed");
 
     assert_eq!(row.0, "{\"name\":\"Home Gym\"}");
+
+    // vNext Handoff 01: the four new tables from migration 0004, same
+    // JSON-blob-row shape, round-tripped to prove the fourth migration
+    // actually works. One representative table (exercise_aliases) is
+    // enough to prove the pattern; EXPECTED_TABLES above already confirms
+    // all four exist and are queryable.
+    sqlx::query("INSERT INTO exercise_aliases (id, deleted_at, data) VALUES ($1, NULL, $2)")
+        .bind("alias-1")
+        .bind("{\"display_alias\":\"DB Incline Bench\"}")
+        .execute(&pool)
+        .await
+        .expect("insert should succeed");
+
+    let row: (String,) = sqlx::query_as("SELECT data FROM exercise_aliases WHERE id = $1")
+        .bind("alias-1")
+        .fetch_one(&pool)
+        .await
+        .expect("select should succeed");
+
+    assert_eq!(row.0, "{\"display_alias\":\"DB Incline Bench\"}");
 }

@@ -2,8 +2,12 @@ import Dexie, { type Table } from 'dexie';
 import type {
   Benchmark,
   BodyMeasurement,
+  EquipmentDefinition,
   Exercise,
+  ExerciseAlias,
+  ExerciseEquipmentContext,
   ExerciseNote,
+  GymEquipmentInstance,
   Milestone,
   PersonalRecord,
   Program,
@@ -27,6 +31,10 @@ export class AtlasDexie extends Dexie {
   bodyMeasurements!: Table<BodyMeasurement, string>;
   workoutOccurrences!: Table<WorkoutOccurrence, string>;
   trainingLocations!: Table<TrainingLocation, string>;
+  exerciseAliases!: Table<ExerciseAlias, string>;
+  equipmentDefinitions!: Table<EquipmentDefinition, string>;
+  gymEquipment!: Table<GymEquipmentInstance, string>;
+  exerciseEquipmentContext!: Table<ExerciseEquipmentContext, string>;
 
   constructor(name: string) {
     super(name);
@@ -54,6 +62,15 @@ export class AtlasDexie extends Dexie {
     // v1.0.0: training locations (formerly device-local equipment profiles).
     this.version(3).stores({
       trainingLocations: 'id, name, deleted_at',
+    });
+    // vNext Handoff 01: canonical exercise aliases + equipment-aware
+    // progression foundations. All four are new, independent stores --
+    // nothing from version(1-3) changes shape.
+    this.version(4).stores({
+      exerciseAliases: 'id, exercise_id, normalized_alias, deleted_at',
+      equipmentDefinitions: 'id, type, deleted_at',
+      gymEquipment: 'id, training_location_id, equipment_definition_id, deleted_at',
+      exerciseEquipmentContext: 'id, exercise_id, gym_equipment_id, deleted_at',
     });
   }
 }

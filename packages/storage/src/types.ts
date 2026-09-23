@@ -1,8 +1,12 @@
 import type {
   Benchmark,
   BodyMeasurement,
+  EquipmentDefinition,
   Exercise,
+  ExerciseAlias,
+  ExerciseEquipmentContext,
   ExerciseNote,
+  GymEquipmentInstance,
   Milestone,
   PersonalRecord,
   Program,
@@ -43,4 +47,12 @@ export interface AtlasStorage {
   workoutOccurrences: Repository<WorkoutOccurrence>;
   /** v1.0.0. Reusable training locations (formerly device-local equipment profiles). */
   trainingLocations: Repository<TrainingLocation>;
+  /** vNext Handoff 01. See `ExerciseAlias`'s doc comment. */
+  exerciseAliases: Repository<ExerciseAlias>;
+  /** vNext Handoff 01. See `EquipmentDefinition`'s doc comment. */
+  equipmentDefinitions: Repository<EquipmentDefinition>;
+  /** vNext Handoff 01. See `GymEquipmentInstance`'s doc comment. */
+  gymEquipment: Repository<GymEquipmentInstance>;
+  /** vNext Handoff 01. See `ExerciseEquipmentContext`'s doc comment. */
+  exerciseEquipmentContext: Repository<ExerciseEquipmentContext>;
 }

@@ -195,3 +195,31 @@ export type ImportResolution =
   { action: 'use_match'; exercise_id: string } | { action: 'create_custom' } | { action: 'skip' };
 
 export type ImportResolutions = Record<string, ImportResolution>;
+
+/**
+ * vNext Handoff 01 (§11). A summary view over an already-built
+ * `ImportPreview` (see `buildImportCompatibilityReport`) -- not a
+ * replacement for it, and not itself a new pipeline stage. Exists so a
+ * review screen (this phase or a later one) has one flat report to render
+ * instead of re-walking the preview's nested workout/day/week structure
+ * itself. Never mutates anything and never gates the import on its own;
+ * `applyImport` + `ImportResolutions` remain the only things that decide
+ * what actually gets saved (§11: "do not immediately mutate the active
+ * program before review/confirmation").
+ */
+export interface ImportCompatibilityReport {
+  matched_exercises: ImportPreviewExercise[];
+  alias_matches: ImportPreviewExercise[];
+  unresolved_exercises: ImportPreviewExercise[];
+  /** One entry per exercise whose equipment isn't in the given active
+   * location's equipment list -- empty when no active location was given
+   * (nothing to check against) or every matched exercise's equipment is
+   * covered. */
+  missing_equipment: { exercise_name: string; equipment: string[] }[];
+  /** Populated only when the plan document itself carries an expectation
+   * (a duration/distance target, etc.) that conflicts with the matched
+   * exercise's actual `measurement_type` -- most imports carry no such
+   * signal and this stays empty. */
+  incompatible_measurement_types: { exercise_name: string; reason: string }[];
+  warnings: ImportWarning[];
+}

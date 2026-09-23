@@ -6,3 +6,4 @@ export * from './progressionDecision';
 export * from './applyProgressionToSession';
 export * from './workoutOccurrence';
 export * from './todaySchedule';
+export * from './recommendProgression';
