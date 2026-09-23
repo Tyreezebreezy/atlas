@@ -23,8 +23,11 @@ import {
   type ResolvedDay,
   type TodayScheduleEntry,
 } from '@atlas/program-engine';
+import { buildWeeklyReview } from '@atlas/progress-engine';
 import type {
   Exercise,
+  Milestone,
+  PersonalRecord,
   Program,
   WorkoutOccurrence,
   WorkoutSession,
@@ -45,6 +48,13 @@ function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00`);
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Monday of the calendar week containing `iso` -- same mondayOffset convention as resolveWeekSchedule (program-engine), kept in sync deliberately. */
+function startOfWeek(iso: string): string {
+  const weekday = new Date(`${iso}T00:00:00`).getDay();
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  return addDays(iso, mondayOffset);
 }
 
 function formatUpNextDate(iso: string): string {
@@ -199,6 +209,8 @@ export function TodayScreen() {
   const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
   const [exercisesById, setExercisesById] = useState<Map<string, Exercise>>(new Map());
   const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
+  const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
 
   // v0.2.4 browsing state. `selectedDate`/`selectedSequenceIndex` of `null`
   // both mean "follow the live current day/position" -- "Return to Today"
@@ -239,19 +251,24 @@ export function TodayScreen() {
     // invariant this preserves.
     const { ensureExercisesSeeded } = await import('@atlas/exercise-library');
     await ensureExercisesSeeded(storage);
-    const [sessions, programs, allTemplates, exercises, allOccurrences] = await Promise.all([
-      storage.workoutSessions.getAll(),
-      storage.programs.getAll(),
-      storage.workoutTemplates.getAll(),
-      storage.exercises.getAll(),
-      storage.workoutOccurrences.getAll(),
-    ]);
+    const [sessions, programs, allTemplates, exercises, allOccurrences, allPRs, allMilestones] =
+      await Promise.all([
+        storage.workoutSessions.getAll(),
+        storage.programs.getAll(),
+        storage.workoutTemplates.getAll(),
+        storage.exercises.getAll(),
+        storage.workoutOccurrences.getAll(),
+        storage.personalRecords.getAll(),
+        storage.milestones.getAll(),
+      ]);
     setActiveSession(sessions.find((s) => s.status === 'in_progress') ?? null);
     setActiveProgram(programs.find((p) => p.is_active) ?? null);
     setTemplates(new Map(allTemplates.map((t) => [t.id, t])));
     setAllSessions(sessions);
     setExercisesById(new Map(exercises.map((e) => [e.id, e])));
     setOccurrences(allOccurrences);
+    setPersonalRecords(allPRs);
+    setMilestones(allMilestones);
     setLoading(false);
   }
 
@@ -446,27 +463,44 @@ export function TodayScreen() {
             <div className="atlas-resume-card__confirm">
               <p>Discard this workout? Completed sets will be kept as a discarded session.</p>
               <div className="atlas-resume-card__actions">
-                <button type="button" onClick={() => setConfirmingDiscard(false)}>
+                <button
+                  type="button"
+                  className="atlas-btn atlas-btn--secondary"
+                  onClick={() => setConfirmingDiscard(false)}
+                >
                   Cancel
                 </button>
-                <button type="button" onClick={() => void handleDiscard()}>
+                <button
+                  type="button"
+                  className="atlas-btn atlas-btn--primary"
+                  onClick={() => void handleDiscard()}
+                >
                   Yes, Discard
                 </button>
               </div>
             </div>
           ) : (
-            <div className="atlas-resume-card__actions">
-              <button type="button" onClick={() => setConfirmingDiscard(true)}>
-                Discard
-              </button>
+            <>
+              <div className="atlas-resume-card__actions">
+                <button
+                  type="button"
+                  className="atlas-resume-card__resume"
+                  onClick={() => enterGymMode(activeSession.id)}
+                >
+                  Resume
+                </button>
+              </div>
+              {/* vNext Handoff 03A: Discard demoted to a quiet text-style
+                  action beneath Resume -- it must never compete with the
+                  primary action (research pack §13). */}
               <button
                 type="button"
-                className="atlas-resume-card__resume"
-                onClick={() => enterGymMode(activeSession.id)}
+                className="atlas-btn atlas-btn--quiet-danger atlas-resume-card__discard"
+                onClick={() => setConfirmingDiscard(true)}
               >
-                Resume
+                Discard Workout
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
@@ -479,6 +513,34 @@ export function TodayScreen() {
 
   const today = todayIso();
   const isSequential = !!activeProgram && programProgressionMode(activeProgram) === 'sequential';
+
+  // vNext Handoff 03A: compact "This Week" snapshot (research pack v3 §13).
+  // Reuses the already-integrated buildWeeklyReview() (Handoff 02) rather
+  // than reimplementing counts in React. plannedSessions only resolves for
+  // a fixed/weekly-mode program -- Sequential has no calendar week to plan
+  // against (same reason WeekNavigator itself doesn't apply there), so it's
+  // left null and the card falls back to a plain count. stagnationSignals
+  // is deliberately [] here (a full per-exercise sweep isn't cleanly
+  // available on this screen) -- REVIEW_STALLED_EXERCISE just never fires
+  // from this card, which is an honest simplification, not a wrong number.
+  const weekStart = startOfWeek(today);
+  const weekEnd = addDays(weekStart, 6);
+  const plannedThisWeek =
+    activeProgram && !isSequential
+      ? resolveWeekSchedule(activeProgram, templates, occurrences, today).filter(
+          (d) => d.entry.kind !== 'rest' && d.entry.kind !== 'none',
+        ).length
+      : null;
+  const weeklyReview = buildWeeklyReview({
+    periodStart: weekStart,
+    periodEnd: weekEnd,
+    sessions: allSessions,
+    personalRecords,
+    milestones,
+    bodyMeasurements: [],
+    stagnationSignals: [],
+    plannedSessions: plannedThisWeek,
+  });
 
   if (viewingSessionId) {
     const session = allSessions.find((s) => s.id === viewingSessionId);
@@ -790,6 +852,27 @@ export function TodayScreen() {
                 <p className="atlas-today__workout-meta">Moved to {scheduleEntry.movedToDate}</p>
               )}
             </div>
+          )}
+        </section>
+      )}
+
+      {isViewingToday && weeklyReview.completed_sessions + weeklyReview.pr_count + weeklyReview.milestone_count > 0 && (
+        <section className="atlas-today__week-snapshot" aria-label="This week">
+          <h2>This Week</h2>
+          <p className="atlas-today__week-snapshot-line">
+            {weeklyReview.planned_sessions != null
+              ? `${weeklyReview.completed_sessions} / ${weeklyReview.planned_sessions} sessions`
+              : `${weeklyReview.completed_sessions} session${weeklyReview.completed_sessions === 1 ? '' : 's'}`}
+          </p>
+          {weeklyReview.pr_count > 0 && (
+            <p className="atlas-today__week-snapshot-line">
+              {weeklyReview.pr_count} PR{weeklyReview.pr_count === 1 ? '' : 's'}
+            </p>
+          )}
+          {weeklyReview.milestone_count > 0 && (
+            <p className="atlas-today__week-snapshot-line">
+              {weeklyReview.milestone_count} milestone{weeklyReview.milestone_count === 1 ? '' : 's'}
+            </p>
           )}
         </section>
       )}

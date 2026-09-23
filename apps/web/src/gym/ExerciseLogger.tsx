@@ -12,6 +12,7 @@ import type {
   PersonalRecord,
   PerformedSet,
   PlannedExercise,
+  ProgressionRecommendation,
   SetPhase,
   SetType,
   TimerState,
@@ -22,6 +23,7 @@ import { loadSettings } from '../settings/settings';
 import { ExerciseMedia } from '../library/ExerciseMedia';
 import { ExerciseContextSheet } from './ExerciseContextSheet';
 import { initialDraftValues, type DraftSetKind, type DraftValues } from './draftValues';
+import { formatRecommendation, REASON_TEXT } from './formatRecommendation';
 
 /** One user-facing choice per row, covering both the phase (warmup/work)
  * and sub-type (normal/amrap/drop/failure/rest_pause) dimensions the
@@ -168,6 +170,13 @@ interface ExerciseLoggerProps {
   onRemoveCompletedSet: (setId: string) => void;
   onStartExerciseTimer: (durationSeconds: number) => void;
   onStopExerciseTimer: () => void;
+  /** vNext Handoff 03A. Live, display-only -- computed fresh by the caller
+   * via recommendProgression()/refineForCurrentSession() (Handoff 01/02),
+   * never recalculated here. Purely informational: it never changes what
+   * prefills the set-entry fields below, so a manual entry always wins
+   * (research pack v3 §10). Null when the exercise has no loadable
+   * dimension the strategy layer understands yet. */
+  liveRecommendation?: ProgressionRecommendation | null;
 }
 
 function formatSet(set: PerformedSet): string {
@@ -207,6 +216,7 @@ export function ExerciseLogger({
   performedSets,
   previousSets,
   bestPR,
+  liveRecommendation,
   activeTimer,
   allSessions,
   library,
@@ -392,11 +402,19 @@ export function ExerciseLogger({
                   : ''
               }${planned.target_weight ? ` @ ${planned.target_weight} lb` : ''}`
             : null;
-        if (!lastSet && !bestPR && !targetSummary) return null;
+        const todaySummary = liveRecommendation ? formatRecommendation(liveRecommendation) : null;
+        const todayReason = liveRecommendation ? REASON_TEXT[liveRecommendation.reason_code] : null;
+        if (!lastSet && !bestPR && !targetSummary && !todaySummary) return null;
         // One compact row, not three separate blocks -- phone readability
         // over showing every possible metric at once (handoff sec. 3.6).
         return (
           <div className="atlas-gym-stats">
+            {targetSummary && (
+              <div className="atlas-gym-stats__cell">
+                <span className="atlas-gym-stats__label">Target</span>
+                <span className="atlas-gym-stats__value">{targetSummary}</span>
+              </div>
+            )}
             {lastSet && (
               <div className="atlas-gym-stats__cell">
                 <span className="atlas-gym-stats__label">Last</span>
@@ -409,10 +427,11 @@ export function ExerciseLogger({
                 <span className="atlas-gym-stats__value">{describePR(bestPR).value}</span>
               </div>
             )}
-            {targetSummary && (
-              <div className="atlas-gym-stats__cell">
-                <span className="atlas-gym-stats__label">Target</span>
-                <span className="atlas-gym-stats__value">{targetSummary}</span>
+            {todaySummary && (
+              <div className="atlas-gym-stats__cell atlas-gym-stats__cell--today">
+                <span className="atlas-gym-stats__label">Today</span>
+                <span className="atlas-gym-stats__value">{todaySummary}</span>
+                {todayReason && <span className="atlas-gym-stats__reason">{todayReason}</span>}
               </div>
             )}
           </div>

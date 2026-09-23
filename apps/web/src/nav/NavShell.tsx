@@ -10,7 +10,7 @@ import {
   OnboardingModal,
   hasCompletedOnboarding,
 } from '../onboarding/Onboarding';
-import { NAV_TABS, NAV_TAB_LABELS, type NavTab } from './tabs';
+import { NAV_TAB_LABELS, PRIMARY_NAV_TABS, type NavTab } from './tabs';
 
 // Lazy: all pull in the exercise library (and its ~1.3MB seed data), so they
 // should only load once someone actually opens that tab, not on every boot.
@@ -32,7 +32,16 @@ const ImportExportScreen = lazy(() =>
 
 type MoreView = 'menu' | 'equipment' | 'log-past' | 'settings' | 'import-export' | 'help';
 
-function MoreTab() {
+interface MoreTabProps {
+  /** vNext Handoff 03A: Exercise Library moved out of the permanent bottom
+   * nav (research pack §4/§17) -- reached from here instead. Delegates to
+   * the parent's `activeTab` state rather than owning its own, so
+   * `ProgressScreen`'s existing `onViewExercises` callback (which sets
+   * `activeTab('library')` directly) keeps working unchanged. */
+  onOpenLibrary: () => void;
+}
+
+function MoreTab({ onOpenLibrary }: MoreTabProps) {
   const [view, setView] = useState<MoreView>('menu');
   if (view === 'equipment') return <EquipmentScreen onBack={() => setView('menu')} />;
   if (view === 'log-past') return <LogPastWorkoutScreen onBack={() => setView('menu')} />;
@@ -48,6 +57,13 @@ function MoreTab() {
     <div className="atlas-more-menu">
       <h1>More</h1>
       <ul className="atlas-program-screen__list">
+        <li>
+          <button type="button" onClick={onOpenLibrary} aria-label="Exercise Library">
+            <span className="atlas-library__item-name" aria-hidden="true">
+              Exercise Library
+            </span>
+          </button>
+        </li>
         <li>
           <button
             type="button"
@@ -123,7 +139,7 @@ export function NavShell() {
           <Suspense
             fallback={<EmptyScreen title="Exercises" description="Loading exercise library…" />}
           >
-            <LibraryScreen />
+            <LibraryScreen onBack={() => setActiveTab('more')} />
           </Suspense>
         )}
         {activeTab === 'program' && (
@@ -136,15 +152,19 @@ export function NavShell() {
             <ProgressScreen onViewExercises={() => setActiveTab('library')} />
           </Suspense>
         )}
-        {activeTab === 'more' && <MoreTab />}
+        {activeTab === 'more' && <MoreTab onOpenLibrary={() => setActiveTab('library')} />}
       </main>
       <nav className="atlas-shell__tabbar" aria-label="Primary">
-        {NAV_TABS.map((tab) => (
+        {PRIMARY_NAV_TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             className="atlas-shell__tab"
-            aria-current={activeTab === tab ? 'page' : undefined}
+            // 'library' has no button of its own -- it's reached via More,
+            // so More reads as the active destination while viewing it.
+            aria-current={
+              activeTab === tab || (tab === 'more' && activeTab === 'library') ? 'page' : undefined
+            }
             onClick={() => setActiveTab(tab)}
           >
             {NAV_TAB_LABELS[tab]}

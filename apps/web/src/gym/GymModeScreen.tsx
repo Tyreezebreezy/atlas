@@ -34,10 +34,13 @@ import {
 } from '@atlas/workout-engine';
 import { newPRsFromSession } from '@atlas/pr-engine';
 import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
+import { resolveExerciseEquipment } from '@atlas/equipment-engine';
 import type {
   Exercise,
+  ExerciseEquipmentContext,
   ExerciseGroup,
   ExerciseReplacement,
+  GymEquipmentInstance,
   Milestone,
   PersonalRecord,
   PlannedExercise,
@@ -45,7 +48,15 @@ import type {
   WorkoutOccurrence,
   WorkoutSession,
 } from '@atlas/data-model';
-import { advanceProgramSequence, resolveOccurrenceCompletion } from '@atlas/program-engine';
+import {
+  advanceProgramSequence,
+  effectiveProgressionPolicy,
+  findPreviousNormalSession,
+  recommendProgression,
+  refineForCurrentSession,
+  resolveOccurrenceCompletion,
+  targetSnapshotOf,
+} from '@atlas/program-engine';
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
 import { loadSettings } from '../settings/settings';
@@ -111,6 +122,8 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [equipmentContexts, setEquipmentContexts] = useState<ExerciseEquipmentContext[]>([]);
+  const [gymEquipmentList, setGymEquipmentList] = useState<GymEquipmentInstance[]>([]);
   const [finished, setFinished] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
@@ -126,15 +139,27 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     if (!storage) return;
     void (async () => {
       await ensureBuiltInMilestonesSeeded(storage);
-      const [existing, allExercises, allSessions, allPRs, allPrograms, allOccurrences] =
-        await Promise.all([
-          storage.workoutSessions.get(sessionId),
-          storage.exercises.getAll(),
-          storage.workoutSessions.getAll(),
-          storage.personalRecords.getAll(),
-          storage.programs.getAll(),
-          storage.workoutOccurrences.getAll(),
-        ]);
+      const [
+        existing,
+        allExercises,
+        allSessions,
+        allPRs,
+        allPrograms,
+        allOccurrences,
+        allEquipmentContexts,
+        allGymEquipment,
+      ] = await Promise.all([
+        storage.workoutSessions.get(sessionId),
+        storage.exercises.getAll(),
+        storage.workoutSessions.getAll(),
+        storage.personalRecords.getAll(),
+        storage.programs.getAll(),
+        storage.workoutOccurrences.getAll(),
+        storage.exerciseEquipmentContext.getAll(),
+        storage.gymEquipment.getAll(),
+      ]);
+      setEquipmentContexts(allEquipmentContexts);
+      setGymEquipmentList(allGymEquipment);
       setActiveProgram(
         (existing?.program_id && allPrograms.find((p) => p.id === existing.program_id)) || null,
       );
@@ -500,6 +525,30 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
               ? previousPerformance(priorSessions, exercise.id, session.id)
               : [];
             const bestPR = exercise ? bestPRForExercise(personalRecords, exercise) : null;
+            // vNext Handoff 03A: live, display-only recommendation --
+            // recomputed fresh via the equipment-aware stack (Handoff 01/02)
+            // rather than reading the session-start `progression_decision`
+            // snapshot. Purely presentational: it never rewrites
+            // `planned`/the stored target, so a manual entry always wins
+            // (research pack v3 §10 "user manual edits retain control").
+            const liveRecommendation = exercise
+              ? refineForCurrentSession(
+                  recommendProgression({
+                    exercise,
+                    policy: effectiveProgressionPolicy(activeProgram, currentPlanned),
+                    currentTarget: targetSnapshotOf(currentPlanned),
+                    previousSession: findPreviousNormalSession(priorSessions, exercise.id, session.started_at),
+                    equipment: resolveExerciseEquipment(
+                      exercise.id,
+                      equipmentContexts,
+                      gymEquipmentList,
+                      loadSettings().activeTrainingLocationId,
+                    ),
+                  }),
+                  performedForExercise,
+                  effectiveProgressionPolicy(activeProgram, currentPlanned),
+                )
+              : null;
             const isOptional = isOptionalExercise(currentPlanned);
             const orMembers = currentPlanned.or_group
               ? orGroupMembers(session.planned_snapshot, currentPlanned.or_group)
@@ -528,6 +577,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                   performedSets={performedForExercise}
                   previousSets={previousSets}
                   bestPR={bestPR}
+                  liveRecommendation={liveRecommendation}
                   activeTimer={session.active_timer}
                   allSessions={priorSessions}
                   library={[...exercises.values()]}

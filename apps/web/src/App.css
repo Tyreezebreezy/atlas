@@ -40,6 +40,73 @@ button {
   font-family: inherit;
 }
 
+/* vNext Handoff 03A -- shared button-hierarchy utilities. Existing
+ * screen-specific button classes (e.g. .atlas-gym-mode__finish) keep their
+ * layout/spacing rules; these add alongside them so "primary" reads the
+ * same everywhere instead of every screen inventing its own important
+ * button. Apply the base class plus exactly one level. */
+.atlas-btn {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-4);
+  border-radius: var(--atlas-radius-sm);
+  border: 1px solid var(--atlas-color-border);
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-primary);
+  font-size: var(--atlas-font-size-body);
+  font-weight: var(--atlas-font-weight-medium);
+  cursor: pointer;
+}
+
+.atlas-btn--primary {
+  border-color: var(--atlas-color-accent);
+  background: var(--atlas-color-accent);
+  color: var(--atlas-color-surface);
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-btn--primary:hover {
+  filter: brightness(0.92);
+}
+
+.atlas-btn--secondary {
+  border-color: var(--atlas-color-border);
+  background: var(--atlas-color-surface-raised);
+}
+
+.atlas-btn--secondary:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-btn--tertiary {
+  border-color: transparent;
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-weight: var(--atlas-font-weight-regular);
+}
+
+.atlas-btn--tertiary:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-btn--quiet-danger {
+  min-height: auto;
+  padding: var(--atlas-space-1) var(--atlas-space-2);
+  border-color: transparent;
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font-weight: var(--atlas-font-weight-regular);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-btn--quiet-danger:hover {
+  color: var(--atlas-color-danger);
+}
+
+.atlas-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .atlas-shell {
   display: flex;
   flex-direction: column;
@@ -752,6 +819,39 @@ button {
   font-size: 0.9rem;
 }
 
+/* vNext Handoff 03A: the active program's own card -- surface-focused +
+   accent border so it visually leads the screen (research pack v3 Â§16),
+   distinct from the plain-surface rows every other program/quick-workout
+   list item uses. */
+.atlas-program-screen__active-label {
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-semibold);
+  color: var(--atlas-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-program-screen__active-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--atlas-space-1);
+  width: 100%;
+  min-height: 72px;
+  padding: var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-accent);
+  border-radius: var(--atlas-radius-lg);
+  background: var(--atlas-color-surface-focused);
+  cursor: pointer;
+  text-align: left;
+}
+
+.atlas-program-screen__active-name {
+  font-size: var(--atlas-font-size-title);
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
 .atlas-program-screen__list {
   list-style: none;
   margin: 0;
@@ -1196,6 +1296,41 @@ button {
   color: var(--atlas-color-text-secondary);
 }
 
+/* vNext Handoff 03A: Discard demoted below Resume -- centered, quiet,
+   text-scale small so it reads as "available but not competing." */
+.atlas-resume-card__discard {
+  display: block;
+  width: 100%;
+  margin-top: var(--atlas-space-2);
+  text-align: center;
+}
+
+/* vNext Handoff 03A: compact "This Week" snapshot card (research pack v3
+   Â§13) -- reuses .atlas-today__card's accent-card language at a smaller,
+   quieter scale (surface-raised, not accent-bordered, since it's a
+   supporting fact, not the primary call to action on the screen). */
+.atlas-today__week-snapshot {
+  margin-top: var(--atlas-space-4);
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface-raised);
+}
+
+.atlas-today__week-snapshot h2 {
+  margin: 0 0 var(--atlas-space-1);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-semibold);
+  color: var(--atlas-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.atlas-today__week-snapshot-line {
+  margin: 0;
+  font-size: var(--atlas-font-size-body);
+  font-weight: var(--atlas-font-weight-medium);
+}
+
 /* Today card (v0.2.2) -- one resolved card for today's actual workout,
    replacing the old full-week list. Same accent-card language as
    .atlas-resume-card for visual consistency. */
@@ -1572,7 +1707,15 @@ button {
 
 .atlas-superset__member-fields {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--atlas-space-2);
+}
+
+/* vNext Handoff 03A: up to 7 inputs (weight/reps/duration/distance/RPE/RIR/
+   notes) can appear per member -- without wrapping this silently overflowed
+   a narrow phone (research pack v3 Â§26/Â§17 "no horizontal clipping"). */
+.atlas-superset__member {
+  flex-wrap: wrap;
 }
 
 .atlas-superset__member-fields input {
@@ -1761,6 +1904,24 @@ button {
   color: var(--atlas-color-timer);
 }
 
+/* vNext Handoff 03A: "Today" (the live recommendation) leads visually --
+   the other three cells are historical context, this one is what to
+   actually do next. */
+.atlas-gym-stats__cell--today .atlas-gym-stats__label,
+.atlas-gym-stats__cell--today .atlas-gym-stats__value {
+  color: var(--atlas-color-accent);
+}
+
+.atlas-gym-stats__cell--today .atlas-gym-stats__value {
+  font-size: 1.05rem;
+}
+
+.atlas-gym-stats__reason {
+  font-size: var(--atlas-font-size-micro);
+  color: var(--atlas-color-text-secondary);
+  font-weight: var(--atlas-font-weight-regular);
+}
+
 .atlas-gym-exercise__sets {
   width: 100%;
   border-collapse: collapse;
@@ -1816,10 +1977,22 @@ button {
   min-width: 44px;
   min-height: 44px;
   border-radius: 50%;
-  border: 1px solid var(--atlas-color-border);
-  background: var(--atlas-color-surface);
   font-size: 1.1rem;
   cursor: pointer;
+}
+
+/* vNext Handoff 03A: Complete Set is the single most-tapped action in the
+   app -- give it real primary weight (accent, not the same bordered-surface
+   treatment as every secondary control) instead of an outline-only circle
+   indistinguishable from Previous/Next/Add Exercise. */
+.atlas-gym-exercise__complete {
+  border: 2px solid var(--atlas-color-accent);
+  background: transparent;
+  color: var(--atlas-color-accent);
+}
+
+.atlas-gym-exercise__complete:hover {
+  background: var(--atlas-color-accent-mist);
 }
 
 .atlas-gym-exercise__done {
@@ -3385,7 +3558,7 @@ summary {
   font-variant-numeric: tabular-nums;
 }
 
-/* v1.0.0 (H2) — Anatomical Body Map */
+/* v1.0.0 (H2) ï¿½ Anatomical Body Map */
 .atlas-body-map {
   display: flex;
   flex-direction: column;
@@ -3472,7 +3645,7 @@ summary {
   fill: var(--atlas-muscle-heat);
 }
 
-/* v1.0.0 (H2) — Exercise Library Body exploration + detail anatomy */
+/* v1.0.0 (H2) ï¿½ Exercise Library Body exploration + detail anatomy */
 .atlas-library__view-toggle {
   display: flex;
   gap: var(--atlas-space-1);
@@ -3533,7 +3706,7 @@ summary {
   margin-bottom: var(--atlas-space-1);
 }
 
-/* v1.0.0 (H2) — Custom exercise muscle mapping */
+/* v1.0.0 (H2) ï¿½ Custom exercise muscle mapping */
 .atlas-custom-exercise-form__mode {
   display: flex;
   gap: var(--atlas-space-1);
@@ -3591,7 +3764,7 @@ summary {
   margin: 0 0 var(--atlas-space-3);
 }
 
-/* v1.0.0 (H3) — Muscle Explorer */
+/* v1.0.0 (H3) ï¿½ Muscle Explorer */
 .atlas-muscle-explorer__ranges {
   display: flex;
   gap: var(--atlas-space-1);
@@ -3697,7 +3870,7 @@ summary {
   font-size: var(--atlas-font-size-caption);
 }
 
-/* v1.0.0 (H3) — Workout summary anatomy */
+/* v1.0.0 (H3) ï¿½ Workout summary anatomy */
 .atlas-workout-summary__muscles {
   margin-top: var(--atlas-space-4);
 }
@@ -3725,7 +3898,7 @@ summary {
   font-size: var(--atlas-font-size-caption);
 }
 
-/* v1.0.0 (H3) — Program Builder planned coverage */
+/* v1.0.0 (H3) ï¿½ Program Builder planned coverage */
 .atlas-template-editor__coverage {
   margin: var(--atlas-space-4) 0;
 }

@@ -24,7 +24,14 @@ import { ExerciseDetail } from './ExerciseDetail';
 // isn't worth a new dependency until someone actually feels it lag.
 const MAX_VISIBLE = 100;
 
-export function LibraryScreen() {
+interface LibraryScreenProps {
+  /** vNext Handoff 03A: set when reached from More (the library is no
+   * longer a permanent bottom-nav tab) -- omitted for any other entry
+   * point, which renders exactly as before. */
+  onBack?: () => void;
+}
+
+export function LibraryScreen({ onBack }: LibraryScreenProps = {}) {
   const storage = useStorage();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,6 +104,11 @@ export function LibraryScreen() {
 
   return (
     <div className="atlas-library">
+      {onBack && (
+        <button type="button" className="atlas-template-editor__back" onClick={onBack}>
+          &larr; More
+        </button>
+      )}
       <h1>Library</h1>
       <p className="atlas-library__subtitle">
         Browse every exercise, with a how-to demonstration wherever one exists.

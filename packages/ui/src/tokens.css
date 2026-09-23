@@ -22,6 +22,12 @@
   --atlas-color-background: #0b0d10;
   --atlas-color-surface: #15191e;
   --atlas-color-surface-raised: #242b33;
+  /* vNext Handoff 03A. Third elevation step for a genuinely focused surface
+   * (a bottom sheet, modal, or the one card that should visually lead a
+   * screen) -- distinct from `-raised`, which every ordinary card already
+   * uses. Same subtle-increment philosophy as the other two steps, not a
+   * WCAG target (see file header). */
+  --atlas-color-surface-focused: #333e49;
   --atlas-color-text-primary: #f2f4f7;
   --atlas-color-text-secondary: #9aa5b1;
   --atlas-color-accent: #3b9eff;
