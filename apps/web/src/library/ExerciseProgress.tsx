@@ -1,16 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { calculatePRs } from '@atlas/pr-engine';
-import {
-  bestWeightSeries,
-  distanceSeries,
-  durationSeries,
-  estimated1RMSeries,
-  repsSeries,
-  summarizeExercise,
-  volumeSeries,
-  type ChartPoint,
-} from '@atlas/progress-engine';
+import { buildStrengthView, summarizeExercise, type StrengthMetric } from '@atlas/progress-engine';
 import type { Exercise, PerformedSet, WorkoutSession } from '@atlas/data-model';
+import { useStorage } from '../storage/StorageContext';
 import { describePR, formatSeconds } from '../progress/formatPR';
 import { TrendChart } from '../progress/TrendChart';
 
@@ -19,17 +11,18 @@ interface ExerciseProgressProps {
   sessions: WorkoutSession[];
 }
 
-interface MetricOption {
-  key: string;
-  label: string;
-  series: ChartPoint[];
-  unit?: string;
-  formatValue?: (v: number) => string;
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+/** Whole numbers for rep counts, seconds as m:ss, everything else with its unit. */
+function valueFormatter(metric: StrengthMetric): ((v: number) => string) | undefined {
+  if (metric.kind === 'reps_at_load' || metric.kind === 'reps') return (v) => String(Math.round(v));
+  if (metric.kind === 'duration') return formatSeconds;
+  return undefined;
+}
+
+const HEADLINE_PRS = ['max_load', 'estimated_1rm', 'bodyweight', 'timed', 'distance'];
 
 /**
  * PRs and chart series are computed live from history on every render
@@ -38,64 +31,62 @@ function formatDate(iso: string): string {
  * recompute is sub-millisecond, and staying live means this view can never
  * show something stale if a recalculation trigger elsewhere ever misses.
  * See docs/PRS.md.
+ *
+ * vNext Handoff 03B: which metrics exist, which opens first and where the
+ * records fall all come from `buildStrengthView` (progress-engine). A machine
+ * with a maxed stack opens on reps-at-that-load; estimated 1RM is a separate
+ * metric that never fabricates a value for sets above its supported range.
  */
 export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) {
-  const summary = useMemo(() => summarizeExercise(sessions, exercise.id), [sessions, exercise.id]);
-  const prs = useMemo(() => calculatePRs(sessions, exercise), [sessions, exercise]);
+  const storage = useStorage();
+  const [chosenKey, setChosenKey] = useState<string | null>(null);
+  const [chosenLoad, setChosenLoad] = useState<number | null>(null);
+  const [locationNames, setLocationNames] = useState<Map<string, string>>(new Map());
 
-  const metrics = useMemo<MetricOption[]>(() => {
-    const options: MetricOption[] = [];
-    if (exercise.measurement_type === 'reps_weight') {
-      options.push({
-        key: 'e1rm',
-        label: 'Estimated 1RM',
-        series: estimated1RMSeries(sessions, exercise.id),
-        unit: ' lb',
-      });
-      options.push({
-        key: 'weight',
-        label: 'Best Weight',
-        series: bestWeightSeries(sessions, exercise.id),
-        unit: ' lb',
-      });
-      options.push({
-        key: 'volume',
-        label: 'Volume',
-        series: volumeSeries(sessions, exercise.id),
-        unit: ' lb',
-      });
-    }
-    if (exercise.measurement_type === 'reps' || exercise.measurement_type === 'reps_bodyweight') {
-      options.push({
-        key: 'reps',
-        label: 'Reps',
-        series: repsSeries(sessions, exercise.id),
-        unit: ' reps',
-      });
-    }
-    if (exercise.measurement_type === 'time' || exercise.measurement_type === 'distance_time') {
-      options.push({
-        key: 'duration',
-        label: 'Duration',
-        series: durationSeries(sessions, exercise.id),
-        formatValue: formatSeconds,
-      });
-    }
-    if (exercise.measurement_type === 'distance' || exercise.measurement_type === 'distance_time') {
-      options.push({
-        key: 'distance',
-        label: 'Distance',
-        series: distanceSeries(sessions, exercise.id),
-        unit: ' m',
-      });
-    }
-    return options;
-  }, [sessions, exercise.id, exercise.measurement_type]);
+  const overall = useMemo(() => buildStrengthView(sessions, exercise), [sessions, exercise]);
+  const contexts = overall.contexts;
 
-  const [activeMetric, setActiveMetric] = useState(metrics[0]?.key);
-  const selected = metrics.find((m) => m.key === activeMetric) ?? metrics[0];
+  // Weight-bearing history at one place must not be blended with another's, so once an
+  // exercise has been done in more than one context there is no "all" -- it opens on the
+  // context of the latest session, and the picker switches between them.
+  const latestContext = useMemo(() => {
+    const latest = [...sessions]
+      .filter((s) => s.status === 'completed' && s.performed_sets.some((set) => set.exercise_id === exercise.id))
+      .sort((a, b) => (b.completed_at ?? b.started_at).localeCompare(a.completed_at ?? a.started_at))[0];
+    return latest?.training_location_id ?? null;
+  }, [sessions, exercise.id]);
+  const [chosenContext, setChosenContext] = useState<string | null | undefined>(undefined);
+  const context = contexts.length > 1 ? (chosenContext === undefined ? latestContext : chosenContext) : undefined;
 
-  if (summary.sessionCount === 0) {
+  useEffect(() => {
+    if (!storage || contexts.length <= 1) return;
+    let cancelled = false;
+    void storage.trainingLocations.getAll().then((all) => {
+      if (!cancelled) setLocationNames(new Map(all.map((l) => [l.id, l.name])));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storage, contexts.length]);
+
+  const view = useMemo(
+    () => buildStrengthView(sessions, exercise, { load: chosenLoad, trainingLocationId: context }),
+    [sessions, exercise, chosenLoad, context],
+  );
+  const scopedSessions = useMemo(
+    () =>
+      context === undefined
+        ? sessions
+        : sessions.filter((s) => (s.training_location_id ?? null) === context),
+    [sessions, context],
+  );
+  const summary = useMemo(() => summarizeExercise(scopedSessions, exercise.id), [scopedSessions, exercise.id]);
+  const prs = useMemo(() => calculatePRs(scopedSessions, exercise), [scopedSessions, exercise]);
+
+  const selected = view.metrics.find((m) => m.key === (chosenKey ?? view.default_key)) ?? view.metrics[0];
+  const bestReps = selected?.kind === 'reps_at_load' ? Math.max(...selected.series.map((p) => p.value)) : null;
+
+  if (overall.metrics.length === 0 && summarizeExercise(sessions, exercise.id).sessionCount === 0) {
     return (
       <div className="atlas-exercise-progress">
         <p className="atlas-program-screen__empty">No completed workouts for this exercise yet.</p>
@@ -105,20 +96,100 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
 
   return (
     <div className="atlas-exercise-progress">
+      {contexts.length > 1 && (
+        <label className="atlas-strength__context">
+          <span>Equipment</span>
+          <select
+            value={context === null ? '' : (context ?? '')}
+            onChange={(e) => setChosenContext(e.target.value === '' ? null : e.target.value)}
+          >
+            {contexts.map((id) => (
+              <option key={id ?? 'none'} value={id ?? ''}>
+                {id == null ? 'No place recorded' : (locationNames.get(id) ?? 'Saved place')}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {view.metrics.length > 0 && selected && (
+        <div className="atlas-exercise-progress__chart">
+          {view.metrics.length > 1 && (
+            <div
+              className="atlas-exercise-progress__metric-picker"
+              role="tablist"
+              aria-label="Chart metric"
+            >
+              {view.metrics.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected.key === m.key}
+                  className={
+                    selected.key === m.key ? 'atlas-exercise-progress__metric--active' : undefined
+                  }
+                  onClick={() => setChosenKey(m.key)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {selected.kind === 'reps_at_load' && (
+            <div className="atlas-strength__fixed-load">
+              {view.load_options.length > 1 ? (
+                <select
+                  className="atlas-strength__load-chip atlas-strength__load-select"
+                  aria-label="Load"
+                  value={view.selected_load ?? ''}
+                  onChange={(e) => setChosenLoad(Number(e.target.value))}
+                >
+                  {view.load_options.map((load) => (
+                    <option key={load} value={load}>
+                      {load} lb
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="atlas-strength__load-chip">{selected.load} lb</span>
+              )}
+              <span className="atlas-strength__fixed-load-text">reps per session at this load</span>
+              {bestReps != null && <strong>Best {bestReps}</strong>}
+            </div>
+          )}
+
+          {selected.kind === 'e1rm' && selected.series.length === 0 ? (
+            <p className="atlas-trend-chart__empty">
+              No estimated 1RM yet. {selected.note}
+              {view.load_options.length > 0 ? ' Reps at load shows your progress instead.' : ''}
+            </p>
+          ) : (
+            <>
+              <TrendChart
+                key={selected.key + String(selected.load ?? '')}
+                points={selected.series}
+                unit={selected.unit}
+                formatValue={valueFormatter(selected)}
+                recordIndices={selected.record_indices}
+                title={selected.label}
+              />
+              {selected.note && selected.series.length > 0 && (
+                <p className="atlas-strength__note">{selected.note}</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <dl className="atlas-exercise-progress__stats">
         <div>
           <dt>Last</dt>
-          <dd>{summary.lastSets.map((s) => describeSet(s)).join(', ')}</dd>
+          <dd>{describeSets(summary.lastSets)}</dd>
         </div>
         {prs
-          .filter(
-            (p) =>
-              p.kind === 'max_load' ||
-              p.kind === 'estimated_1rm' ||
-              p.kind === 'bodyweight' ||
-              p.kind === 'timed' ||
-              p.kind === 'distance',
-          )
+          .filter((p) => HEADLINE_PRS.includes(p.kind))
           .map((pr) => {
             const { title, value } = describePR(pr);
             return (
@@ -134,9 +205,26 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
         </div>
       </dl>
 
+      {/* Only loads used more than once: a load tried a single time is a first number, not a rep record. */}
+      {prs.some((p) => p.kind === 'rep_at_load' && view.load_options.includes(p.load ?? NaN)) && (
+        <div className="atlas-exercise-progress__rep-bests">
+          <h3>Best reps at each load</h3>
+          <ul>
+            {prs
+              .filter((p) => p.kind === 'rep_at_load' && view.load_options.includes(p.load ?? NaN))
+              .sort((a, b) => (b.load ?? 0) - (a.load ?? 0))
+              .map((pr) => (
+                <li key={pr.id}>
+                  {pr.load} lb × {pr.value}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
       {prs.some((p) => p.kind === 'rep_range') && (
         <div className="atlas-exercise-progress__rep-bests">
-          <h3>Rep Bests</h3>
+          <h3>Best weight at each rep count</h3>
           <ul>
             {prs
               .filter((p) => p.kind === 'rep_range')
@@ -148,44 +236,10 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
         </div>
       )}
 
-      {metrics.length > 0 && (
-        <div className="atlas-exercise-progress__chart">
-          {metrics.length > 1 && (
-            <div
-              className="atlas-exercise-progress__metric-picker"
-              role="tablist"
-              aria-label="Chart metric"
-            >
-              {metrics.map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected?.key === m.key}
-                  className={
-                    selected?.key === m.key ? 'atlas-exercise-progress__metric--active' : undefined
-                  }
-                  onClick={() => setActiveMetric(m.key)}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {selected && (
-            <TrendChart
-              points={selected.series}
-              unit={selected.unit}
-              formatValue={selected.formatValue}
-            />
-          )}
-        </div>
-      )}
-
       <div className="atlas-exercise-progress__history">
         <h3>History</h3>
         <ul>
-          {[...sessions]
+          {[...scopedSessions]
             .filter(
               (s) =>
                 s.status === 'completed' &&
@@ -200,7 +254,7 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
                     {formatDate(s.completed_at ?? s.started_at)}
                   </span>
                   <span className="atlas-exercise-progress__history-sets">
-                    {sets.map((set) => describeSet(set)).join(', ')}
+                    {describeSets(sets)}
                   </span>
                 </li>
               );
@@ -217,4 +271,21 @@ function describeSet(set: PerformedSet): string {
   if (set.duration_seconds != null) return formatSeconds(set.duration_seconds);
   if (set.distance_meters != null) return `${set.distance_meters} m`;
   return '—';
+}
+
+/** "170 × 18, 16, 15": consecutive sets at the same weight share it, so a fixed-load day reads at a glance. */
+function describeSets(sets: PerformedSet[]): string {
+  const parts: string[] = [];
+  let openWeight: number | null = null;
+  for (const set of sets) {
+    if (set.weight != null && set.reps != null) {
+      if (openWeight === set.weight) parts[parts.length - 1] += `, ${set.reps}`;
+      else parts.push(`${set.weight} × ${set.reps}`);
+      openWeight = set.weight;
+    } else {
+      parts.push(describeSet(set));
+      openWeight = null;
+    }
+  }
+  return parts.join(', ');
 }

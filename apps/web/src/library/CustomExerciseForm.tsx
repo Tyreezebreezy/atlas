@@ -4,7 +4,6 @@ import {
   getMuscle,
   groupName,
   muscleName,
-  musclesForSvgId,
   musclesInGroup,
   MUSCLE_GROUPS,
   MUSCLE_TAXONOMY_VERSION,
@@ -146,7 +145,7 @@ export function CustomExerciseForm({ onCreated, onCancel }: CustomExerciseFormPr
 
       <BodyMap
         states={bodyStates}
-        onSelectRegion={(svgId) => toggleMuscleIds(musclesForSvgId(svgId))}
+        onSelectRegion={(_svgId, muscleIds) => toggleMuscleIds(muscleIds)}
       />
 
       <div className="atlas-custom-exercise-form__groups">

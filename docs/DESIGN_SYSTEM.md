@@ -82,3 +82,23 @@ file. Verified live via the dev server: Today, Library, Library search,
 and Exercise Detail (including a `frame-sequence` media placeholder on
 the new `surface-raised` tile) all render correctly with zero console
 errors.
+
+## vNext Handoff 03B additions
+
+- **Surfaces separate by elevation, not borders.** Progress uses `.atlas-panel`
+  (`surface`) and one `--lead` card (`surface-raised` + an accent top edge) so a
+  screen has a visual center; hairlines use `--atlas-chart-grid`. Outlined
+  cards (1px `border`) are kept for controls, not for content.
+- **Segmented control primitive** (`.atlas-segmented`, plus the Progress tab
+  row and chart metric picker): a `surface` track, transparent options, the
+  active one `accent-mist`. A `<button>` without an explicit reset renders as
+  the browser's gray button in the dark color scheme — every segmented control
+  must set `border: 0; background: transparent`.
+- **Edge accents are inset strips** (`box-shadow: inset 3px 0 0 <color>`), not
+  `border-left`, which curves into a crescent at rounded corners. Gold =
+  milestone reached, blue = benchmark.
+- **Muscle heat is ATLAS blue.** `--atlas-muscle-heat` is now `accent` (it was
+  the timer cyan); selection mode stays green (`--atlas-muscle-selected`), so
+  the two vocabularies of the shared Body Map never look alike.
+- `--atlas-space-5` does not exist (see `docs/PROGRESS.md` known debt); use
+  `space-4` / `space-6`.

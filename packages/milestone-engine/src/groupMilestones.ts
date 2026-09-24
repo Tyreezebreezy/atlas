@@ -11,7 +11,7 @@ export interface MilestoneGroup {
 /** The one number that makes one milestone "bigger" than another of the
  * same movement -- semantic, not the title string (a title-sorted list
  * puts "100 Push-Ups" before "25 Push-Ups"; this doesn't). */
-function semanticTarget(milestone: Milestone): number {
+export function semanticTarget(milestone: Milestone): number {
   switch (milestone.dimension) {
     case 'weight':
     case 'weight_and_reps':

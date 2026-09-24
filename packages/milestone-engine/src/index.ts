@@ -5,4 +5,5 @@ export * from './builtInMilestones';
 export * from './ensureBuiltInMilestonesSeeded';
 export * from './migrateBuiltInMilestonesToCatalog';
 export * from './groupMilestones';
+export * from './groupMilestonesByCategory';
 export * from './describeMilestoneProgress';

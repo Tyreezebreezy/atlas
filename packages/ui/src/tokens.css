@@ -157,7 +157,9 @@
   --atlas-muscle-primary: var(--atlas-color-accent);
   --atlas-muscle-secondary: #5a8fc9;
   --atlas-muscle-selected: var(--atlas-color-success);
-  --atlas-muscle-heat: var(--atlas-color-timer);
+  /* vNext Handoff 03B: heat is ATLAS blue (was timer cyan) -- the analytics map stays
+     in the brand's blue family, distinct from the green "selected" of selection mode. */
+  --atlas-muscle-heat: var(--atlas-color-accent);
   --atlas-muscle-idle: #2a333d;
 }
 

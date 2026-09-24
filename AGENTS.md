@@ -14,7 +14,7 @@ for the entity shapes and the version-by-version history of what was added
 and why. [docs/ROADMAP.md](docs/ROADMAP.md) is the actual (not aspirational)
 per-version status. Feature-specific docs (PRS, MILESTONES, BENCHMARKS,
 BODY_COMPOSITION, SUBSTITUTIONS, EXERCISE_DATA, EXERCISE_MEDIA,
-IMPORT_FORMAT, MOBILE, ADAPTIVE_UI) go deep on one topic each — check the
+IMPORT_FORMAT, MOBILE, ADAPTIVE_UI, PROGRESS, ANATOMY) go deep on one topic each — check the
 table of contents in ARCHITECTURE.md/DATA_MODEL.md for which one covers
 what you're touching before assuming something isn't documented.
 

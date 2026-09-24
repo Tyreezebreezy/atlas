@@ -8,10 +8,9 @@ import {
   searchExercises,
 } from '@atlas/exercise-library';
 import {
-  mappedMuscleIds,
+  exercisesTargetingMuscles,
   muscleName,
   MUSCLE_GROUPS,
-  musclesForSvgId,
   musclesInGroup,
 } from '@atlas/anatomy';
 import { useStorage } from '../storage/StorageContext';
@@ -67,11 +66,10 @@ export function LibraryScreen({ onBack }: LibraryScreenProps = {}) {
   );
   const selected = exercises.find((e) => e.id === selectedId) ?? null;
 
-  const bodyFiltered = useMemo(() => {
-    if (selectedMuscleIds.length === 0) return [];
-    const wanted = new Set(selectedMuscleIds);
-    return exercises.filter((e) => mappedMuscleIds(e).some((id) => wanted.has(id)));
-  }, [exercises, selectedMuscleIds]);
+  const bodyFiltered = useMemo(
+    () => exercisesTargetingMuscles(exercises, selectedMuscleIds),
+    [exercises, selectedMuscleIds],
+  );
 
   async function handleExerciseCreated(exercise: Exercise) {
     if (!storage) return;
@@ -146,7 +144,7 @@ export function LibraryScreen({ onBack }: LibraryScreenProps = {}) {
           <p className="atlas-library__count">Select a muscle to see exercises that train it.</p>
           <BodyMap
             states={selectedMuscleIds.map((id) => ({ muscleId: id, state: 'selected' as const }))}
-            onSelectRegion={(svgId) => setSelectedMuscleIds(musclesForSvgId(svgId))}
+            onSelectRegion={(_svgId, muscleIds) => setSelectedMuscleIds(muscleIds)}
           />
           <div className="atlas-library__body-groups">
             {MUSCLE_GROUPS.map((group) => (

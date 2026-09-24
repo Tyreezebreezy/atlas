@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Exercise } from '@atlas/data-model';
 import {
   deriveImportedMuscleMap,
+  exercisesTargetingMuscles,
   getMuscle,
   getMuscleGroup,
   isKnownMuscle,
@@ -130,5 +131,30 @@ describe('muscleMapOf read path', () => {
     expect(ids).toContain('chest.mid');
     expect(ids).toContain('shoulders.anterior');
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('exercisesTargetingMuscles', () => {
+  const bench = exercise({ id: 'bench', name: 'Barbell Bench Press' });
+  const curl = exercise({ id: 'curl', name: 'Barbell Curl', target_muscle: 'biceps', secondary_muscles: ['forearms'] });
+  const squat = exercise({ id: 'squat', name: 'Leg extension x', target_muscle: 'quads', secondary_muscles: [] });
+  const all = [bench, curl, squat];
+
+  it('returns exercises that train any selected muscle, primary or secondary', () => {
+    expect(exercisesTargetingMuscles(all, ['chest.mid']).map((e) => e.id)).toEqual(['bench']);
+    // Triceps is only a secondary muscle of the bench press -- still trained by it.
+    expect(exercisesTargetingMuscles(all, ['arms.triceps']).map((e) => e.id)).toContain('bench');
+    expect(exercisesTargetingMuscles(all, ['arms.biceps', 'quads.quadriceps']).map((e) => e.id).sort()).toEqual([
+      'curl',
+      'squat',
+    ]);
+  });
+
+  it('an empty selection matches nothing rather than everything', () => {
+    expect(exercisesTargetingMuscles(all, [])).toEqual([]);
+  });
+
+  it('a muscle no exercise trains matches nothing', () => {
+    expect(exercisesTargetingMuscles(all, ['calves.soleus'])).toEqual([]);
   });
 });

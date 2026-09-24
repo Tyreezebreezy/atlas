@@ -102,3 +102,30 @@ export function describeMilestoneProgress(
   }
   return { current, remaining, text: `${remaining} ${unit} to goal` };
 }
+
+/**
+ * vNext Handoff 03B. What a goal asks for, in plain words, for the dimensions
+ * `describeMilestoneProgress` has no single "current" to compare against
+ * (consistency, body weight, benchmark). A card can then state the goal
+ * instead of the generic "Not enough data yet" -- no partial-progress number
+ * is invented for any of them. Null for lift-style goals, whose progress text
+ * already carries the target.
+ */
+export function describeMilestoneTarget(milestone: Milestone): string | null {
+  switch (milestone.dimension) {
+    case 'consistency': {
+      const weeks = milestone.target_consecutive_weeks;
+      if (weeks != null) return `${weeks} consecutive week${weeks === 1 ? '' : 's'} with a workout`;
+      const sessions = milestone.target_total_sessions;
+      return sessions != null ? `${sessions} completed workouts` : null;
+    }
+    case 'body_weight':
+      return milestone.target_body_weight != null ? `Reach ${milestone.target_body_weight} lb` : null;
+    case 'benchmark_threshold':
+      return milestone.target_percentile != null
+        ? `Percentile ${milestone.target_percentile} or higher`
+        : null;
+    default:
+      return null;
+  }
+}

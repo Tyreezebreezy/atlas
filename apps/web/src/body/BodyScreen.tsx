@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { weightSeries, bodyFatSeries } from '@atlas/body-composition';
+import { weightSeries, bodyFatSeries, weightRollingAverageSeries } from '@atlas/body-composition';
 import type { BodyMeasurement } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
 import { TrendChart } from '../progress/TrendChart';
@@ -26,17 +26,133 @@ const METRIC_LABELS: { key: keyof BodyMeasurement; label: string; unit: string }
   { key: 'bmr', label: 'BMR', unit: 'cal' },
 ];
 
+/** Rows of history shown before "Show all" -- a long log should not bury the page. */
+const HISTORY_PREVIEW = 8;
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 interface BodyScreenProps {
-  onBack: () => void;
+  /** Omit when the screen is a Progress section (its tab row is the navigation). */
+  onBack?: () => void;
+  /** Rendered inside Progress: no back button and no page title of its own. */
+  embedded?: boolean;
 }
 
-export function BodyScreen({ onBack }: BodyScreenProps) {
+/**
+ * vNext Handoff 03B (§13). Body weight is the primary content; its 7-day
+ * average is drawn quietly behind it, and only once enough weigh-ins exist.
+ * Scale-reported composition values (body fat, lean mass, ...) are optional,
+ * collapsed by default, and labeled as estimates rather than measurements.
+ * Pure of storage, so the no-data / sparse / populated states are testable.
+ */
+export function BodySummary({
+  measurements,
+  onLog,
+}: {
+  measurements: BodyMeasurement[];
+  onLog: () => void;
+}) {
+  const weightPoints = useMemo(() => weightSeries(measurements), [measurements]);
+  const averagePoints = useMemo(() => weightRollingAverageSeries(measurements), [measurements]);
+  const bodyFatPoints = useMemo(() => bodyFatSeries(measurements), [measurements]);
+  const latestWeight = weightPoints[weightPoints.length - 1];
+  const latestAverage = averagePoints[averagePoints.length - 1];
+  const latestComposition = useMemo(
+    () =>
+      [...measurements]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .find((m) => METRIC_LABELS.some((metric) => m[metric.key] != null)),
+    [measurements],
+  );
+  const hasComposition = bodyFatPoints.length > 0 || latestComposition != null;
+
+  if (measurements.length === 0) {
+    return (
+      <section className="atlas-panel atlas-body__empty">
+        <h2>No weigh-ins yet</h2>
+        <p>Log your weight now and then and a trend builds here. Nothing else is required.</p>
+        <button type="button" className="atlas-btn atlas-btn--primary" onClick={onLog}>
+          Log first weigh-in
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <section className="atlas-panel atlas-body__summary" aria-labelledby="body-weight-title">
+        <div className="atlas-body__summary-head">
+          <h2 id="body-weight-title">Weight</h2>
+          <button type="button" className="atlas-btn atlas-btn--secondary atlas-body__log" onClick={onLog}>
+            + Log
+          </button>
+        </div>
+        {latestWeight ? (
+          <p className="atlas-body__latest">
+            {round1(latestWeight.value)} <span>lb</span>
+            <small> {formatDate(latestWeight.date)}</small>
+          </p>
+        ) : (
+          <p className="atlas-body__hint">No weight recorded yet -- only other measurements.</p>
+        )}
+        {latestAverage && (
+          <p className="atlas-body__average">7-day average {round1(latestAverage.value)} lb</p>
+        )}
+        <TrendChart
+          points={weightPoints}
+          unit=" lb"
+          title="Body weight"
+          secondary={averagePoints.length > 0 ? { points: averagePoints, label: '7-day average' } : undefined}
+          xScale="date"
+          showLastValue={false}
+          minSpan={4}
+        />
+        {weightPoints.length > 0 && averagePoints.length === 0 && (
+          <p className="atlas-body__hint">
+            {weightPoints.length < 2
+              ? 'A trend line appears after a few weigh-ins.'
+              : 'A 7-day average appears once there are three weigh-ins within a week.'}
+          </p>
+        )}
+      </section>
+
+      {hasComposition && (
+        <details className="atlas-panel atlas-body__composition">
+          <summary>Body composition estimates</summary>
+          <p className="atlas-body__hint">
+            Values from a scale or entered by hand. Read them as a trend, not an exact measurement.
+          </p>
+          {bodyFatPoints.length > 0 && (
+            <>
+              <h3>Body fat</h3>
+              <TrendChart points={bodyFatPoints} unit="%" title="Body fat" xScale="date" minSpan={2} />
+            </>
+          )}
+          {latestComposition && (
+            <p className="atlas-body__composition-latest">
+              <strong>Latest ({formatDate(latestComposition.date)}):</strong>{' '}
+              {METRIC_LABELS.filter((metric) => latestComposition[metric.key] != null)
+                .map(
+                  (metric) =>
+                    `${metric.label} ${latestComposition[metric.key]}${metric.unit ? ` ${metric.unit}` : ''}`,
+                )
+                .join(' · ')}
+            </p>
+          )}
+        </details>
+      )}
+    </>
+  );
+}
+
+export function BodyScreen({ onBack, embedded = false }: BodyScreenProps) {
   const storage = useStorage();
   const [loading, setLoading] = useState(true);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   useEffect(() => {
     if (!storage) return;
@@ -50,8 +166,6 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
     () => [...measurements].sort((a, b) => b.date.localeCompare(a.date)),
     [measurements],
   );
-  const weightPoints = useMemo(() => weightSeries(measurements), [measurements]);
-  const bodyFatPoints = useMemo(() => bodyFatSeries(measurements), [measurements]);
   const editingMeasurement = editingId
     ? (measurements.find((m) => m.id === editingId) ?? null)
     : null;
@@ -79,7 +193,7 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
   if (!storage || loading) {
     return (
       <div className="atlas-empty-screen">
-        <h1>Body</h1>
+        {!embedded && <h1>Body</h1>}
         <p>Loading&hellip;</p>
       </div>
     );
@@ -98,37 +212,24 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
     );
   }
 
+  const visibleHistory = showAllHistory ? history : history.slice(0, HISTORY_PREVIEW);
+
   return (
     <div className="atlas-body">
-      <button type="button" className="atlas-template-editor__back" onClick={onBack}>
-        &larr; Back
-      </button>
-      <h1>Body</h1>
-
-      {measurements.length === 0 ? (
-        <p className="atlas-program-screen__empty">No measurements logged yet.</p>
-      ) : (
-        <>
-          <section>
-            <h2>Weight</h2>
-            <TrendChart points={weightPoints} unit=" lb" />
-          </section>
-          <section>
-            <h2>Body Fat</h2>
-            <TrendChart points={bodyFatPoints} unit="%" />
-          </section>
-        </>
+      {!embedded && onBack && (
+        <button type="button" className="atlas-template-editor__back" onClick={onBack}>
+          &larr; Back
+        </button>
       )}
+      {!embedded && <h1>Body</h1>}
 
-      <section>
-        <h2>History</h2>
-        {history.length === 0 ? (
-          <p className="atlas-program-screen__empty">
-            Log your first measurement to start tracking.
-          </p>
-        ) : (
+      <BodySummary measurements={measurements} onLog={() => setShowForm(true)} />
+
+      {measurements.length > 0 && (
+        <section aria-labelledby="body-history-title">
+          <h2 id="body-history-title">Log</h2>
           <ul className="atlas-body__history-list">
-            {history.map((m) => {
+            {visibleHistory.map((m) => {
               const extras = METRIC_LABELS.filter((metric) => m[metric.key] != null);
               return (
                 <li key={m.id}>
@@ -173,12 +274,17 @@ export function BodyScreen({ onBack }: BodyScreenProps) {
               );
             })}
           </ul>
-        )}
-      </section>
-
-      <button type="button" className="atlas-body__log-button" onClick={() => setShowForm(true)}>
-        + Log Measurement
-      </button>
+          {history.length > HISTORY_PREVIEW && (
+            <button
+              type="button"
+              className="atlas-link-button"
+              onClick={() => setShowAllHistory((v) => !v)}
+            >
+              {showAllHistory ? 'Show fewer' : `Show all ${history.length}`}
+            </button>
+          )}
+        </section>
+      )}
     </div>
   );
 }

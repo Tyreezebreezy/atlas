@@ -1,169 +1,235 @@
-import { useState } from 'react';
-import type { BodyRegion } from '@atlas/data-model';
+import { useId, useState, type CSSProperties } from 'react';
 import { getMuscle } from '@atlas/anatomy';
+import { VIEW_LAYOUTS, type BodyView, type RegionGroup } from './anatomyMapping';
 
 /**
- * v1.0.0 (H2). ATLAS-owned anatomical Body Map: a stylized, maintainable SVG
- * figure (front + back) whose regions are independently addressable by
- * `svg_id` (the same id the muscle taxonomy uses). Data-driven -- it takes
- * per-muscle states as props and owns no Workout/Program logic.
+ * v1.0.0 (H2), rebuilt in vNext Handoff 03B on vendored anatomical geometry.
  *
- * Stylized rather than medical: recognizable shapes with generous invisible
- * touch targets (inflated transparent stroke in CSS), so tiny regions stay
- * tappable on a phone.
+ * This component only PAINTS. It owns no training analytics: callers hand it
+ * per-muscle states (already normalized -- `intensity` is 0..1) and it draws
+ * them. Which upstream shape represents which ATLAS muscle is decided in
+ * anatomyMapping.ts (documented, audited, tested); the geometry is in
+ * vendoredMuscleShapes.ts (see NOTICE.md for provenance/license). Nothing
+ * from the upstream package's own renderer or color scale is used.
+ *
+ * Shapes are grouped per ATLAS region, so keyboard and screen-reader users
+ * get one stop per region ("Traps"), not one per upstream sub-shape.
+ *
+ * Two visual vocabularies share this one renderer and must stay distinct:
+ * - SELECTION (Library, exercise editor): `primary` / `secondary` / `selected`
+ *   -- a solid fill that says "this is the one you picked".
+ * - ANALYTICS (Progress > Muscles): `heat` (intensity ramp), `assist`
+ *   (assisted only, never converted into heat) or `tone` (categorical), with `selected: true` adding only an outline so the
+ *   region keeps its analytic fill.
  */
 
-export type BodyMapState = 'primary' | 'secondary' | 'selected' | 'heat';
+export type BodyMapState = 'idle' | 'primary' | 'secondary' | 'selected' | 'heat' | 'assist' | 'tone';
+
+/** Categorical fills for `tone`. Each also has a non-color cue in CSS (fill
+ * pattern / outline style), so meaning never rests on hue alone. */
+export type BodyMapTone = 'positive' | 'neutral' | 'caution' | 'muted';
 
 export interface BodyMapMuscleState {
   muscleId: string;
   state: BodyMapState;
   /** 0..1 intensity for 'heat' (exposure). Ignored for other states. */
   intensity?: number;
+  /** Required for 'tone'. */
+  tone?: BodyMapTone;
+  /** Outline this region as the current selection without changing its fill. */
+  selected?: boolean;
 }
 
 interface BodyMapProps {
-  /** Muscle states keyed by muscle id; the component maps each to its svg region. */
+  /** Muscle states keyed by muscle id; the component maps each to its region(s). */
   states: BodyMapMuscleState[];
-  /** When provided, regions become keyboard/touch selectable buttons. */
-  onSelectRegion?: (svgId: string) => void;
+  /**
+   * When provided, regions become keyboard/touch selectable buttons.
+   * `muscleIds` is every canonical ATLAS muscle the tapped region represents
+   * -- a shared/fallback region (e.g. the sternal pec, which is both Lower
+   * and Mid Chest) represents more than its own svg_id, so prefer it over
+   * `musclesForSvgId(svgId)`.
+   */
+  onSelectRegion?: (svgId: string, muscleIds: string[]) => void;
+  /** Fixes the figure to one side and hides the Front/Back toggle (thumbnails). */
+  view?: BodyView;
+  /** Accessible name of the figure; defaults to "Front/Back view of the body". */
+  ariaLabel?: string;
   className?: string;
 }
 
-interface RegionShape {
-  svgId: string;
-  d: string;
-  label: string;
-}
-
-// Each region is one symmetric shape drawn across the figure midline
-// (x=100). Chunky on purpose so touch targets stay usable on a phone.
-const FRONT_REGIONS: RegionShape[] = [
-  { svgId: 'deltoid', label: 'Shoulders', d: 'M44 52 Q40 74 52 82 L64 76 L64 48 Q56 42 44 52 Z' },
-  { svgId: 'chest-upper', label: 'Upper Chest', d: 'M56 50 Q100 42 144 50 L144 66 L56 66 Z' },
-  { svgId: 'chest-mid', label: 'Mid Chest', d: 'M54 66 Q100 60 146 66 L146 88 L54 88 Z' },
-  { svgId: 'chest-lower', label: 'Lower Chest', d: 'M56 88 Q100 84 144 88 L144 106 L56 106 Z' },
-  { svgId: 'serratus', label: 'Serratus Anterior', d: 'M52 96 L64 96 L64 116 L52 112 Z' },
-  { svgId: 'abs', label: 'Abs', d: 'M72 106 Q100 102 128 106 L128 158 L72 158 Z' },
-  { svgId: 'obliques', label: 'Obliques', d: 'M56 110 L72 110 L72 158 L56 154 Z' },
-  { svgId: 'biceps', label: 'Biceps', d: 'M42 78 Q40 100 48 118 L60 116 L60 80 Z' },
-  { svgId: 'forearms', label: 'Forearms', d: 'M46 122 L58 120 L58 158 L46 158 Z' },
-  { svgId: 'hip-flexors', label: 'Hip Flexors', d: 'M70 160 L90 160 L90 178 L70 176 Z' },
-  { svgId: 'adductors', label: 'Adductors', d: 'M86 172 L114 172 L114 200 L86 200 Z' },
-  { svgId: 'quads', label: 'Quadriceps', d: 'M62 172 Q60 210 66 244 L94 244 L94 172 Z' },
-  { svgId: 'tibialis', label: 'Tibialis Anterior', d: 'M66 262 L94 262 L94 292 L66 292 Z' },
-];
-
-const BACK_REGIONS: RegionShape[] = [
-  { svgId: 'deltoid', label: 'Rear Deltoid', d: 'M44 52 Q40 74 52 82 L64 76 L64 48 Q56 42 44 52 Z' },
-  { svgId: 'traps', label: 'Traps', d: 'M64 44 Q100 36 136 44 L132 64 L68 64 Z' },
-  { svgId: 'mid-back', label: 'Mid-Back / Rhomboids', d: 'M62 66 Q100 60 138 66 L138 92 L62 92 Z' },
-  { svgId: 'lats', label: 'Lats', d: 'M56 66 L62 66 L62 122 L52 120 Z' },
-  { svgId: 'erectors', label: 'Spinal Erectors', d: 'M94 66 L106 66 L106 158 L94 158 Z' },
-  { svgId: 'triceps', label: 'Triceps', d: 'M42 78 Q40 100 48 118 L60 116 L60 80 Z' },
-  { svgId: 'forearms', label: 'Forearm Extensors', d: 'M46 122 L58 120 L58 158 L46 158 Z' },
-  { svgId: 'glutes', label: 'Glutes', d: 'M58 164 Q100 156 142 164 L142 196 Q100 202 58 196 Z' },
-  { svgId: 'abductors', label: 'Abductors', d: 'M58 196 L74 196 L74 240 L60 238 Z' },
-  { svgId: 'hamstrings', label: 'Hamstrings', d: 'M66 172 Q64 210 70 246 L92 246 L92 172 Z' },
-  { svgId: 'calves', label: 'Calves', d: 'M66 252 L94 252 L94 296 Q92 304 80 304 L66 300 Z' },
-];
-
 function rank(state: BodyMapState): number {
+  if (state === 'idle') return 0; // carries only `selected` -- no fill of its own
   if (state === 'selected') return 3;
-  if (state === 'primary' || state === 'heat') return 2;
+  if (state === 'primary' || state === 'heat' || state === 'tone') return 2;
   return 1; // secondary
 }
 
-export function BodyMap({ states, onSelectRegion, className }: BodyMapProps) {
-  const [view, setView] = useState<BodyRegion>('front');
+/** Merge order for tones that share one region: attention first, matching the performance rollup. */
+const TONE_RANK: Record<BodyMapTone, number> = { caution: 3, positive: 2, neutral: 1, muted: 0 };
+
+/**
+ * Strongest state wins; on a tie the higher intensity (or tone) wins;
+ * otherwise the first stays -- so the result never depends on array order.
+ * Used both to merge muscles that share one region and regions that share
+ * one shape.
+ */
+function strongerState(
+  a: BodyMapMuscleState | undefined,
+  b: BodyMapMuscleState | undefined,
+): BodyMapMuscleState | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const merge = (winner: BodyMapMuscleState, other: BodyMapMuscleState): BodyMapMuscleState =>
+    winner.selected || other.selected ? { ...winner, selected: true } : winner;
+  const byRank = rank(b.state) - rank(a.state);
+  if (byRank !== 0) return byRank > 0 ? merge(b, a) : merge(a, b);
+  if (a.state === 'tone' && b.state === 'tone') {
+    const byTone = TONE_RANK[b.tone ?? 'muted'] - TONE_RANK[a.tone ?? 'muted'];
+    if (byTone !== 0) return byTone > 0 ? merge(b, a) : merge(a, b);
+  }
+  return (b.intensity ?? 0) > (a.intensity ?? 0) ? merge(b, a) : merge(a, b);
+}
+
+export function BodyMap({ states, onSelectRegion, view: fixedView, ariaLabel, className }: BodyMapProps) {
+  const [chosenView, setChosenView] = useState<BodyView>('front');
+  const view = fixedView ?? chosenView;
+  // Per-instance pattern id: two figures on one page must not depend on each other's <defs>.
+  const hatchId = `atlas-hatch-${useId().replace(/:/g, '')}`;
   const interactive = !!onSelectRegion;
 
-  // Resolve per-muscle states onto their svg regions. Muscles sharing one
-  // region (the deltoid heads, the calf muscles) merge with the higher-rank
-  // state winning.
-  const regionStates = new Map<string, BodyMapMuscleState>();
+  // ATLAS svg_id -> merged state of every muscle in that region.
+  const bySvgId = new Map<string, BodyMapMuscleState>();
   for (const s of states) {
     const muscle = getMuscle(s.muscleId);
     if (!muscle) continue;
-    const existing = regionStates.get(muscle.svg_id);
-    if (!existing || rank(s.state) >= rank(existing.state)) {
-      regionStates.set(muscle.svg_id, s);
-    }
+    bySvgId.set(muscle.svg_id, strongerState(bySvgId.get(muscle.svg_id), s) ?? s);
   }
 
-  const regions = view === 'front' ? FRONT_REGIONS : BACK_REGIONS;
+  const layout = view === 'front' ? VIEW_LAYOUTS.front : VIEW_LAYOUTS.back;
+
+  function stateFor(group: RegionGroup): BodyMapMuscleState | undefined {
+    return group.svgIds.reduce<BodyMapMuscleState | undefined>(
+      (acc, svgId) => strongerState(acc, bySvgId.get(svgId)),
+      undefined,
+    );
+  }
 
   return (
     <div className={`atlas-body-map${className ? ` ${className}` : ''}`}>
-      <div className="atlas-body-map__toolbar" role="group" aria-label="Body view">
-        <button
-          type="button"
-          className={
-            view === 'front'
-              ? 'atlas-body-map__toggle atlas-body-map__toggle--active'
-              : 'atlas-body-map__toggle'
-          }
-          aria-pressed={view === 'front'}
-          onClick={() => setView('front')}
-        >
-          Front
-        </button>
-        <button
-          type="button"
-          className={
-            view === 'back'
-              ? 'atlas-body-map__toggle atlas-body-map__toggle--active'
-              : 'atlas-body-map__toggle'
-          }
-          aria-pressed={view === 'back'}
-          onClick={() => setView('back')}
-        >
-          Back
-        </button>
-      </div>
+      {!fixedView && (
+        <div className="atlas-body-map__toolbar" role="group" aria-label="Body view">
+          <button
+            type="button"
+            className={
+              view === 'front'
+                ? 'atlas-body-map__toggle atlas-body-map__toggle--active'
+                : 'atlas-body-map__toggle'
+            }
+            aria-pressed={view === 'front'}
+            onClick={() => setChosenView('front')}
+          >
+            Front
+          </button>
+          <button
+            type="button"
+            className={
+              view === 'back'
+                ? 'atlas-body-map__toggle atlas-body-map__toggle--active'
+                : 'atlas-body-map__toggle'
+            }
+            aria-pressed={view === 'back'}
+            onClick={() => setChosenView('back')}
+          >
+            Back
+          </button>
+        </div>
+      )}
       <svg
-        viewBox="0 0 200 340"
+        viewBox={layout.viewBox}
         role={interactive ? 'group' : 'img'}
-        aria-label={view === 'front' ? 'Front view of the body' : 'Back view of the body'}
+        aria-label={ariaLabel ?? (view === 'front' ? 'Front view of the body' : 'Back view of the body')}
         className="atlas-body-map__svg"
+        style={{ '--atlas-hatch': `url(#${hatchId})` } as CSSProperties}
       >
+        <defs>
+          {/* Stalled (performance mode): diagonal hatch -- a cue that isn't hue. */}
+          <pattern
+            id={hatchId}
+            width="1.4"
+            height="1.4"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width="1.4" height="1.4" style={{ fill: 'var(--atlas-color-warning)' }} />
+            <rect width="0.55" height="1.4" style={{ fill: 'var(--atlas-color-background)' }} />
+          </pattern>
+        </defs>
         <g className="atlas-body-map__figure">
-          <circle cx="100" cy="22" r="15" className="atlas-body-map__head" />
-          <rect x="92" y="34" width="16" height="14" rx="4" className="atlas-body-map__head" />
-          {regions.map((shape) => {
-            const entry = regionStates.get(shape.svgId);
-            const cls = entry
-              ? `atlas-body-map__region atlas-body-map__region--${entry.state}`
-              : 'atlas-body-map__region';
+          {/* Head, hands, feet, joints, unused muscles: part of the figure, never colored or interactive. */}
+          {layout.decorative.map((shape) => (
+            <path key={shape.id} d={shape.d} className="atlas-body-map__decorative" />
+          ))}
+          {layout.groups.map((group) => {
+            const entry = stateFor(group);
+            const classes = ['atlas-body-map__region'];
+            if (entry) classes.push(`atlas-body-map__region--${entry.state}`);
+            if (entry?.state === 'tone') classes.push(`atlas-body-map__region--tone-${entry.tone ?? 'muted'}`);
+            // Heat is an idle->heat color ramp (see App.css), not transparency, so an outlined
+            // region keeps a fully opaque outline however faint its fill.
             const heatStyle =
               entry?.state === 'heat' && entry.intensity != null
-                ? { opacity: 0.25 + 0.75 * entry.intensity }
+                ? ({ '--atlas-heat': String(0.25 + 0.75 * entry.intensity) } as CSSProperties)
                 : undefined;
+            const isSelected = entry?.state === 'selected' || !!entry?.selected;
             return (
-              <path
-                key={shape.svgId}
-                d={shape.d}
-                className={cls}
+              <g
+                key={group.key}
+                className={classes.join(' ')}
                 style={heatStyle}
-                role={interactive ? 'button' : 'presentation'}
+                role={interactive ? 'button' : undefined}
                 tabIndex={interactive ? 0 : undefined}
-                aria-label={interactive ? shape.label : undefined}
-                onClick={interactive && onSelectRegion ? () => onSelectRegion(shape.svgId) : undefined}
+                aria-label={interactive ? group.label : undefined}
+                aria-pressed={interactive ? isSelected : undefined}
+                onClick={
+                  onSelectRegion
+                    ? () => onSelectRegion(group.svgIds[0] as string, group.muscleIds)
+                    : undefined
+                }
                 onKeyDown={
-                  interactive && onSelectRegion
+                  onSelectRegion
                     ? (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          onSelectRegion(shape.svgId);
+                          onSelectRegion(group.svgIds[0] as string, group.muscleIds);
                         }
                       }
                     : undefined
                 }
               >
-                <title>{shape.label}</title>
-              </path>
+                {group.shapes.map((shape) => (
+                  <path key={shape.id} d={shape.d}>
+                    <title>{shape.name}</title>
+                  </path>
+                ))}
+              </g>
             );
           })}
+          {/* Selection outline, drawn last so a neighbor's gap-stroke can never paint over it, and
+              without reordering the focusable regions above. Never the only cue: aria-pressed and
+              (in selection mode) the fill change carry it too. */}
+          <g className="atlas-body-map__outlines" aria-hidden="true">
+            {layout.groups
+              .filter((group) => {
+                const entry = stateFor(group);
+                return entry?.state === 'selected' || !!entry?.selected;
+              })
+              .flatMap((group) =>
+                group.shapes.map((shape) => (
+                  <path key={`outline-${shape.id}`} d={shape.d} className="atlas-body-map__outline" />
+                )),
+              )}
+          </g>
         </g>
       </svg>
     </div>

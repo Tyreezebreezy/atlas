@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Milestone, PersonalRecord } from '@atlas/data-model';
 import { createMilestone } from './createMilestone';
-import { describeMilestoneProgress } from './describeMilestoneProgress';
+import { describeMilestoneProgress, describeMilestoneTarget } from './describeMilestoneProgress';
 
 function pr(overrides: Partial<PersonalRecord>): PersonalRecord {
   return {
@@ -115,5 +115,33 @@ describe('describeMilestoneProgress', () => {
     const progress = describeMilestoneProgress(m, [pr({ kind: 'max_load', value: 245 })]);
     expect(progress.remaining).toBe(0);
     expect(progress.text).toBe('Goal reached.');
+  });
+});
+
+describe('describeMilestoneTarget', () => {
+  it('states the goal for consistency, body-weight and benchmark milestones', () => {
+    expect(
+      describeMilestoneTarget(createMilestone({ title: 'a', exerciseId: null, dimension: 'consistency', targetConsecutiveWeeks: 4 })),
+    ).toBe('4 consecutive weeks with a workout');
+    expect(
+      describeMilestoneTarget(createMilestone({ title: 'a', exerciseId: null, dimension: 'consistency', targetConsecutiveWeeks: 1 })),
+    ).toBe('1 consecutive week with a workout');
+    expect(
+      describeMilestoneTarget(createMilestone({ title: 'a', exerciseId: null, dimension: 'consistency', targetTotalSessions: 50 })),
+    ).toBe('50 completed workouts');
+    expect(
+      describeMilestoneTarget(createMilestone({ title: 'a', exerciseId: null, dimension: 'body_weight', targetBodyWeight: 185 })),
+    ).toBe('Reach 185 lb');
+    expect(
+      describeMilestoneTarget(
+        createMilestone({ title: 'a', exerciseId: null, dimension: 'benchmark_threshold', targetBenchmarkId: 'b', targetPercentile: 75 }),
+      ),
+    ).toBe('Percentile 75 or higher');
+  });
+
+  it('has nothing to add for lift-style goals, whose progress text already names the target', () => {
+    expect(
+      describeMilestoneTarget(createMilestone({ title: 'a', exerciseId: 'e', dimension: 'weight', targetWeight: 225 })),
+    ).toBeNull();
   });
 });

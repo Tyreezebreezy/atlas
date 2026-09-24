@@ -206,3 +206,14 @@ export function mappedMuscleIds(exercise: Exercise): string[] {
   if (!map) return [];
   return dedupe([...map.primary, ...map.secondary]);
 }
+
+/**
+ * vNext Handoff 03B. The Library's body browse: every exercise that trains
+ * (as a primary OR secondary muscle) at least one of `muscleIds`. An empty
+ * selection matches nothing -- "no muscle picked" is not "every exercise".
+ */
+export function exercisesTargetingMuscles(exercises: Exercise[], muscleIds: string[]): Exercise[] {
+  if (muscleIds.length === 0) return [];
+  const wanted = new Set(muscleIds);
+  return exercises.filter((exercise) => mappedMuscleIds(exercise).some((id) => wanted.has(id)));
+}

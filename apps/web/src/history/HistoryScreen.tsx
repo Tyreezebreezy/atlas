@@ -5,10 +5,24 @@ import { useStorage } from '../storage/StorageContext';
 import { formatSessionDate as formatDate, SessionDetail } from './SessionDetail';
 
 interface HistoryScreenProps {
-  onBack: () => void;
+  /** Omit when the screen is a Progress section (its tab row is the navigation). */
+  onBack?: () => void;
+  /** Rendered inside Progress: no back button and no page title of its own. */
+  embedded?: boolean;
+  /** Opens one exercise in Progress > Strength. */
+  onOpenExercise?: (exerciseId: string) => void;
 }
 
-export function HistoryScreen({ onBack }: HistoryScreenProps) {
+function monthKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+export function HistoryScreen({ onBack, embedded = false, onOpenExercise }: HistoryScreenProps) {
   const storage = useStorage();
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
@@ -36,12 +50,24 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
     [sessions],
   );
 
+  // Newest first, grouped by calendar month so a long history stays scannable.
+  const months = useMemo(() => {
+    const groups: { key: string; label: string; sessions: WorkoutSession[] }[] = [];
+    for (const session of completed) {
+      const key = monthKey(session.started_at);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) last.sessions.push(session);
+      else groups.push({ key, label: monthLabel(session.started_at), sessions: [session] });
+    }
+    return groups;
+  }, [completed]);
+
   const selected = completed.find((s) => s.id === selectedId) ?? null;
 
   if (!storage || loading) {
     return (
       <div className="atlas-empty-screen">
-        <h1>History</h1>
+        {!embedded && <h1>History</h1>}
         <p>Loading&hellip;</p>
       </div>
     );
@@ -49,42 +75,59 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
 
   if (selected) {
     return (
-      <SessionDetail session={selected} exercises={exercises} onBack={() => setSelectedId(null)} />
+      <SessionDetail
+        session={selected}
+        exercises={exercises}
+        onBack={() => setSelectedId(null)}
+        onOpenExercise={onOpenExercise}
+      />
     );
   }
 
   return (
     <div className="atlas-history">
-      <button type="button" className="atlas-template-editor__back" onClick={onBack}>
-        &larr; Back
-      </button>
-      <h1>History</h1>
+      {!embedded && onBack && (
+        <button type="button" className="atlas-template-editor__back" onClick={onBack}>
+          &larr; Back
+        </button>
+      )}
+      {!embedded && <h1>History</h1>}
       {completed.length === 0 ? (
         <p className="atlas-program-screen__empty">
           No completed workouts yet &mdash; finish one and it'll show up here.
         </p>
       ) : (
-        <ul className="atlas-program-screen__list">
-          {completed.map((session) => {
-            const summary = summarizeSession(session);
-            return (
-              <li key={session.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(session.id)}
-                  aria-label={`${session.name}, ${formatDate(session.started_at)}, ${summary.durationMinutes} minutes, ${summary.setCount} sets`}
-                >
-                  <span className="atlas-library__item-name" aria-hidden="true">
-                    {formatDate(session.started_at)} &middot; {session.name}
-                  </span>
-                  <span className="atlas-library__item-meta" aria-hidden="true">
-                    {summary.durationMinutes} min &middot; {summary.setCount} sets
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        months.map((month) => (
+          <section key={month.key} className="atlas-history__month" aria-label={month.label}>
+            <h2>
+              {month.label}
+              <span className="atlas-history__month-count">
+                {month.sessions.length} workout{month.sessions.length === 1 ? '' : 's'}
+              </span>
+            </h2>
+            <ul className="atlas-program-screen__list">
+              {month.sessions.map((session) => {
+                const summary = summarizeSession(session);
+                return (
+                  <li key={session.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(session.id)}
+                      aria-label={`${session.name}, ${formatDate(session.started_at)}, ${summary.durationMinutes} minutes, ${summary.setCount} sets`}
+                    >
+                      <span className="atlas-library__item-name" aria-hidden="true">
+                        {formatDate(session.started_at)} &middot; {session.name}
+                      </span>
+                      <span className="atlas-library__item-meta" aria-hidden="true">
+                        {summary.durationMinutes} min &middot; {summary.setCount} sets
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))
       )}
     </div>
   );

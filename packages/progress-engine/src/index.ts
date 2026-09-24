@@ -8,3 +8,6 @@ export * from './activityHeatmap';
 export * from './trainingRecency';
 export * from './detectStagnation';
 export * from './buildWeeklyReview';
+export * from './muscleMapViewModel';
+export * from './strengthView';
+export * from './progressOverview';

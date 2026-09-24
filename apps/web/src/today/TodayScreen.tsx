@@ -6,12 +6,15 @@ import {
   startWorkoutSession,
 } from '@atlas/workout-engine';
 import {
+  addDaysToIso,
   advanceProgramSequence,
   applyProgressionToSession,
   currentSequentialDay,
   dismissOccurrence,
   flattenProgramDays,
+  localIsoDate,
   moveOccurrence,
+  plannedSessionsThisWeek,
   programProgressionMode,
   programSequencePosition,
   resolveMissedWorkouts,
@@ -19,6 +22,7 @@ import {
   resolveWeeklySchedule,
   resolveWeekSchedule,
   skipOccurrence,
+  startOfWeekIso,
   type FlattenedProgramDay,
   type ResolvedDay,
   type TodayScheduleEntry,
@@ -38,24 +42,6 @@ import { useStorage } from '../storage/StorageContext';
 import { SessionDetail } from '../history/SessionDetail';
 import { WeekNavigator } from './WeekNavigator';
 import { SequenceNavigator } from './SequenceNavigator';
-
-function todayIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** Monday of the calendar week containing `iso` -- same mondayOffset convention as resolveWeekSchedule (program-engine), kept in sync deliberately. */
-function startOfWeek(iso: string): string {
-  const weekday = new Date(`${iso}T00:00:00`).getDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  return addDays(iso, mondayOffset);
-}
 
 function formatUpNextDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
@@ -511,7 +497,7 @@ export function TodayScreen() {
     .filter((t) => t.is_quick_workout)
     .sort(compareByName);
 
-  const today = todayIso();
+  const today = localIsoDate();
   const isSequential = !!activeProgram && programProgressionMode(activeProgram) === 'sequential';
 
   // vNext Handoff 03A: compact "This Week" snapshot (research pack v3 §13).
@@ -523,14 +509,9 @@ export function TodayScreen() {
   // is deliberately [] here (a full per-exercise sweep isn't cleanly
   // available on this screen) -- REVIEW_STALLED_EXERCISE just never fires
   // from this card, which is an honest simplification, not a wrong number.
-  const weekStart = startOfWeek(today);
-  const weekEnd = addDays(weekStart, 6);
-  const plannedThisWeek =
-    activeProgram && !isSequential
-      ? resolveWeekSchedule(activeProgram, templates, occurrences, today).filter(
-          (d) => d.entry.kind !== 'rest' && d.entry.kind !== 'none',
-        ).length
-      : null;
+  const weekStart = startOfWeekIso(today);
+  const weekEnd = addDaysToIso(weekStart, 6);
+  const plannedThisWeek = plannedSessionsThisWeek(activeProgram, templates, occurrences, today);
   const weeklyReview = buildWeeklyReview({
     periodStart: weekStart,
     periodEnd: weekEnd,
@@ -558,7 +539,7 @@ export function TodayScreen() {
 
   // ----- Weekly/fixed mode: resolve the selected date's entry directly. -----
   const effectiveSelectedDate = selectedDate ?? today;
-  const weekAnchor = addDays(today, weekOffsetWeeks * 7);
+  const weekAnchor = addDaysToIso(today, weekOffsetWeeks * 7);
   const weeklyEntry: TodayScheduleEntry | null =
     activeProgram && !isSequential
       ? resolveWeeklySchedule(activeProgram, templates, occurrences, effectiveSelectedDate)

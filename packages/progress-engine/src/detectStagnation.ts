@@ -1,4 +1,4 @@
-import { eligibleSetsForExercise, type EligibleSet } from '@atlas/pr-engine';
+import { eligibleSets, eligibleSetsForExercise, type EligibleSet } from '@atlas/pr-engine';
 import type { Exercise, PersonalRecord, WorkoutSession } from '@atlas/data-model';
 
 /**
@@ -82,6 +82,28 @@ export function detectStagnation(
       last_exposure_date: last.completed_at ?? last.started_at,
       reason_code: 'PROGRESS_STALLED',
     });
+  }
+  return signals;
+}
+
+/**
+ * vNext Handoff 03B. `detectStagnation` for every exercise the owner has
+ * trained -- the "one call per exercise" sweep `buildWeeklyReview` asks its
+ * caller to precompute (progress-engine doesn't own the exercise library, so
+ * the caller hands in the lookup). Exercises missing from the lookup are
+ * skipped rather than guessed at.
+ */
+export function detectAllStagnation(
+  sessions: WorkoutSession[],
+  exercises: Map<string, Exercise>,
+  personalRecords: PersonalRecord[],
+  options: { minComparableExposures?: number } = {},
+): StagnationSignal[] {
+  const trainedIds = new Set(eligibleSets(sessions).map((e) => e.set.exercise_id));
+  const signals: StagnationSignal[] = [];
+  for (const id of trainedIds) {
+    const exercise = exercises.get(id);
+    if (exercise) signals.push(...detectStagnation(sessions, exercise, personalRecords, options));
   }
   return signals;
 }

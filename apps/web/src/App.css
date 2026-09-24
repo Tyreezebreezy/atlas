@@ -476,7 +476,8 @@ button {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--atlas-space-4);
-  margin: 0 0 var(--atlas-space-5);
+  /* `--atlas-space-5` was never defined, so these block gaps used to collapse to nothing. */
+  margin: var(--atlas-space-6) 0 0;
 }
 
 .atlas-exercise-progress__stats dt {
@@ -493,7 +494,7 @@ button {
 }
 
 .atlas-exercise-progress__rep-bests {
-  margin-bottom: var(--atlas-space-5);
+  margin-top: var(--atlas-space-6);
 }
 
 .atlas-exercise-progress__rep-bests h3,
@@ -512,37 +513,56 @@ button {
 }
 
 .atlas-exercise-progress__rep-bests li {
-  padding: var(--atlas-space-1) var(--atlas-space-2);
-  border: 1px solid var(--atlas-color-border);
+  padding: var(--atlas-space-1) var(--atlas-space-3);
   border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
   font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.atlas-exercise-progress__chart {
-  margin-bottom: var(--atlas-space-5);
+.atlas-exercise-progress__history {
+  margin-top: var(--atlas-space-6);
 }
 
+/* vNext Handoff 03B: the metric picker is a segmented control like the Progress section
+   row -- it scrolls sideways rather than wrapping or shrinking its labels. */
 .atlas-exercise-progress__metric-picker {
   display: flex;
   gap: var(--atlas-space-1);
-  margin-bottom: var(--atlas-space-2);
+  padding: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-3);
+  background: var(--atlas-color-surface);
+  border-radius: var(--atlas-radius-md);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.atlas-exercise-progress__metric-picker::-webkit-scrollbar {
+  display: none;
 }
 
 .atlas-exercise-progress__metric-picker button {
+  flex: 1 0 auto;
   min-height: var(--atlas-touch-target);
-  padding: 0 var(--atlas-space-2);
-  border: 1px solid var(--atlas-color-border);
-  border-radius: var(--atlas-radius-sm);
+  padding: 0 var(--atlas-space-3);
+  border: 0;
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
   background: transparent;
-  font-size: 0.8rem;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.atlas-exercise-progress__metric--active {
-  border-color: var(--atlas-color-accent) !important;
-  background: var(--atlas-color-accent-mist) !important;
-  color: var(--atlas-color-accent) !important;
-  font-weight: 600;
+.atlas-exercise-progress__metric-picker button:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: -2px;
+}
+
+.atlas-exercise-progress__metric-picker .atlas-exercise-progress__metric--active {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
 }
 
 .atlas-exercise-progress__history ul {
@@ -2311,7 +2331,7 @@ button {
 
 .atlas-trend-chart__tooltip {
   min-height: 1.2em;
-  margin: var(--atlas-space-2) 0 0;
+  margin: 0;
   font-size: 0.85rem;
   color: var(--atlas-color-text-primary);
 }
@@ -2363,7 +2383,8 @@ button {
   width: 12px;
   height: 12px;
   border-radius: 2px;
-  background: var(--atlas-color-surface);
+  /* One step above the surface it sits on (a panel), so an empty day is still a visible cell. */
+  background: var(--atlas-color-surface-raised);
 }
 
 .atlas-activity-heatmap__day--level-1 {
@@ -2734,28 +2755,49 @@ button {
 
 /* Progress screen */
 
-/* v1.0.0 (H1) — sub-view segmented control (Trends / Muscles / History / Body / Milestones). */
+/* v1.0.0 (H1), reworked in vNext Handoff 03B — the section switcher (Overview / Strength /
+   Muscles / Body / History / Milestones). A horizontally scrollable pill row: six sections
+   never squeeze into unreadably narrow fixed tabs on a phone. */
 .atlas-progress__segments {
   display: flex;
   gap: var(--atlas-space-1);
   padding: var(--atlas-space-1);
   margin-bottom: var(--atlas-space-4);
   background: var(--atlas-color-surface);
-  border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-md);
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+.atlas-progress__segments::-webkit-scrollbar {
+  display: none;
 }
 
 .atlas-progress__segment {
   flex: 1 0 auto;
   min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-3);
+  border: 0;
   border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  background: transparent;
   color: var(--atlas-color-text-secondary);
   font-size: var(--atlas-font-size-caption);
   font-weight: var(--atlas-font-weight-medium);
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.atlas-progress__segment:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: -2px;
+}
+
+/* Only when the row actually overflows (a phone): fade the right edge so the cut-off pill
+   reads as "scrolls", not as clipped. At wider widths all six fit and nothing is faded. */
+@container atlas-content (max-width: 30rem) {
+  .atlas-progress__segments {
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
 }
 
 .atlas-progress__segment:hover {
@@ -2777,97 +2819,6 @@ button {
   letter-spacing: 0.04em;
   color: var(--atlas-color-text-secondary);
   margin-bottom: var(--atlas-space-2);
-}
-
-.atlas-progress__month-row {
-  display: flex;
-  gap: var(--atlas-space-6);
-}
-
-.atlas-progress__month-stat {
-  display: flex;
-  align-items: baseline;
-  gap: var(--atlas-space-2);
-}
-
-.atlas-progress__month-count {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--atlas-color-success);
-}
-
-.atlas-progress__month-count--milestone {
-  color: var(--atlas-color-milestone);
-}
-
-.atlas-progress__month-label {
-  font-size: 1rem;
-  color: var(--atlas-color-text-secondary);
-}
-
-.atlas-progress__recent-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--atlas-card-gap);
-}
-
-.atlas-progress__trend-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--atlas-space-3);
-}
-
-.atlas-progress__recent-list li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  padding: var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-border);
-  border-radius: var(--atlas-radius-md);
-  background: var(--atlas-color-surface);
-}
-
-.atlas-progress__recent-exercise {
-  grid-column: 1 / -1;
-  font-weight: 600;
-}
-
-.atlas-progress__recent-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--atlas-color-success);
-}
-
-.atlas-progress__recent-meta {
-  align-self: center;
-  font-size: 0.8rem;
-  color: var(--atlas-color-text-secondary);
-  text-align: right;
-}
-
-.atlas-progress__recent-item--milestone {
-  border-left: 3px solid var(--atlas-color-milestone) !important;
-}
-
-.atlas-progress__recent-item--milestone .atlas-progress__recent-meta {
-  color: var(--atlas-color-milestone);
-}
-
-.atlas-progress__trend-list li {
-  display: flex;
-  justify-content: space-between;
-  padding: var(--atlas-space-2) 0;
-  border-bottom: 1px solid var(--atlas-color-border);
-}
-
-.atlas-progress__trend-value {
-  font-variant-numeric: tabular-nums;
-  color: var(--atlas-color-timer);
 }
 
 .atlas-progress__distribution h3 {
@@ -2956,30 +2907,6 @@ button {
   flex: 0 0 auto;
 }
 
-.atlas-progress__view-exercises {
-  width: 100%;
-  min-height: 48px;
-  margin-top: var(--atlas-space-6);
-  border: 1px solid var(--atlas-color-accent);
-  border-radius: var(--atlas-radius-sm);
-  background: transparent;
-  color: var(--atlas-color-accent);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.atlas-progress__milestones > button {
-  width: 100%;
-  min-height: 44px;
-  margin-top: var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-milestone);
-  border-radius: var(--atlas-radius-sm);
-  background: transparent;
-  color: var(--atlas-color-milestone);
-  font-weight: 600;
-  cursor: pointer;
-}
-
 /* v0.2.2: grouped by movement (see groupMilestones) instead of one flat
    achieved/active split -- each group is its own labeled cluster so
    "10, 25, 50, 75, 100 Push-Ups" reads as one ladder. */
@@ -3015,46 +2942,10 @@ button {
   background: var(--atlas-color-surface);
 }
 
-.atlas-progress__milestone--achieved {
-  border-color: var(--atlas-color-milestone);
-}
-
-.atlas-progress__milestone--pending {
-  opacity: 0.72;
-}
-
 .atlas-progress__milestone-title {
   font-weight: 600;
 }
 
-.atlas-progress__milestone--achieved .atlas-progress__milestone-title {
-  color: var(--atlas-color-milestone);
-}
-
-.atlas-progress__milestone-date,
-.atlas-progress__milestone-exercise {
-  font-size: 0.8rem;
-  color: var(--atlas-color-text-secondary);
-}
-
-/* v0.2.3: My Milestones/Achieved/Catalog cards all put a title+meta column
-   on the left of the same flex row (`.atlas-progress__milestone-list li`
-   is already `justify-content: space-between`) with actions on the right,
-   so this is the only new layout rule needed for all three. */
-.atlas-progress__milestone-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.atlas-progress__milestone-actions {
-  display: flex;
-  gap: var(--atlas-space-2);
-  flex-shrink: 0;
-}
-
-.atlas-progress__milestone-actions button,
 .atlas-progress__milestone-toggle {
   min-height: var(--atlas-touch-target);
   padding: 0 var(--atlas-space-2);
@@ -3081,50 +2972,6 @@ button {
   color: var(--atlas-color-milestone);
   font-weight: 600;
   cursor: pointer;
-}
-
-.atlas-progress__benchmark-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--atlas-card-gap);
-}
-
-.atlas-progress__benchmark-list li {
-  padding: var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-border);
-  border-radius: var(--atlas-radius-md);
-  background: var(--atlas-color-surface);
-}
-
-.atlas-progress__benchmark-exercise {
-  display: block;
-  font-weight: 600;
-}
-
-.atlas-progress__benchmark-display {
-  display: block;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--atlas-color-accent);
-  margin-top: var(--atlas-space-1);
-}
-
-.atlas-progress__benchmark-details {
-  margin-top: var(--atlas-space-2);
-  font-size: 0.8rem;
-  color: var(--atlas-color-text-secondary);
-}
-
-.atlas-progress__benchmark-details summary {
-  cursor: pointer;
-  color: var(--atlas-color-accent);
-}
-
-.atlas-progress__benchmark-details p {
-  margin: var(--atlas-space-1) 0 0;
 }
 
 /* History */
@@ -3553,7 +3400,6 @@ summary {
 .atlas-exercise-logger,
 .atlas-rest-timer,
 .atlas-body__history-values,
-.atlas-progress__month-count,
 .atlas-progress__distribution-count {
   font-variant-numeric: tabular-nums;
 }
@@ -3570,17 +3416,19 @@ summary {
   gap: var(--atlas-space-1);
   padding: var(--atlas-space-1);
   background: var(--atlas-color-surface);
-  border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-md);
 }
 
 .atlas-body-map__toggle {
   flex: 1;
   min-height: var(--atlas-touch-target);
+  border: 0;
   border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  background: transparent;
   color: var(--atlas-color-text-secondary);
   font-size: var(--atlas-font-size-caption);
   font-weight: var(--atlas-font-weight-medium);
+  cursor: pointer;
 }
 
 .atlas-body-map__toggle:hover {
@@ -3592,57 +3440,125 @@ summary {
   color: var(--atlas-color-text-primary);
 }
 
+/* The anatomical figure is tall and narrow (viewBox 35 x 93): bound its HEIGHT, not its
+   width, so it fits a phone screen in portrait instead of running ~900px down the page. */
 .atlas-body-map__svg {
-  width: 100%;
-  max-width: 22rem;
-  height: auto;
+  width: auto;
+  max-width: 100%;
+  height: clamp(280px, 52vh, 36rem);
   margin: 0 auto;
 }
 
-.atlas-body-map__head {
+/* vNext Handoff 03B: the vendored anatomical figure uses a much finer
+   coordinate system (viewBox ~35 units wide, vs. the previous hand-drawn
+   figure's 200) -- every unit-based value below is scaled down to match.
+   State classes live on the region's <g>; the fill/stroke cascade to every
+   upstream sub-shape inside it. */
+.atlas-body-map__region path,
+.atlas-body-map__decorative {
+  stroke: var(--atlas-color-background);
+  stroke-width: 0.15;
+  stroke-linejoin: round;
+}
+
+.atlas-body-map__region path {
   fill: var(--atlas-muscle-idle);
+  transition:
+    fill var(--atlas-duration-fast) var(--atlas-ease-standard),
+    stroke var(--atlas-duration-fast) var(--atlas-ease-standard);
 }
 
 .atlas-body-map__region {
-  fill: var(--atlas-muscle-idle);
-  stroke: var(--atlas-color-background);
-  stroke-width: 3;
-  /* Generous invisible hit area: a thick transparent stroke makes the tiny
-     regions tappable on a phone without changing the drawing. */
-  cursor: default;
-  transition:
-    fill var(--atlas-duration-fast) var(--atlas-ease-standard),
-    opacity var(--atlas-duration-fast) var(--atlas-ease-standard);
+  transition: opacity var(--atlas-duration-fast) var(--atlas-ease-standard);
+}
+
+/* Head, hands, feet, joints and the muscles ATLAS doesn't track complete the
+   figure but are never colored -- a touch dimmer than idle muscle regions so
+   the eye reads them as "part of the body," not "an untouched muscle." */
+.atlas-body-map__decorative {
+  fill: var(--atlas-color-surface-raised);
 }
 
 .atlas-body-map__region[role='button'] {
   cursor: pointer;
-}
-
-.atlas-body-map__region[role='button']:hover {
-  fill: var(--atlas-muscle-secondary);
-}
-
-.atlas-body-map__region:focus-visible {
   outline: none;
-  stroke: var(--atlas-color-focus);
-  stroke-width: 3;
 }
 
-.atlas-body-map__region--primary {
+/* Hover brightens whatever the region already is -- it must not repaint an analytic
+   fill as "secondary blue", which would read as data that isn't there. */
+.atlas-body-map__region[role='button']:hover path {
+  filter: brightness(1.35);
+}
+
+.atlas-body-map__region[role='button']:focus-visible path {
+  stroke: var(--atlas-color-focus);
+  stroke-width: 0.45;
+}
+
+.atlas-body-map__region--primary path {
   fill: var(--atlas-muscle-primary);
 }
 
-.atlas-body-map__region--secondary {
+.atlas-body-map__region--secondary path {
   fill: var(--atlas-muscle-secondary);
 }
 
-.atlas-body-map__region--selected {
-  fill: var(--atlas-muscle-selected);
+/* ANALYTICS vocabulary (Progress > Muscles). `heat` is an idle -> heat ramp (a color mix,
+   not transparency) driven by --atlas-heat (0..1, set by BodyMap), so an outlined region
+   keeps a fully opaque outline however faint its fill. */
+.atlas-body-map__region--heat path {
+  fill: color-mix(
+    in srgb,
+    var(--atlas-muscle-heat) calc(var(--atlas-heat, 1) * 100%),
+    var(--atlas-muscle-idle)
+  );
 }
 
-.atlas-body-map__region--heat {
+/* Worked only as an assisting muscle: the faintest tint plus a dashed outline (not a
+   fainter heat value -- assistance is never converted into fractional volume). */
+.atlas-body-map__region--assist path {
+  fill: color-mix(in srgb, var(--atlas-muscle-heat) 14%, var(--atlas-muscle-idle));
+  stroke: var(--atlas-muscle-heat);
+  stroke-width: 0.2;
+  stroke-dasharray: 0.55 0.4;
+}
+
+/* Performance tones. Each carries a cue besides hue: stalled is hatched, "not enough
+   data" is dashed; the ranked list beside the map always states each state in words. */
+.atlas-body-map__region--tone-positive path {
   fill: var(--atlas-muscle-heat);
+}
+
+.atlas-body-map__region--tone-neutral path {
+  fill: var(--atlas-muscle-secondary);
+}
+
+.atlas-body-map__region--tone-caution path {
+  fill: var(--atlas-hatch, var(--atlas-color-warning));
+}
+
+.atlas-body-map__region--tone-muted path {
+  stroke: var(--atlas-color-text-secondary);
+  stroke-width: 0.2;
+  stroke-dasharray: 0.55 0.4;
+}
+
+/* Selection outline: an overlay BodyMap draws after every region, so a neighbor's gap stroke
+   can never paint over half of it. Never color-only: the <g> also carries aria-pressed. */
+.atlas-body-map__outline {
+  fill: none;
+  stroke: var(--atlas-color-text-primary);
+  stroke-width: 0.4;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* SELECTION vocabulary (Library, exercise editor): Selected is never color-only
+   (handoff §19): the fill changes AND the region gets the heavy light outline above, and the
+   <g> carries aria-pressed. */
+.atlas-body-map__region--selected path,
+.atlas-body-map__region--selected[role='button']:hover path {
+  fill: var(--atlas-muscle-selected);
 }
 
 /* v1.0.0 (H2) � Exercise Library Body exploration + detail anatomy */
@@ -3652,17 +3568,19 @@ summary {
   padding: var(--atlas-space-1);
   margin-bottom: var(--atlas-space-3);
   background: var(--atlas-color-surface);
-  border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-md);
 }
 
 .atlas-library__view-button {
   flex: 1;
   min-height: var(--atlas-touch-target);
+  border: 0;
   border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  background: transparent;
   color: var(--atlas-color-text-secondary);
   font-size: var(--atlas-font-size-caption);
   font-weight: var(--atlas-font-weight-medium);
+  cursor: pointer;
 }
 
 .atlas-library__view-button--active {
@@ -3764,112 +3682,6 @@ summary {
   margin: 0 0 var(--atlas-space-3);
 }
 
-/* v1.0.0 (H3) � Muscle Explorer */
-.atlas-muscle-explorer__ranges {
-  display: flex;
-  gap: var(--atlas-space-1);
-  padding: var(--atlas-space-1);
-  margin-bottom: var(--atlas-space-3);
-  background: var(--atlas-color-surface);
-  border: 1px solid var(--atlas-color-border);
-  border-radius: var(--atlas-radius-md);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.atlas-muscle-explorer__range {
-  flex: 1 0 auto;
-  min-height: var(--atlas-touch-target);
-  padding: 0 var(--atlas-space-2);
-  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
-  color: var(--atlas-color-text-secondary);
-  font-size: var(--atlas-font-size-caption);
-  font-weight: var(--atlas-font-weight-medium);
-  white-space: nowrap;
-}
-
-.atlas-muscle-explorer__range:hover {
-  background: var(--atlas-color-hover);
-}
-
-.atlas-muscle-explorer__range--active {
-  background: var(--atlas-color-accent-mist);
-  color: var(--atlas-color-text-primary);
-}
-
-.atlas-muscle-explorer__custom {
-  display: flex;
-  align-items: center;
-  gap: var(--atlas-space-2);
-  margin-bottom: var(--atlas-space-3);
-}
-
-.atlas-muscle-explorer__custom input {
-  width: 72px;
-  min-height: var(--atlas-touch-target);
-  padding: 0 var(--atlas-space-2);
-  border: 1px solid var(--atlas-color-border);
-  border-radius: var(--atlas-radius-sm);
-  background: var(--atlas-color-surface);
-  text-align: center;
-}
-
-.atlas-muscle-explorer__list {
-  list-style: none;
-  margin: var(--atlas-space-3) 0 0;
-  padding: 0;
-}
-
-.atlas-muscle-explorer__muscle {
-  width: 100%;
-  min-height: var(--atlas-touch-target);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--atlas-space-2) 0;
-  border-bottom: 1px solid var(--atlas-color-border);
-  text-align: left;
-}
-
-.atlas-muscle-explorer__muscle:hover {
-  background: var(--atlas-color-hover);
-}
-
-.atlas-muscle-explorer__muscle--active {
-  background: var(--atlas-color-accent-mist);
-}
-
-.atlas-muscle-explorer__detail {
-  margin-top: var(--atlas-space-3);
-  padding: var(--atlas-space-3);
-  border: 1px solid var(--atlas-color-border);
-  border-radius: var(--atlas-radius-md);
-  background: var(--atlas-color-surface);
-}
-
-.atlas-muscle-explorer__detail dl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--atlas-space-4);
-  margin: 0;
-}
-
-.atlas-muscle-explorer__detail dt {
-  color: var(--atlas-color-text-secondary);
-  font-size: var(--atlas-font-size-caption);
-}
-
-.atlas-muscle-explorer__detail dd {
-  margin: 0;
-  font-weight: var(--atlas-font-weight-semibold);
-}
-
-.atlas-muscle-explorer__exercises {
-  margin-top: var(--atlas-space-2);
-  color: var(--atlas-color-text-secondary);
-  font-size: var(--atlas-font-size-caption);
-}
-
 /* v1.0.0 (H3) � Workout summary anatomy */
 .atlas-workout-summary__muscles {
   margin-top: var(--atlas-space-4);
@@ -3909,4 +3721,1243 @@ summary {
   letter-spacing: 0.04em;
   color: var(--atlas-color-text-secondary);
   margin-bottom: var(--atlas-space-2);
+}
+
+/* =============================================================================
+   vNext Handoff 03B — Progress redesign. Stage 1: shell, panels, Overview,
+   History grouping. Surfaces separate by elevation (surface steps), not by
+   borders; the one card that should lead a screen sits a step higher.
+   ============================================================================= */
+
+.atlas-panel {
+  padding: var(--atlas-space-4);
+  background: var(--atlas-color-surface);
+  border-radius: var(--atlas-radius-md);
+}
+
+/* Progress's legacy `.atlas-progress section` margin must not stack on top of grid gaps. */
+.atlas-progress .atlas-panel,
+.atlas-progress .atlas-overview__hero {
+  margin-top: 0;
+}
+
+.atlas-panel--lead {
+  background: var(--atlas-color-surface-raised);
+  box-shadow: inset 0 2px 0 var(--atlas-color-accent);
+}
+
+.atlas-panel > h2:first-child {
+  margin-top: 0;
+}
+
+/* A component that brings its own <section> (e.g. the activity grid) sits flush inside a panel. */
+.atlas-progress .atlas-panel > section {
+  margin-top: 0;
+}
+
+.atlas-link-button {
+  min-height: var(--atlas-touch-target);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--atlas-color-accent);
+  font: inherit;
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-link-button:hover {
+  text-decoration: underline;
+}
+
+.atlas-link-button:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 2px;
+  border-radius: var(--atlas-radius-sm);
+}
+
+.atlas-progress__title {
+  margin: 0 0 var(--atlas-space-3);
+  font-size: var(--atlas-font-size-display);
+  line-height: var(--atlas-line-height-tight);
+}
+
+.atlas-progress__panel:focus {
+  outline: none;
+}
+
+/* ---- Overview ------------------------------------------------------------- */
+
+.atlas-overview {
+  display: grid;
+  /* minmax(0, 1fr): a card holding a scrolling row or a long name must never widen the track. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--atlas-space-4);
+  align-content: start;
+}
+
+@container atlas-content (min-width: 40rem) {
+  /* Two balanced columns (CSS columns, so cards flow top-to-bottom in DOM order and an absent
+     card leaves no hole). Full-width items span both. */
+  .atlas-overview__grid {
+    display: block;
+    column-count: 2;
+    column-gap: var(--atlas-space-4);
+  }
+
+  .atlas-overview__grid > * {
+    break-inside: avoid;
+    margin-bottom: var(--atlas-space-4);
+  }
+
+  .atlas-overview__span {
+    column-span: all;
+    /* Margins are truncated where a column ends, so the gap above a full-width item has to be its own. */
+    margin-top: var(--atlas-space-4);
+  }
+}
+
+.atlas-overview__empty p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-overview__hero {
+  display: flex;
+  align-items: baseline;
+  gap: var(--atlas-space-3);
+  padding: var(--atlas-space-2) 0;
+}
+
+.atlas-overview__hero-count {
+  font-size: 3.25rem;
+  font-weight: var(--atlas-font-weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-overview__hero-label {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-title);
+}
+
+.atlas-overview__figure {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: var(--atlas-font-weight-bold);
+  line-height: var(--atlas-line-height-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-overview__figure span {
+  font-size: var(--atlas-font-size-body);
+  font-weight: var(--atlas-font-weight-medium);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-overview__figure small {
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-regular);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-overview__note {
+  margin: var(--atlas-space-1) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-overview__muscles {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--atlas-space-4);
+  align-items: center;
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-body-map--thumb .atlas-body-map__svg {
+  width: auto;
+  height: 168px;
+  max-width: none;
+}
+
+.atlas-overview__top-groups {
+  display: grid;
+  gap: var(--atlas-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-overview__top-groups li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--atlas-space-2);
+  padding-bottom: var(--atlas-space-2);
+  border-bottom: 1px solid var(--atlas-chart-grid);
+}
+
+.atlas-overview__top-groups strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Weekly review card --------------------------------------------------- */
+
+.atlas-review__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-progress .atlas-review__head h2 {
+  margin: 0;
+}
+
+.atlas-review__status {
+  padding: 2px var(--atlas-space-3);
+  border-radius: 999px;
+  background: var(--atlas-color-surface-focused);
+  font-size: var(--atlas-font-size-micro);
+  white-space: nowrap;
+}
+
+.atlas-review__sessions {
+  display: flex;
+  align-items: baseline;
+  gap: var(--atlas-space-1);
+  margin: var(--atlas-space-3) 0 0;
+}
+
+.atlas-review__sessions strong {
+  font-size: 2.75rem;
+  font-weight: var(--atlas-font-weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-review__of {
+  font-size: 1.5rem;
+  font-weight: var(--atlas-font-weight-semibold);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-review__unit {
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-review__movement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-1) var(--atlas-space-4);
+  margin: var(--atlas-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-review__movement strong {
+  color: var(--atlas-color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-review__movement--progressed strong {
+  color: var(--atlas-color-success);
+}
+
+.atlas-review__movement--stalled strong {
+  color: var(--atlas-color-warning);
+}
+
+.atlas-review__facts {
+  margin: var(--atlas-space-3) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-review__facts:empty {
+  display: none;
+}
+
+/* ---- Tappable progress rows (recent progress, exercise pickers) ------------ */
+
+.atlas-progress-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-progress-list li + li {
+  border-top: 1px solid var(--atlas-chart-grid);
+}
+
+.atlas-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--atlas-space-3);
+  width: calc(100% + var(--atlas-space-4));
+  min-height: var(--atlas-touch-target);
+  margin: 0 calc(var(--atlas-space-2) * -1);
+  padding: var(--atlas-space-3) var(--atlas-space-2);
+  border: 0;
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-progress-row:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-progress-row:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: -2px;
+}
+
+.atlas-progress-row__name {
+  font-weight: var(--atlas-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.atlas-progress-row__delta {
+  color: var(--atlas-color-success);
+  font-weight: var(--atlas-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.atlas-progress-row__meta {
+  grid-column: 1 / -1;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+/* ---- History, grouped by month --------------------------------------------- */
+
+.atlas-history__month h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+  margin: var(--atlas-space-6) 0 var(--atlas-space-2);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.atlas-history__month:first-child h2 {
+  margin-top: 0;
+}
+
+.atlas-history__month-count {
+  font-weight: var(--atlas-font-weight-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* =============================================================================
+   vNext Handoff 03B — Stage 2: charts and the Strength view.
+   ============================================================================= */
+
+.atlas-trend-chart__grid {
+  stroke: var(--atlas-chart-grid);
+  stroke-width: 1;
+}
+
+.atlas-trend-chart__area {
+  fill: color-mix(in srgb, var(--atlas-color-accent) 10%, transparent);
+  stroke: none;
+}
+
+.atlas-trend-chart__secondary {
+  stroke: var(--atlas-color-text-secondary);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.atlas-trend-chart__record {
+  fill: none;
+  stroke: var(--atlas-color-accent);
+  stroke-width: 1.5;
+}
+
+.atlas-trend-chart__point:focus-visible {
+  outline: none;
+  stroke: var(--atlas-color-text-primary);
+  stroke-width: 2;
+}
+
+.atlas-trend-chart__value-label {
+  fill: var(--atlas-color-text-primary);
+  font-size: 12px;
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-trend-chart__axis-label {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-trend-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-1) var(--atlas-space-4);
+  margin: var(--atlas-space-2) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-trend-chart__legend i {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: var(--atlas-space-1);
+}
+
+.atlas-trend-chart__legend-record {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--atlas-color-accent);
+  border-radius: 50%;
+}
+
+.atlas-trend-chart__legend-secondary {
+  width: 18px;
+  border-top: 2px dashed var(--atlas-color-text-secondary);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .atlas-trend-chart__line,
+  .atlas-trend-chart__area {
+    animation: atlas-chart-in var(--atlas-duration-slow) var(--atlas-ease-out) both;
+  }
+}
+
+@keyframes atlas-chart-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---- Strength view --------------------------------------------------------- */
+
+.atlas-strength {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--atlas-space-4);
+  align-content: start;
+  /* One chart at a time: past this width it only stretches into a long, flat line. */
+  max-width: 48rem;
+}
+
+.atlas-strength__load-select {
+  min-height: 0;
+  padding-right: var(--atlas-space-2);
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+@container atlas-content (max-width: 30rem) {
+  .atlas-exercise-progress__metric-picker {
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+}
+
+.atlas-strength__picker,
+.atlas-strength__context {
+  display: grid;
+  gap: var(--atlas-space-1);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-strength__picker select,
+.atlas-strength__context select {
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  font: inherit;
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-strength__context {
+  margin-bottom: var(--atlas-space-3);
+}
+
+/* The headline for a fixed-load exercise: the load is a label, not a trend. */
+.atlas-strength__fixed-load {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2) var(--atlas-space-3);
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-strength__load-chip {
+  padding: 2px var(--atlas-space-3);
+  border-radius: 999px;
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-accent);
+  font-weight: var(--atlas-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-strength__fixed-load-text {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-strength__fixed-load strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-strength__note {
+  margin: var(--atlas-space-2) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-exercise-progress__chart {
+  padding: var(--atlas-space-4);
+  background: var(--atlas-color-surface);
+  border-radius: var(--atlas-radius-md);
+}
+
+.atlas-exercise-progress__chart .atlas-exercise-progress__metric-picker {
+  padding: 0;
+  background: transparent;
+}
+
+/* =============================================================================
+   vNext Handoff 03B — Stage 3: segmented control primitive + the Muscles page.
+   ============================================================================= */
+
+.atlas-segmented {
+  display: flex;
+  gap: var(--atlas-space-1);
+  padding: var(--atlas-space-1);
+  background: var(--atlas-color-surface);
+  border-radius: var(--atlas-radius-md);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.atlas-segmented::-webkit-scrollbar {
+  display: none;
+}
+
+.atlas-segmented__option {
+  flex: 1 0 auto;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 0;
+  border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
+  background: transparent;
+  color: var(--atlas-color-text-secondary);
+  font: inherit;
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.atlas-segmented__option:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-segmented__option[aria-pressed='true'],
+.atlas-segmented__option[aria-selected='true'] {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-segmented__option:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: -2px;
+}
+
+/* The period picker is the quieter of the two controls on the Muscles page. */
+.atlas-segmented--quiet {
+  background: transparent;
+  padding: 0;
+}
+
+.atlas-segmented--quiet .atlas-segmented__option {
+  min-height: 36px;
+  background: var(--atlas-color-surface);
+}
+
+.atlas-segmented--quiet .atlas-segmented__option[aria-pressed='true'] {
+  background: var(--atlas-color-accent-mist);
+}
+
+/* ---- Muscles ----------------------------------------------------------------- */
+
+.atlas-muscles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--atlas-space-4);
+  align-content: start;
+}
+
+.atlas-muscles__controls {
+  display: grid;
+  gap: var(--atlas-space-2);
+  /* Four short options should not stretch across a 1200px page. */
+  max-width: 40rem;
+}
+
+.atlas-muscles__blurb,
+.atlas-muscles__summary {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-muscles__summary {
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-muscles__custom {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-muscles__custom input {
+  width: 6rem;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+}
+
+.atlas-progress .atlas-muscles__empty {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-muscles__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--atlas-space-4);
+}
+
+.atlas-muscles__map {
+  display: grid;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-muscles__list {
+  display: grid;
+  gap: var(--atlas-space-3);
+  align-content: start;
+}
+
+/* Wide enough for the map and the ranked list side by side. */
+@container atlas-content (min-width: 44rem) {
+  .atlas-muscles__body {
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+    gap: var(--atlas-space-6);
+    align-items: start;
+  }
+}
+
+.atlas-muscle-rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-muscle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--atlas-space-3);
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  padding: var(--atlas-space-3);
+  border: 0;
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-muscle-row:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-muscle-row:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: -2px;
+}
+
+/* Selected is a raised surface AND an accent edge -- and aria-pressed -- never color alone. */
+.atlas-muscle-row[aria-pressed='true'] {
+  background: var(--atlas-color-surface-raised);
+  box-shadow: inset 3px 0 0 var(--atlas-color-accent);
+}
+
+.atlas-muscle-row__name {
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-muscle-row__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--atlas-font-weight-semibold);
+  text-align: right;
+}
+
+.atlas-muscle-row__value--stalled {
+  color: var(--atlas-color-warning);
+}
+
+.atlas-muscle-row__value--progressing {
+  color: var(--atlas-color-success);
+}
+
+.atlas-muscle-row__bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--atlas-color-surface-focused);
+}
+
+.atlas-muscle-row__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--atlas-color-accent);
+}
+
+.atlas-muscle-row__meta {
+  grid-column: 1 / -1;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-muscle-row__meta:empty {
+  display: none;
+}
+
+/* Map key */
+
+.atlas-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--atlas-space-1) var(--atlas-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-map-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-map-legend__ramp {
+  display: inline-block;
+  width: 44px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--atlas-muscle-heat) 25%, var(--atlas-muscle-idle)),
+    var(--atlas-muscle-heat)
+  );
+}
+
+.atlas-map-legend__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--atlas-muscle-idle);
+}
+
+.atlas-map-legend__swatch--positive {
+  background: var(--atlas-muscle-heat);
+}
+
+.atlas-map-legend__swatch--neutral {
+  background: var(--atlas-muscle-secondary);
+}
+
+.atlas-map-legend__swatch--caution {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--atlas-color-warning) 0 3px,
+    var(--atlas-color-background) 3px 5px
+  );
+}
+
+.atlas-map-legend__swatch--muted {
+  border: 1.5px dashed var(--atlas-color-text-secondary);
+}
+
+.atlas-map-legend__swatch--assist {
+  border: 1.5px dashed var(--atlas-muscle-heat);
+  background: color-mix(in srgb, var(--atlas-muscle-heat) 14%, var(--atlas-muscle-idle));
+}
+
+.atlas-map-legend__swatch--selected {
+  outline: 2px solid var(--atlas-color-text-primary);
+  outline-offset: -1px;
+}
+
+/* Selection detail */
+
+.atlas-muscle-detail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-muscle-detail h3 {
+  margin: 0;
+  font-size: var(--atlas-font-size-title);
+}
+
+.atlas-muscle-detail h4 {
+  margin: var(--atlas-space-4) 0 var(--atlas-space-2);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.atlas-muscle-detail__none {
+  margin: var(--atlas-space-2) 0 0;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-muscle-detail__values {
+  display: grid;
+  gap: var(--atlas-space-2);
+  margin: var(--atlas-space-3) 0 0;
+}
+
+.atlas-muscle-detail__values > div,
+.atlas-muscle-detail__exercises li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-muscle-detail__values dt {
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-muscle-detail__values dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-muscle-detail__values small {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-muscle-detail__exercises {
+  display: grid;
+  gap: var(--atlas-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-muscle-detail__exercises li span:last-child {
+  color: var(--atlas-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A selection's detail sits directly under whatever was tapped: under its row (raised one
+   step, joined to it) or under the map. */
+.atlas-muscle-rows .atlas-muscle-detail {
+  margin-top: 2px;
+  background: var(--atlas-color-surface-raised);
+}
+
+/* =============================================================================
+   vNext Handoff 03B — Stage 4: Body.
+   ============================================================================= */
+
+.atlas-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--atlas-space-4);
+  align-content: start;
+  max-width: 48rem;
+}
+
+.atlas-body section.atlas-panel,
+.atlas-body details.atlas-panel {
+  margin-top: 0;
+}
+
+.atlas-body__empty p {
+  margin: 0 0 var(--atlas-space-4);
+  max-width: 34rem;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-body__summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-body .atlas-body__summary-head h2 {
+  margin: 0;
+}
+
+.atlas-body__log {
+  min-height: 36px;
+  padding: 0 var(--atlas-space-3);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-body__latest {
+  margin: var(--atlas-space-2) 0 0;
+  font-size: 2.25rem;
+  font-weight: var(--atlas-font-weight-bold);
+  line-height: var(--atlas-line-height-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-body__latest span {
+  font-size: var(--atlas-font-size-body);
+  font-weight: var(--atlas-font-weight-medium);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-body__latest small {
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-regular);
+  color: var(--atlas-color-text-secondary);
+}
+
+/* The average is context for the weigh-ins above it, so it stays a quiet line. */
+.atlas-body__average {
+  margin: 2px 0 var(--atlas-space-3);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-body__hint {
+  margin: var(--atlas-space-2) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-body__composition summary {
+  cursor: pointer;
+  font-weight: var(--atlas-font-weight-semibold);
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-body__composition[open] summary {
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-body__composition h3 {
+  margin: var(--atlas-space-4) 0 var(--atlas-space-2);
+  font-size: var(--atlas-font-size-caption);
+  color: var(--atlas-color-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.atlas-body__composition-latest {
+  margin: var(--atlas-space-3) 0 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-body__composition-latest strong {
+  color: var(--atlas-color-text-primary);
+}
+
+/* The log: quiet rows, not a stack of outlined cards. */
+.atlas-body__history-list {
+  gap: 0;
+}
+
+.atlas-body__history-list li {
+  padding: var(--atlas-space-3) 0;
+  border: 0;
+  border-top: 1px solid var(--atlas-chart-grid);
+  border-radius: 0;
+  background: transparent;
+}
+
+.atlas-body__history-list li:first-child {
+  border-top: 0;
+}
+
+.atlas-body__history-values {
+  color: var(--atlas-color-text-primary);
+}
+
+.atlas-body__history-actions {
+  margin-top: var(--atlas-space-1);
+  gap: var(--atlas-space-3);
+}
+
+.atlas-body__history-actions button {
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  color: var(--atlas-color-accent);
+  font-size: var(--atlas-font-size-caption);
+}
+
+/* =============================================================================
+   vNext Handoff 03B — Stage 5: Milestones and benchmark comparisons.
+   Milestones are gold-edged when reached; benchmarks are blue-edged and tagged,
+   so "you reached this" and "here is how you compare" never read alike.
+   ============================================================================= */
+
+.atlas-milestones {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--atlas-space-6);
+  align-content: start;
+  max-width: 48rem;
+}
+
+.atlas-milestones__bar {
+  display: grid;
+  gap: var(--atlas-space-2);
+}
+
+@container atlas-content (min-width: 36rem) {
+  .atlas-milestones__bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+.atlas-milestones__add {
+  justify-self: start;
+}
+
+.atlas-milestones__note {
+  margin: 0 0 var(--atlas-space-3);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-progress .atlas-milestones__empty {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-progress .atlas-milestone-category {
+  margin-top: 0;
+}
+
+.atlas-milestone-category h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-milestone-category__count {
+  padding: 0 var(--atlas-space-2);
+  border-radius: 999px;
+  background: var(--atlas-color-surface-raised);
+  font-weight: var(--atlas-font-weight-regular);
+  letter-spacing: 0;
+}
+
+.atlas-milestone-ladder + .atlas-milestone-ladder {
+  margin-top: var(--atlas-space-4);
+}
+
+.atlas-milestone-ladder h3 {
+  margin: 0 0 var(--atlas-space-2);
+  font-size: var(--atlas-font-size-body);
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-milestone-list {
+  display: grid;
+  gap: var(--atlas-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-milestone-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+  /* An inset strip, not a border: a border curves into a crescent at the rounded corners. */
+  box-shadow: inset 3px 0 0 transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .atlas-milestone-card {
+    animation: atlas-chart-in var(--atlas-duration-base) var(--atlas-ease-out) both;
+  }
+}
+
+.atlas-milestone-card--achieved {
+  box-shadow: inset 3px 0 0 var(--atlas-color-milestone);
+}
+
+.atlas-milestone-card__main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.atlas-milestone-card__title {
+  font-weight: var(--atlas-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.atlas-milestone-card--achieved .atlas-milestone-card__title {
+  color: var(--atlas-color-milestone);
+}
+
+.atlas-milestone-card__meta {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-milestone-card__bar {
+  display: block;
+  max-width: 12rem;
+  height: 4px;
+  margin-top: var(--atlas-space-2);
+  border-radius: 2px;
+  background: var(--atlas-color-surface-focused);
+}
+
+.atlas-milestone-card__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--atlas-color-accent);
+}
+
+.atlas-milestone-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--atlas-space-1);
+}
+
+.atlas-milestone-card__actions button {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--atlas-color-accent);
+  font: inherit;
+  font-size: var(--atlas-font-size-caption);
+  cursor: pointer;
+}
+
+.atlas-milestone-card__actions button:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  border-radius: var(--atlas-radius-sm);
+}
+
+/* ---- Benchmark comparisons -------------------------------------------------- */
+
+.atlas-benchmarks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--atlas-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-benchmark-card {
+  display: grid;
+  gap: 2px;
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+  box-shadow: inset 3px 0 0 var(--atlas-color-accent);
+}
+
+.atlas-benchmark-card__tag {
+  color: var(--atlas-color-accent);
+  font-size: var(--atlas-font-size-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.atlas-benchmark-card__exercise {
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-benchmark-card__source {
+  margin-top: var(--atlas-space-1);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-benchmark-card__source summary {
+  cursor: pointer;
+  color: var(--atlas-color-accent);
+}
+
+.atlas-benchmark-card__source p {
+  margin: var(--atlas-space-1) 0 0;
+}
+
+/* History rows: a surface step instead of an outlined card (the shared list style is left alone
+   for Program and Library). */
+.atlas-history .atlas-program-screen__list li > button:first-child {
+  border: 0;
+  background: var(--atlas-color-surface);
+}
+
+.atlas-history .atlas-program-screen__list li > button:first-child:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-history .atlas-program-screen__list li > button:first-child:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: -2px;
+}
+
+.atlas-history .atlas-program-screen__list {
+  gap: var(--atlas-space-2);
 }

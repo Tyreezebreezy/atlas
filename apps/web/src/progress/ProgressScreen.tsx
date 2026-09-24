@@ -1,105 +1,54 @@
 import { useEffect, useMemo, useState } from 'react';
-import { estimated1RMSeries } from '@atlas/progress-engine';
 import {
-  describeMilestoneProgress,
   ensureBuiltInMilestonesSeeded,
-  groupMilestones,
   migrateBuiltInMilestonesToCatalog,
 } from '@atlas/milestone-engine';
-import { formatExerciseName } from '@atlas/exercise-library';
-import {
-  ensureBenchmarksSeeded,
-  findBenchmark,
-  interpolatePercentile,
-  formatPercentileDisplay,
-} from '@atlas/benchmark-engine';
-import type {
-  Benchmark,
-  Exercise,
-  Milestone,
-  PersonalRecord,
-  PrKind,
-  WorkoutSession,
-} from '@atlas/data-model';
+import { ensureBenchmarksSeeded } from '@atlas/benchmark-engine';
+import type { Milestone } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
 import { BodyScreen } from '../body/BodyScreen';
 import { HistoryScreen } from '../history/HistoryScreen';
-import { ActivityHeatmap } from './ActivityHeatmap';
-import { describePR } from './formatPR';
 import { evaluateMilestonesForSession } from './evaluateMilestonesForSession';
 import { MilestoneCatalog } from './MilestoneCatalog';
 import { MilestoneForm } from './MilestoneForm';
-import { MuscleExplorer } from './MuscleExplorer';
+import { MilestonesView } from './MilestonesView';
+import { MusclesView } from './MusclesView';
+import { OverviewView } from './OverviewView';
+import { panelId, ProgressNav, tabId } from './ProgressNav';
+import { PROGRESS_SEGMENTS, type ProgressData, type ProgressSegment } from './progressData';
+import { StrengthView } from './StrengthView';
 
 interface ProgressScreenProps {
   onViewExercises: () => void;
 }
 
-/** v1.0.0 (H1). Progress is the home for five sub-views: Trends (the
- * dashboard), Muscles (distribution/recency -- upgraded to the canonical
- * taxonomy + Body Map in H2/H3), History, Body, and Milestones. History and
- * Body moved here from the old "More" menu. */
-type ProgressSegment = 'trends' | 'muscles' | 'history' | 'body' | 'milestones';
-
-const PROGRESS_SEGMENTS: { key: ProgressSegment; label: string }[] = [
-  { key: 'trends', label: 'Trends' },
-  { key: 'muscles', label: 'Muscles' },
-  { key: 'history', label: 'History' },
-  { key: 'body', label: 'Body' },
-  { key: 'milestones', label: 'Milestones' },
-];
-
-function isThisMonth(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-// Which PR kind demonstrates a benchmark metric, e.g. "pushups" is measured
-// by the exercise's `bodyweight`-kind PR (most reps in one set). Benchmarks
-// with no exerciseName (e.g. grip strength -- no ATLAS exercise for it) have
-// no entry here and are simply not shown, since there's no PR to compare.
-const BENCHMARK_PR_KIND: Record<string, PrKind> = {
-  pushups: 'bodyweight',
-  pullups: 'bodyweight',
-  bench_press_1rm_lb: 'estimated_1rm',
-  plank_seconds: 'timed',
-};
-
-interface RecentItem {
-  key: string;
-  kind: 'pr' | 'milestone';
-  date: string;
-  exerciseName: string;
-  title: string;
-  value: string | null;
-}
+const NAV_ID = 'progress';
 
 /**
+ * vNext Handoff 03B. Progress is six sections -- Overview, Strength, Muscles,
+ * Body, History, Milestones -- switched by a scrollable tab row. This screen
+ * owns loading and the milestone editing flows; each section is its own view
+ * and reads domain functions, never re-deriving PR / e1RM / stagnation /
+ * weekly-review / muscle math itself.
+ *
  * Reads the persisted (recalculated-on-finish) personalRecords table rather
  * than recomputing PRs live for every exercise the user has ever touched --
- * unlike ExerciseProgress (scoped to one exercise, cheap to recompute live),
- * this screen aggregates across potentially dozens of exercises, so a plain
- * indexed read of already-materialized data is the right tradeoff. See
- * docs/PRS.md "Performance."
+ * unlike the per-exercise Strength chart (scoped to one exercise, cheap to
+ * recompute live), Overview and Milestones aggregate across dozens of
+ * exercises, so a plain indexed read of already-materialized data is the
+ * right tradeoff. See docs/PRS.md "Performance."
  */
 export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
   const storage = useStorage();
   const [loading, setLoading] = useState(true);
-  const [prs, setPrs] = useState<PersonalRecord[]>([]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
-  const [exercises, setExercises] = useState<Map<string, Exercise>>(new Map());
-  const [sessions, setSessions] = useState<WorkoutSession[]>([]);
+  const [data, setData] = useState<ProgressData | null>(null);
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   /** Null when the catalog is closed; a string (possibly empty) is its initial search text. */
   const [catalogQuery, setCatalogQuery] = useState<string | null>(null);
-  const [segment, setSegment] = useState<ProgressSegment>('trends');
+  const [segment, setSegment] = useState<ProgressSegment>('overview');
+  /** Set when another section (Overview, History) sends the user to one exercise's Strength view. */
+  const [strengthExerciseId, setStrengthExerciseId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storage) return;
@@ -112,123 +61,59 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       // seen), but demoting old data before a fresh seed reads clearer.
       await migrateBuiltInMilestonesToCatalog(storage);
       await Promise.all([ensureBuiltInMilestonesSeeded(storage), ensureBenchmarksSeeded(storage)]);
-      const [allPRs, allMilestones, allBenchmarks, allExercises, allSessions] = await Promise.all([
+      const [
+        prs,
+        milestones,
+        benchmarks,
+        exercises,
+        sessions,
+        bodyMeasurements,
+        programs,
+        templates,
+        occurrences,
+      ] = await Promise.all([
         storage.personalRecords.getAll(),
         storage.milestones.getAll(),
         storage.benchmarks.getAll(),
         storage.exercises.getAll(),
         storage.workoutSessions.getAll(),
+        storage.bodyMeasurements.getAll(),
+        storage.programs.getAll(),
+        storage.workoutTemplates.getAll(),
+        storage.workoutOccurrences.getAll(),
       ]);
-      setPrs(allPRs);
-      setMilestones(allMilestones);
-      setBenchmarks(allBenchmarks);
-      setExercises(new Map(allExercises.map((e) => [e.id, e])));
-      setSessions(allSessions);
+      setData({
+        prs,
+        milestones,
+        benchmarks,
+        exercises: new Map(exercises.map((e) => [e.id, e])),
+        sessions,
+        bodyMeasurements,
+        activeProgram: programs.find((p) => p.is_active) ?? null,
+        templates: new Map(templates.map((t) => [t.id, t])),
+        occurrences,
+      });
       setLoading(false);
     }
   }, [storage]);
 
-  const thisMonthPRs = useMemo(() => prs.filter((p) => isThisMonth(p.achieved_at)).length, [prs]);
-  const thisMonthMilestones = useMemo(
-    () => milestones.filter((m) => m.achieved_at != null && isThisMonth(m.achieved_at)).length,
-    [milestones],
-  );
+  const exercises = data?.exercises;
+  const milestones = data?.milestones;
 
-  const recent = useMemo<RecentItem[]>(() => {
-    const prItems: RecentItem[] = prs.map((pr) => {
-      const { title, value } = describePR(pr);
-      return {
-        key: `pr:${pr.id}`,
-        kind: 'pr',
-        date: pr.achieved_at,
-        exerciseName: formatExerciseName(exercises.get(pr.exercise_id)?.name ?? 'Exercise'),
-        title,
-        value,
-      };
-    });
-    const milestoneItems: RecentItem[] = milestones
-      .filter((m): m is Milestone & { achieved_at: string } => m.achieved_at != null)
-      .map((m) => ({
-        key: `milestone:${m.id}`,
-        kind: 'milestone',
-        date: m.achieved_at,
-        exerciseName: m.exercise_id
-          ? formatExerciseName(exercises.get(m.exercise_id)?.name ?? 'Exercise')
-          : '',
-        title: m.title,
-        value: null,
-      }));
-    return [...prItems, ...milestoneItems].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  }, [prs, milestones, exercises]);
-
-  const strengthTrends = useMemo(() => {
-    const trends: { exerciseId: string; first: number; last: number }[] = [];
-    for (const pr of prs) {
-      if (pr.kind !== 'estimated_1rm') continue;
-      const series = estimated1RMSeries(sessions, pr.exercise_id);
-      const firstPoint = series[0];
-      const lastPoint = series[series.length - 1];
-      if (series.length < 2 || !firstPoint || !lastPoint) continue;
-      trends.push({ exerciseId: pr.exercise_id, first: firstPoint.value, last: lastPoint.value });
-    }
-    return trends.slice(0, 3);
-  }, [prs, sessions]);
-
-  // Grouped by movement and ordered by increasing target (v0.2.2) -- not by
-  // achieved_at, which scrambles different movements together the moment
-  // two milestones are hit on different days. See docs/DATA_MODEL.md
-  // "Milestone grouping."
-  //
-  // v0.2.3 Part B/C: "active" now means "the owner selected this as a
-  // goal" (built-ins seed inactive -- see ensureBuiltInMilestonesSeeded.ts
-  // -- and evaluateMilestone already skips `!active` entirely, so an
-  // unselected catalog target is never even evaluated). My Milestones and
-  // Achieved are mutually exclusive: a goal graduates out of "in progress"
-  // the moment it's achieved, regardless of its active flag from then on.
-  const myMilestoneGroups = useMemo(
-    () =>
-      groupMilestones(
-        milestones.filter((m) => m.active && m.achieved_at == null),
-        exercises,
-      ),
-    [milestones, exercises],
-  );
-  const achievedMilestoneGroups = useMemo(
-    () =>
-      groupMilestones(
-        milestones.filter((m) => m.achieved_at != null),
-        exercises,
-      ),
-    [milestones, exercises],
-  );
   // The catalog only ever shows built-ins still worth pursuing -- an
   // already-achieved one has nothing left to "add" (it's in Achieved
   // regardless of this list), and this is the ONLY screen the full set of
   // dozens of built-ins is ever rendered on (Part K).
   const catalogMilestones = useMemo(
-    () => milestones.filter((m) => m.is_builtin && m.achieved_at == null),
+    () => (milestones ?? []).filter((m) => m.is_builtin && m.achieved_at == null),
     [milestones],
   );
 
-  const benchmarkComparisons = useMemo(() => {
-    const results: { benchmark: Benchmark; exerciseName: string; display: string }[] = [];
-    for (const benchmark of benchmarks) {
-      if (!benchmark.exercise_id) continue;
-      const prKind = BENCHMARK_PR_KIND[benchmark.metric];
-      if (!prKind) continue;
-      const pr = prs.find((p) => p.exercise_id === benchmark.exercise_id && p.kind === prKind);
-      if (!pr) continue;
-      const found = findBenchmark(benchmarks, benchmark.metric);
-      if (!found) continue;
-      const percentile = interpolatePercentile(pr.value, found.percentile_thresholds);
-      results.push({
-        benchmark: found,
-        exerciseName: formatExerciseName(exercises.get(benchmark.exercise_id)?.name ?? 'Exercise'),
-        display: formatPercentileDisplay(percentile, found.comparison_population),
-      });
-    }
-    return results;
-  }, [benchmarks, prs, exercises]);
+  async function refreshMilestones() {
+    if (!storage) return;
+    const fresh = await storage.milestones.getAll();
+    setData((prev) => (prev ? { ...prev, milestones: fresh } : prev));
+  }
 
   async function handleMilestoneSaved(saved: Milestone) {
     if (!storage) return;
@@ -250,7 +135,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     // already be satisfied by existing history -- credit it immediately
     // rather than waiting for the next workout to finish.
     await evaluateMilestonesForSession(storage);
-    setMilestones(await storage.milestones.getAll());
+    await refreshMilestones();
     setShowMilestoneForm(false);
     setEditingMilestone(null);
   }
@@ -264,7 +149,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       version: milestone.version + 1,
     });
     if (nextActive) await evaluateMilestonesForSession(storage);
-    setMilestones(await storage.milestones.getAll());
+    await refreshMilestones();
   }
 
   // Removing a not-yet-achieved goal from My Milestones: a built-in just
@@ -285,7 +170,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     } else {
       await storage.milestones.softDelete(milestone.id);
     }
-    setMilestones(await storage.milestones.getAll());
+    await refreshMilestones();
   }
 
   // After achieving a goal, offer the catalog pre-filtered to the same
@@ -293,12 +178,17 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
   // surface, and the owner decides (Part J: no automatic replacement).
   function handleChooseNextGoal(milestone: Milestone) {
     const exerciseName = milestone.exercise_id
-      ? (exercises.get(milestone.exercise_id)?.name ?? '')
+      ? (exercises?.get(milestone.exercise_id)?.name ?? '')
       : '';
     setCatalogQuery(exerciseName);
   }
 
-  if (!storage || loading) {
+  function openStrength(exerciseId: string | null) {
+    setStrengthExerciseId(exerciseId);
+    setSegment('strength');
+  }
+
+  if (!storage || loading || !data) {
     return (
       <div className="atlas-empty-screen">
         <h1>Progress</h1>
@@ -311,7 +201,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
     return (
       <MilestoneCatalog
         milestones={catalogMilestones}
-        exercises={exercises}
+        exercises={data.exercises}
         initialQuery={catalogQuery}
         onToggle={(m, next) => void handleToggleCatalogMilestone(m, next)}
         onCreateCustom={() => {
@@ -329,7 +219,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
         storage={storage}
         existingMilestone={editingMilestone ?? undefined}
         existingExercise={
-          editingMilestone?.exercise_id ? exercises.get(editingMilestone.exercise_id) : undefined
+          editingMilestone?.exercise_id ? data.exercises.get(editingMilestone.exercise_id) : undefined
         }
         onSaved={(m) => void handleMilestoneSaved(m)}
         onCancel={() => {
@@ -342,217 +232,50 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
 
   return (
     <div className="atlas-progress">
-      <div className="atlas-progress__segments" role="tablist" aria-label="Progress">
-        {PROGRESS_SEGMENTS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            role="tab"
-            aria-selected={segment === s.key}
-            className={
-              segment === s.key
-                ? 'atlas-progress__segment atlas-progress__segment--active'
-                : 'atlas-progress__segment'
-            }
-            onClick={() => setSegment(s.key)}
-          >
-            {s.label}
-          </button>
-        ))}
+      <h1 className="atlas-progress__title">Progress</h1>
+      <ProgressNav
+        items={PROGRESS_SEGMENTS}
+        active={segment}
+        onChange={setSegment}
+        idPrefix={NAV_ID}
+        label="Progress sections"
+      />
+
+      <div
+        className="atlas-progress__panel"
+        role="tabpanel"
+        id={panelId(NAV_ID, segment)}
+        aria-labelledby={tabId(NAV_ID, segment)}
+      >
+        {segment === 'overview' && (
+          <OverviewView
+            data={data}
+            onOpenStrength={openStrength}
+            onOpenSegment={setSegment}
+            onViewExercises={onViewExercises}
+          />
+        )}
+        {segment === 'strength' && (
+          <StrengthView
+            data={data}
+            exerciseId={strengthExerciseId}
+            onSelectExercise={setStrengthExerciseId}
+            onViewExercises={onViewExercises}
+          />
+        )}
+        {segment === 'muscles' && <MusclesView data={data} />}
+        {segment === 'body' && <BodyScreen embedded />}
+        {segment === 'history' && <HistoryScreen embedded onOpenExercise={openStrength} />}
+        {segment === 'milestones' && (
+          <MilestonesView
+            data={data}
+            onAdd={() => setCatalogQuery('')}
+            onEdit={setEditingMilestone}
+            onRemove={(m) => void handleRemoveMilestone(m)}
+            onChooseNextGoal={handleChooseNextGoal}
+          />
+        )}
       </div>
-
-      {segment === 'history' && <HistoryScreen onBack={() => setSegment('trends')} />}
-      {segment === 'body' && <BodyScreen onBack={() => setSegment('trends')} />}
-
-      {(segment === 'trends' || segment === 'muscles' || segment === 'milestones') && (
-        <h1>Progress</h1>
-      )}
-
-      {segment === 'trends' && (
-        <>
-          <section className="atlas-progress__month">
-            <h2>This Month</h2>
-            <div className="atlas-progress__month-row">
-              <div className="atlas-progress__month-stat">
-                <span className="atlas-progress__month-count">{thisMonthPRs}</span>
-                <span className="atlas-progress__month-label">
-                  {thisMonthPRs === 1 ? 'PR' : 'PRs'}
-                </span>
-              </div>
-              <div className="atlas-progress__month-stat">
-                <span className="atlas-progress__month-count atlas-progress__month-count--milestone">
-                  {thisMonthMilestones}
-                </span>
-                <span className="atlas-progress__month-label">
-                  {thisMonthMilestones === 1 ? 'Milestone' : 'Milestones'}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <ActivityHeatmap sessions={sessions} />
-
-          <section>
-            <h2>Recent</h2>
-            {recent.length === 0 ? (
-              <p className="atlas-program-screen__empty">
-                Finish a workout to start tracking personal records and milestones.
-              </p>
-            ) : (
-              <ul className="atlas-progress__recent-list">
-                {recent.map((item) => (
-                  <li
-                    key={item.key}
-                    className={
-                      item.kind === 'milestone'
-                        ? 'atlas-progress__recent-item--milestone'
-                        : undefined
-                    }
-                  >
-                    <span className="atlas-progress__recent-exercise">{item.exerciseName}</span>
-                    {item.value && (
-                      <span className="atlas-progress__recent-value">{item.value}</span>
-                    )}
-                    <span className="atlas-progress__recent-meta">
-                      {item.kind === 'milestone' ? 'Milestone' : 'New'} {item.title} &middot;{' '}
-                      {formatDate(item.date)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {strengthTrends.length > 0 && (
-            <section>
-              <h2>Estimated Strength</h2>
-              <ul className="atlas-progress__trend-list">
-                {strengthTrends.map((t) => (
-                  <li key={t.exerciseId}>
-                    <span className="atlas-progress__trend-exercise">
-                      {formatExerciseName(exercises.get(t.exerciseId)?.name ?? 'Exercise')}
-                    </span>
-                    <span className="atlas-progress__trend-value">
-                      {Math.round(t.first)} &rarr; {Math.round(t.last)} e1RM
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {benchmarkComparisons.length > 0 && (
-            <section className="atlas-progress__benchmarks">
-              <h2>Benchmarks</h2>
-              <ul className="atlas-progress__benchmark-list">
-                {benchmarkComparisons.map(({ benchmark, exerciseName, display }) => (
-                  <li key={benchmark.id}>
-                    <span className="atlas-progress__benchmark-exercise">{exerciseName}</span>
-                    <span className="atlas-progress__benchmark-display">{display}</span>
-                    <details className="atlas-progress__benchmark-details">
-                      <summary>Source</summary>
-                      <p>{benchmark.source}</p>
-                      {benchmark.sample_description && <p>{benchmark.sample_description}</p>}
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <button
-            type="button"
-            className="atlas-progress__view-exercises"
-            onClick={onViewExercises}
-          >
-            View Exercises
-          </button>
-        </>
-      )}
-
-      {segment === 'muscles' && <MuscleExplorer sessions={sessions} exercises={exercises} />}
-
-      {segment === 'milestones' && (
-        <>
-          <section className="atlas-progress__milestones">
-            <h2>My Milestones</h2>
-            {myMilestoneGroups.length === 0 && (
-              <p className="atlas-program-screen__empty">
-                No active goals yet -- add one from the catalog below.
-              </p>
-            )}
-            {myMilestoneGroups.map((group) => (
-              <div
-                key={group.exerciseId ?? group.displayName}
-                className="atlas-progress__milestone-group"
-              >
-                <h3 className="atlas-progress__milestone-group-title">
-                  {formatExerciseName(group.displayName)}
-                </h3>
-                <ul className="atlas-progress__milestone-list">
-                  {group.milestones.map((m) => {
-                    const progress = describeMilestoneProgress(m, prs);
-                    return (
-                      <li key={m.id}>
-                        <div className="atlas-progress__milestone-main">
-                          <span className="atlas-progress__milestone-title">{m.title}</span>
-                          <span className="atlas-progress__milestone-date">{progress.text}</span>
-                        </div>
-                        <div className="atlas-progress__milestone-actions">
-                          <button type="button" onClick={() => setEditingMilestone(m)}>
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => void handleRemoveMilestone(m)}>
-                            Remove
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-            <button type="button" onClick={() => setCatalogQuery('')}>
-              + Add Milestone
-            </button>
-          </section>
-
-          <section className="atlas-progress__milestones">
-            <h2>Achieved</h2>
-            {achievedMilestoneGroups.length === 0 ? (
-              <p className="atlas-program-screen__empty">Nothing achieved yet.</p>
-            ) : (
-              achievedMilestoneGroups.map((group) => (
-                <div
-                  key={group.exerciseId ?? group.displayName}
-                  className="atlas-progress__milestone-group"
-                >
-                  <h3 className="atlas-progress__milestone-group-title">
-                    {formatExerciseName(group.displayName)}
-                  </h3>
-                  <ul className="atlas-progress__milestone-list">
-                    {group.milestones.map((m) => (
-                      <li key={m.id} className="atlas-progress__milestone--achieved">
-                        <div className="atlas-progress__milestone-main">
-                          <span className="atlas-progress__milestone-title">{m.title}</span>
-                          <span className="atlas-progress__milestone-date">
-                            {formatDate(m.achieved_at!)}
-                          </span>
-                        </div>
-                        <div className="atlas-progress__milestone-actions">
-                          <button type="button" onClick={() => handleChooseNextGoal(m)}>
-                            Choose Next Goal
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
-            )}
-          </section>
-        </>
-      )}
     </div>
   );
 }

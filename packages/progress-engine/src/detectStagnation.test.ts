@@ -7,7 +7,7 @@ import {
   type LogSetInput,
 } from '@atlas/workout-engine';
 import type { Exercise, PersonalRecord, WorkoutSession } from '@atlas/data-model';
-import { detectStagnation } from './detectStagnation';
+import { detectAllStagnation, detectStagnation } from './detectStagnation';
 
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
@@ -153,5 +153,26 @@ describe('detectStagnation', () => {
 
   it('returns [] for an exercise with no history at all', () => {
     expect(detectStagnation([], bench, [])).toEqual([]);
+  });
+});
+
+describe('detectAllStagnation', () => {
+  it('sweeps every trained exercise in the lookup and skips ones it does not know', () => {
+    const stalledBench = [1, 2, 3].map((i) =>
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], `2026-08-0${i}T10:00:00.000Z`),
+    );
+    const improvingCurl = [1, 2, 3].map((i) =>
+      completedSession('curl', [set({ exerciseId: 'curl', weight: 20 + i, reps: 10 })], `2026-08-0${i}T12:00:00.000Z`),
+    );
+    const orphan = [1, 2, 3].map((i) =>
+      completedSession('ghost', [set({ exerciseId: 'ghost', weight: 10, reps: 10 })], `2026-08-0${i}T14:00:00.000Z`),
+    );
+    const lookup = new Map([
+      ['bench', exercise({ id: 'bench' })],
+      ['curl', exercise({ id: 'curl', name: 'Curl' })],
+    ]);
+    const prs = [pr({ exercise_id: 'curl', source_session_id: improvingCurl[2]!.id })];
+    const signals = detectAllStagnation([...stalledBench, ...improvingCurl, ...orphan], lookup, prs);
+    expect(signals.map((s) => s.exercise_id)).toEqual(['bench']);
   });
 });

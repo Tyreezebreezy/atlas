@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { BodyMeasurement } from '@atlas/data-model';
 import { resolveBodyweightForDate } from './resolveBodyweightForDate';
-import { weightSeries, bodyFatSeries } from './bodyMeasurementSeries';
+import {
+  weightSeries,
+  bodyFatSeries,
+  weightRollingAverageSeries,
+  ROLLING_MIN_WEIGH_INS,
+} from './bodyMeasurementSeries';
 import { createBodyMeasurement, type CreateBodyMeasurementInput } from './createBodyMeasurement';
 
 function measurement(
@@ -80,5 +85,53 @@ describe('createBodyMeasurement', () => {
     expect(m.body_fat_percentage).toBeNull();
     expect(m.notes).toBeNull();
     expect(m.id).toBeTruthy();
+  });
+});
+
+describe('weightRollingAverageSeries', () => {
+  const weigh = (date: string, weight: number | null) => measurement(date, weight);
+
+  it('emits nothing until a window holds enough weigh-ins', () => {
+    expect(ROLLING_MIN_WEIGH_INS).toBe(3);
+    expect(weightRollingAverageSeries([])).toEqual([]);
+    expect(weightRollingAverageSeries([weigh('2026-09-01', 180), weigh('2026-09-02', 179)])).toEqual([]);
+  });
+
+  it('averages the weigh-ins in the trailing 7 days, inclusive of the current date', () => {
+    const points = weightRollingAverageSeries([
+      weigh('2026-09-01', 180),
+      weigh('2026-09-03', 178),
+      weigh('2026-09-05', 176),
+      weigh('2026-09-07', 174),
+    ]);
+    // Third weigh-in is the first with 3 in its window; the fourth still sees all four (Sep 1 is 6 days back).
+    expect(points.map((p) => [p.date, p.value])).toEqual([
+      ['2026-09-05', 178],
+      ['2026-09-07', 177],
+    ]);
+  });
+
+  it('drops weigh-ins that have aged out of the window', () => {
+    const points = weightRollingAverageSeries([
+      weigh('2026-09-01', 200),
+      weigh('2026-09-08', 180),
+      weigh('2026-09-09', 178),
+      weigh('2026-09-10', 176),
+    ]);
+    // The Sep 1 reading is 9 days before Sep 10 and no longer counts.
+    expect(points.at(-1)).toMatchObject({ date: '2026-09-10', value: 178 });
+  });
+
+  it('skips entries with no weight and carries the weigh-in id so charts can align it with raw points', () => {
+    const rows = [
+      weigh('2026-09-01', 180),
+      weigh('2026-09-02', null),
+      weigh('2026-09-03', 178),
+      weigh('2026-09-04', 176),
+    ];
+    const points = weightRollingAverageSeries(rows);
+    expect(points).toHaveLength(1);
+    expect(points[0]?.sessionId).toBe(rows[3]?.id);
+    expect(points[0]?.value).toBeCloseTo(178);
   });
 });
