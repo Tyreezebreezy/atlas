@@ -1,3 +1,9 @@
+import {
+  buildHeadlinePREvents,
+  exposureSessions,
+  headlinePREventsInPeriod,
+  type ExposureSessions,
+} from '@atlas/pr-engine';
 import type { BodyMeasurement, Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
 import type { StagnationSignal } from './detectStagnation';
 
@@ -16,6 +22,19 @@ function inPeriod(dateStr: string, start: string, end: string): boolean {
   return d >= start && d <= end;
 }
 
+/** True when the exercise was trained in the period in a session that was NOT its first in that equipment context -- i.e. there is an earlier performance to compare it with. */
+function hasComparisonInPeriod(
+  exposures: ExposureSessions,
+  exerciseId: string,
+  periodStart: string,
+  periodEnd: string,
+): boolean {
+  for (const history of exposures.get(exerciseId)?.values() ?? []) {
+    if (history.slice(1).some((s) => inPeriod(s.completed_at ?? s.started_at, periodStart, periodEnd))) return true;
+  }
+  return false;
+}
+
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
@@ -29,9 +48,12 @@ export interface WeeklyReview {
   planned_sessions: number | null;
   completed_sessions: number;
   adherence_ratio: number | null;
+  /** Headline PRs -- exercise performances that earned a new best, one per exercise per session (see pr-engine `buildHeadlinePREvents`), NOT the number of `PersonalRecord` rows. A first-ever performance is a baseline, not a PR. */
   pr_count: number;
   milestone_count: number;
+  /** Exercises trained this period that earned a headline PR. */
   exercises_progressed: number;
+  /** Exercises trained this period with an earlier performance to compare against, no headline PR and no stall flag. An exercise whose only sessions this period were its first has nothing to compare yet and is in none of the three. */
   exercises_maintained: number;
   exercises_stalled: number;
   body_weight_average: number | null;
@@ -71,7 +93,12 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
     (s) => s.status === 'completed' && (s.completed_at ?? s.started_at).slice(0, 10) < periodStart,
   );
 
-  const prsInPeriod = personalRecords.filter((pr) => inPeriod(pr.achieved_at, periodStart, periodEnd));
+  const exposures = exposureSessions(sessions);
+  const headlinePRs = headlinePREventsInPeriod(
+    buildHeadlinePREvents(personalRecords, sessions, exposures),
+    periodStart,
+    periodEnd,
+  );
   const milestonesInPeriod = milestones.filter(
     (m) => m.achieved_at != null && inPeriod(m.achieved_at, periodStart, periodEnd),
   );
@@ -81,7 +108,7 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
     for (const set of s.performed_sets) trainedExerciseIds.add(set.exercise_id);
   }
   const stalledExerciseIds = new Set(stagnationSignals.map((sig) => sig.exercise_id));
-  const progressedExerciseIds = new Set(prsInPeriod.map((pr) => pr.exercise_id));
+  const progressedExerciseIds = new Set(headlinePRs.map((event) => event.exercise_id));
 
   let exercisesProgressed = 0;
   let exercisesStalled = 0;
@@ -89,7 +116,7 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
   for (const exerciseId of trainedExerciseIds) {
     if (stalledExerciseIds.has(exerciseId)) exercisesStalled += 1;
     else if (progressedExerciseIds.has(exerciseId)) exercisesProgressed += 1;
-    else exercisesMaintained += 1;
+    else if (hasComparisonInPeriod(exposures, exerciseId, periodStart, periodEnd)) exercisesMaintained += 1;
   }
 
   const periodLengthDays =
@@ -123,7 +150,7 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
     planned_sessions: plannedSessions,
     completed_sessions: completedInPeriod.length,
     adherence_ratio: adherenceRatio,
-    pr_count: prsInPeriod.length,
+    pr_count: headlinePRs.length,
     milestone_count: milestonesInPeriod.length,
     exercises_progressed: exercisesProgressed,
     exercises_maintained: exercisesMaintained,

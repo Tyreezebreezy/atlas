@@ -3254,7 +3254,7 @@ button {
 .atlas-onboarding__panel {
   width: 100%;
   max-width: 400px;
-  padding: var(--atlas-space-5);
+  padding: var(--atlas-space-6);
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-lg);
   background: var(--atlas-color-surface);
@@ -4901,6 +4901,8 @@ summary {
 .atlas-benchmarks {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  /* Cards keep their own height: opening one card's Details must not stretch (and spread out) its row-neighbors. */
+  align-items: start;
   gap: var(--atlas-space-2);
   margin: 0;
   padding: 0;
@@ -4940,6 +4942,20 @@ summary {
 
 .atlas-benchmark-card__source p {
   margin: var(--atlas-space-1) 0 0;
+}
+
+/* Handoff 04A: a comparison ATLAS cannot verify is a quiet card, never a number. */
+.atlas-benchmark-card--unavailable {
+  box-shadow: inset 3px 0 0 var(--atlas-chart-grid);
+}
+
+.atlas-benchmark-card--unavailable .atlas-benchmark-card__tag,
+.atlas-benchmark-card--unavailable .atlas-benchmark-card__display {
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-benchmark-card--unavailable .atlas-benchmark-card__display {
+  font-size: var(--atlas-font-size-caption);
 }
 
 /* History rows: a surface step instead of an outlined card (the shared list style is left alone

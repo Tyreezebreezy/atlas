@@ -169,3 +169,47 @@ session — computed with the same eligibility rules as PRs.
 then diffs the resulting `PersonalRecord[]` against the session id via
 `newPRsFromSession` to populate `WorkoutSummary`'s "New PRs" section. This
 never shows a PR that was only _tied_, per the tie-behavior rule above.
+
+## Headline PRs (vNext Handoff 04A)
+
+The `PersonalRecord` rows above are _detailed_ records: one per kind, per rep
+count, per load, so one good bench session can leave a dozen of them. The
+number a person means by "6 PRs this week" is different — how many exercise
+performances earned a new best. That is a **headline PR**: an aggregation over
+the rows (`pr-engine/headlinePRs.ts`), not a second stored source of truth and
+not a second PR detector.
+
+> One headline PR = one exercise, in one completed session, in one equipment
+> context (`training_location_id`), however many detailed rows that performance
+> currently holds.
+
+- `buildHeadlinePREvents(personalRecords, sessions)` groups the current rows by
+  session + exercise + location and returns `HeadlinePREvent[]` (oldest first,
+  independent of input order). An event keeps every record it groups
+  (`records`), so nothing is discarded, and carries a `primary_kind` label.
+- **Baseline is not a PR.** The first eligible session of an exercise in an
+  equipment context is its baseline: its rows exist (they are the first
+  numbers) but do not make an event. The same first-exposure index
+  (`exposureSessions`) backs the muscle Performance mode, so the two cannot
+  disagree about what "first" means. A row whose source session is not among
+  the given sessions cannot be shown to be a later one, so it is not counted.
+- `headlinePREventsInPeriod(events, start, end)` filters by the event's day
+  (inclusive `YYYY-MM-DD`, the rule the weekly review always used).
+- **`primary_kind`** is display-only and never changes what counts. First match
+  wins: `max_load` (and its bodyweight analogue `weighted_bodyweight`),
+  `rep_at_load`, `estimated_1rm`, `rep` / `bodyweight`, `timed` / `distance`,
+  then `rep_range` / `volume` — the handoff's order mapped onto the repository's
+  kinds.
+- **Only standing records are visible.** `calculatePRs` keeps just the current
+  best per key, so a record a later session beat is no longer a row, and an
+  event none of whose records still stand is not counted. The figure is
+  "performances that currently hold a record" — conservative, never inflated.
+  (Example: 170 lb × 12 → 14 → 16 is three sessions; the 12-rep one is the
+  baseline, and the 14- and 16-rep ones each still hold a record, so two events —
+  not the dozen rows they set.)
+- **Consumers.** `buildWeeklyReview` (`pr_count`, `exercises_progressed`) is the
+  single place Today and Progress Overview read the figure from; a source-scan
+  test (`apps/web/src/progress/singleEvaluator.test.ts`) fails if either screen
+  starts counting rows itself. The detail surfaces — the workout summary's "New
+  PRs", Strength record markers, PR history — still list every record and were
+  left alone on purpose.

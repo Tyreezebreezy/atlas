@@ -5,6 +5,7 @@ import type {
   Milestone,
   PersonalRecord,
   Program,
+  TestProtocol,
   WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
@@ -17,6 +18,8 @@ export interface ProgressData {
   prs: PersonalRecord[];
   milestones: Milestone[];
   benchmarks: Benchmark[];
+  /** The test protocols benchmark definitions name -- the compatibility gate needs them. */
+  testProtocols: TestProtocol[];
   bodyMeasurements: BodyMeasurement[];
   activeProgram: Program | null;
   templates: Map<string, WorkoutTemplate>;

@@ -1,4 +1,10 @@
-import type { PercentileResult } from './interpolatePercentile';
+/** What the display needs from a percentile result -- satisfied by a strict evaluation and, structurally, by the legacy `PercentileResult`. */
+export interface PercentileDisplayInput {
+  percentile: number;
+  aboveMaximum?: boolean;
+  /** Carried by the legacy result; the wording does not use it. */
+  belowMinimum?: boolean;
+}
 
 /**
  * Clean, non-fake-precise display text -- never "87.394284%", never
@@ -6,7 +12,7 @@ import type { PercentileResult } from './interpolatePercentile';
  * the handoff's own "Top 5%" example); everything else reads as
  * "Stronger than P% of {population}". Capped to [1, 99] either way.
  */
-export function formatPercentileDisplay(result: PercentileResult, population = 'men'): string {
+export function formatPercentileDisplay(result: PercentileDisplayInput, population = 'men'): string {
   const clamped = Math.min(99, Math.max(1, Math.round(result.percentile)));
   if (result.aboveMaximum || clamped >= 90) {
     const topN = Math.max(1, 100 - clamped);

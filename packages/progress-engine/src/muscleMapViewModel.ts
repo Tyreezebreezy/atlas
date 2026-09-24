@@ -1,5 +1,5 @@
 import { getMuscle, muscleMapOf, MUSCLE_GROUPS } from '@atlas/anatomy';
-import { eligibleSets, eligibleSetsForExercise } from '@atlas/pr-engine';
+import { eligibleSets, exposureSessions, type ExposureSessions } from '@atlas/pr-engine';
 import type { Exercise, PersonalRecord, PlannedExercise, WorkoutSession } from '@atlas/data-model';
 import { detectStagnation } from './detectStagnation';
 
@@ -224,23 +224,15 @@ export function exercisePerformanceState(
   exercise: Exercise,
   personalRecords: PersonalRecord[],
   window: { start: number; end: number },
+  /** Pass a prebuilt index when judging many exercises over the same sessions. */
+  exposures: ExposureSessions = exposureSessions(sessions),
 ): MusclePerformanceState {
-  const exposuresByLocation = new Map<string | null, Map<string, WorkoutSession>>();
-  for (const { session } of eligibleSetsForExercise(sessions, exercise.id)) {
-    const key = session.training_location_id ?? null;
-    const exposures = exposuresByLocation.get(key) ?? new Map<string, WorkoutSession>();
-    exposures.set(session.id, session);
-    exposuresByLocation.set(key, exposures);
-  }
-
   let comparable = false;
   let progressed = false;
-  for (const [locationId, exposures] of exposuresByLocation) {
-    if (exposures.size < 2) continue;
+  for (const [locationId, history] of exposures.get(exercise.id) ?? []) {
+    if (history.length < 2) continue;
     comparable = true;
-    const first = [...exposures.values()].sort((a, b) =>
-      (a.completed_at ?? a.started_at).localeCompare(b.completed_at ?? b.started_at),
-    )[0];
+    const first = history[0];
     progressed ||= personalRecords.some((pr) => {
       if (pr.exercise_id !== exercise.id || (pr.training_location_id ?? null) !== locationId) return false;
       const achieved = new Date(pr.achieved_at).getTime();
@@ -280,6 +272,7 @@ function aggregateTraining(
   const workoutIds = new Set<string>();
   let workingSets = 0;
   const performanceByExercise = new Map<string, MusclePerformanceState>();
+  const exposures = mode === 'performance' ? exposureSessions(sessions) : undefined;
 
   for (const { set, session } of inWindow) {
     workoutIds.add(session.id);
@@ -292,7 +285,7 @@ function aggregateTraining(
 
     // Performance: judge each exercise once (not per set) and tell every muscle/group it targets.
     if (mode === 'performance' && !performanceByExercise.has(exercise.id)) {
-      const state = exercisePerformanceState(sessions, exercise, input.personalRecords ?? [], window);
+      const state = exercisePerformanceState(sessions, exercise, input.personalRecords ?? [], window, exposures);
       performanceByExercise.set(exercise.id, state);
       const seenGroups = new Set<string>();
       for (const id of targets.primary) {

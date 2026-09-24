@@ -7,7 +7,70 @@ There is no "achieved" event for a benchmark and nothing is evaluated on
 workout finish; a comparison is computed live, wherever it's shown, against
 whichever `Benchmark` rows currently exist.
 
-## Percentile interpolation (`interpolatePercentile.ts`)
+## Authority: the compatibility gate (Handoff 04A)
+
+Every current, user-facing comparison comes from `evaluateBenchmarkStrict`
+(`evaluateBenchmarkStrict.ts`), the only evaluator the app calls. A claim needs
+a compatible match on everything the registry records; if any of it is missing
+or does not line up, the answer is a typed
+`NO_COMPATIBLE_BENCHMARK { code, reason }` — never an estimate.
+
+| Check (in this order)                                                                                            | Code                                   |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| a benchmark definition exists                                                                                    | `NO_BENCHMARK`                         |
+| `evaluation_method` is `strict_anchor`                                                                           | `LEGACY_METHOD`, `METHOD_UNSUPPORTED`  |
+| `source`, `dataset_version`, `benchmark_version` are present                                                     | `PROVENANCE_INCOMPLETE`                |
+| `test_protocol_id` is present, resolves to a `TestProtocol`, and `matchProtocol` accepts the result's type       | `PROTOCOL_INCOMPATIBLE`                |
+| `unit` is present and equals the result's unit                                                                   | `UNIT_INCOMPATIBLE`                    |
+| `comparison_population`, `geography`, `population_type` are present (and equal the person's named group, if any) | `REFERENCE_INCOMPATIBLE`               |
+| an age-banded row needs the person's age, known and inside the band                                              | `AGE_INCOMPATIBLE`                     |
+| the row has thresholds, and the result reaches the lowest one                                                    | `NO_THRESHOLDS`, `BELOW_LOWEST_ANCHOR` |
+
+With a match it reports the **highest documented threshold reached**: against
+P50 = 33 / P70 = 41 / P80 = 47 / P90 = 57, a result of 45 is "stronger than
+70%", not an invented 76%. The result also carries the anchor's own value and a
+`provenance` (`method`, `dataset_version`, `benchmark_version`). There is
+deliberately no fallback to interpolation, and the Details disclosure on a card
+shows the source, protocol, reference population, threshold reached and
+versions.
+
+`Benchmark.evaluation_method` (`BenchmarkEvaluationMethod`, additive):
+
+- `strict_anchor` — the thresholds are documented anchors. The only method that
+  yields a claim today.
+- `validated_model` — reserved for an explicitly validated continuous model.
+  None exists and nothing evaluates it, so it fails closed.
+- `legacy_interpolated` — what an _absent_ value means: every v0.0.7 row
+  (ATLAS-modeled points meant for interpolation). A compatibility label only,
+  never a current claim; stored rows are never rewritten to say so.
+
+**What this means for the seeded data.** All five seeded rows are v0.0.7 rows
+(and each is also age-banded, protocol-less, unit-less and
+`benchmark_version`-less), so **none currently yields a comparison**. For an
+exercise the person has a matching PR for, the Benchmarks pane shows the
+restrained "No verified comparison available for this result." with the reason
+under Details. That is the intended, honest outcome: the rows are modeled curves
+(grade D), not documented anchors. A comparison lights up only once a definition
+with `evaluation_method: 'strict_anchor'` and the full registry metadata exists
+and — for an age-banded one — ATLAS knows the person's age. Neither is seeded
+or invented here; a benchmark dataset pack and profile input are separate work.
+
+**History.** Comparisons were always derived live, so no legacy result was ever
+persisted and there was nothing to migrate. On the milestone side,
+`BenchmarkAchievementInput` now requires an `evaluation` provenance whose
+`method` type excludes `legacy_interpolated`, and an achieved
+`benchmark_threshold` milestone keeps it in `achieved_benchmark_evaluation`. An
+achieved milestone is never re-evaluated (the standing rule), so a later
+dataset, method or standing neither revokes nor rewrites it.
+`benchmarkAchievements` stays unwired in the live workout-finish path
+(`evaluateMilestonesForSession.ts`).
+
+## Percentile interpolation (`interpolatePercentile.ts`) — legacy
+
+**Legacy (Handoff 04A): no user-facing code calls this.** It is kept, marked
+`@deprecated` and isolated, so v0.0.7 behavior stays readable and testable;
+`apps/web/src/progress/singleEvaluator.test.ts` fails if the web app imports it.
+What follows describes that legacy behavior.
 
 Deterministic linear interpolation between the `(percentile, value)` points
 in a `Benchmark.percentile_thresholds` map (e.g. `{ "50": 20, "90": 30 }`).
@@ -63,21 +126,22 @@ to copy large copyrighted tables.
 
 ## Which PR proves which benchmark
 
-`apps/web/src/progress/ProgressScreen.tsx` maps each metric to the PR kind
-that demonstrates it (`BENCHMARK_PR_KIND`): `pushups`/`pullups` → the
-exercise's `bodyweight`-kind PR (most reps in one set), `bench_press_1rm_lb`
-→ `estimated_1rm`, `plank_seconds` → `timed`. A benchmark card only appears
-once the user has a matching PR for that exercise — there's nothing to
-compare against otherwise. This mapping is a small UI-level lookup table,
-not engine logic, so it isn't unit-tested separately; it's exercised by the
-same real browser/Tauri runtime pass as the rest of v0.0.7.
+`apps/web/src/progress/BenchmarkComparisons.tsx` maps each metric to the PR
+kind that demonstrates it and the unit that PR is in (`BENCHMARK_OBSERVATION`):
+`pushups`/`pullups` → the exercise's `bodyweight`-kind PR (most reps in one
+set), in reps; `bench_press_1rm_lb` → `estimated_1rm`, in lb; `plank_seconds` →
+`timed`, in seconds. A benchmark card only appears once the user has a matching
+PR for that exercise — there's nothing to compare against otherwise. The
+result is then run through the gate above (`benchmarkComparisons.test.ts`).
 
 ## Age and population
 
 `Benchmark.age_min`/`age_max`/`age_group` and `comparison_population` exist
 and `findBenchmark` already implements age-bracket matching with a fallback
 to an age-unrestricted row — but ATLAS collects no user age anywhere yet, so
-in practice every lookup takes the age-unrestricted fallback path today.
+in practice every lookup takes the age-unrestricted fallback path today. Since
+Handoff 04A the gate goes further: an age-banded row cannot yield a claim at all
+while the person's age is unknown.
 Bench press's percentiles are also **absolute weight, not bodyweight-relative**
 — a documented v0.0.7 simplification (real strength standards normally
 condition on the lifter's own bodyweight; ATLAS's do not yet), not an
@@ -87,7 +151,7 @@ oversight.
 
 `Benchmark.dataset_version` (currently `atlas-benchmarks-2026.1`) makes a
 comparison's provenance recomputable rather than baked-in:
-`formatPercentileDisplay`/`interpolatePercentile` are always called live
+`evaluateBenchmarkStrict` and `formatPercentileDisplay` are always called live
 against whichever `Benchmark` rows are currently active, never stored on a
 `WorkoutSession` at the time of achievement. `ensureBenchmarksSeeded` is a
 no-op once any row of the _current_ `dataset_version` exists; bumping the

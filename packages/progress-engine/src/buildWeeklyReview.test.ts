@@ -7,6 +7,7 @@ import {
   type LogSetInput,
 } from '@atlas/workout-engine';
 import { createBodyMeasurement } from '@atlas/body-composition';
+import { buildHeadlinePREvents, headlinePREventsInPeriod } from '@atlas/pr-engine';
 import type { Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
 import { buildWeeklyReview, type WeeklyReviewInput } from './buildWeeklyReview';
 import type { StagnationSignal } from './detectStagnation';
@@ -108,19 +109,19 @@ describe('buildWeeklyReview', () => {
     expect(review.exercises_stalled).toBe(1);
   });
 
-  it('classifies each trained exercise as exactly one of progressed/maintained/stalled', () => {
-    const priorSession = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const squatSet = set({ exerciseId: 'squat', weight: 200, reps: 5 });
-    const benchSet = set({ exerciseId: 'bench', weight: 100, reps: 8 });
-    const rowSet = set({ exerciseId: 'row', weight: 100, reps: 8 });
-    let session = startWorkoutSession({ name: 'Session', templateId: null, programId: null, programDayId: null, plannedSnapshot: [] });
-    session = addPerformedSet(session, { ...squatSet, completed_at: '2026-08-05T10:00:00.000Z' });
-    session = addPerformedSet(session, { ...benchSet, completed_at: '2026-08-05T10:00:00.000Z' });
-    session = addPerformedSet(session, { ...rowSet, completed_at: '2026-08-05T10:00:00.000Z' });
-    session = completeWorkoutSession(session);
-    session = { ...session, completed_at: '2026-08-05T10:00:00.000Z' };
+  it('classifies each trained exercise as exactly one of progressed/maintained/stalled -- and leaves a first-ever exercise out of all three', () => {
+    const lifts = (load: number) =>
+      (['squat', 'bench', 'row'] as const).map((exerciseId) => set({ exerciseId, weight: load, reps: 5 }));
+    const priorSession = completedSession('bench', lifts(95), '2026-07-20T10:00:00.000Z');
+    const session = completedSession(
+      'bench',
+      [...lifts(100), set({ exerciseId: 'curl', weight: 30, reps: 10 })],
+      '2026-08-05T10:00:00.000Z',
+    );
 
     const squatPr = pr({ exercise_id: 'squat', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id });
+    // The curl's first-ever performance is a baseline: it has rows, but they are not a PR.
+    const curlPr = pr({ exercise_id: 'curl', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id });
     const rowStall: StagnationSignal = {
       exercise_id: 'row',
       training_location_id: null,
@@ -133,18 +134,79 @@ describe('buildWeeklyReview', () => {
     const review = buildWeeklyReview(
       baseInput({
         sessions: [priorSession, session],
-        personalRecords: [squatPr],
+        personalRecords: [squatPr, curlPr],
         stagnationSignals: [rowStall],
       }),
     );
     expect(review.exercises_progressed).toBe(1); // squat
     expect(review.exercises_maintained).toBe(1); // bench
     expect(review.exercises_stalled).toBe(1); // row
+    // curl: nothing earlier to compare with, so it is in none of the three and is not a PR.
+    expect(review.pr_count).toBe(1);
   });
 
-  it('counts PRs and milestones achieved within the period, excluding ones outside it', () => {
-    const inPeriod = pr({ exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z' });
-    const outOfPeriod = pr({ exercise_id: 'bench', achieved_at: '2026-07-01T10:00:00.000Z' });
+  it('counts one PR per exercise performance, however many detailed record rows it set', () => {
+    const prior = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
+    const session = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
+    const rows = (['max_load', 'estimated_1rm', 'rep_at_load', 'rep_range', 'volume'] as const).map((kind) =>
+      pr({ kind, exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
+    );
+    const review = buildWeeklyReview(baseInput({ sessions: [prior, session], personalRecords: rows }));
+    expect(rows).toHaveLength(5);
+    expect(review.pr_count).toBe(1);
+    expect(review.exercises_progressed).toBe(1);
+  });
+
+  it('does not count a first-ever performance as a PR, even though it has record rows', () => {
+    const session = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
+    const rows = (['max_load', 'estimated_1rm', 'volume'] as const).map((kind) =>
+      pr({ kind, exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
+    );
+    const review = buildWeeklyReview(baseInput({ sessions: [session], personalRecords: rows }));
+    expect(review.status_code).toBe('BASELINE_WEEK');
+    expect(review.pr_count).toBe(0);
+    expect(review.exercises_progressed).toBe(0);
+  });
+
+  it('reports the same PR count as the shared headline helper (Today and Progress both read this figure)', () => {
+    const prior = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
+    const session = completedSession(
+      'bench',
+      [set({ exerciseId: 'bench', weight: 100, reps: 8 }), set({ exerciseId: 'squat', weight: 200, reps: 5 })],
+      '2026-08-05T10:00:00.000Z',
+    );
+    const rows = [
+      pr({ kind: 'max_load', exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
+      pr({ kind: 'volume', exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
+      pr({ kind: 'max_load', exercise_id: 'squat', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
+    ];
+    const input = baseInput({ sessions: [prior, session], personalRecords: rows });
+    const viaHelper = headlinePREventsInPeriod(
+      buildHeadlinePREvents(rows, input.sessions),
+      input.periodStart,
+      input.periodEnd,
+    );
+    // Today builds the review with no stagnation signals; Progress builds it with real ones. The count must not depend on that.
+    const stall: StagnationSignal = {
+      exercise_id: 'squat',
+      training_location_id: null,
+      comparable_exposures: 3,
+      first_exposure_date: '2026-07-01T00:00:00.000Z',
+      last_exposure_date: '2026-08-05T00:00:00.000Z',
+      reason_code: 'PROGRESS_STALLED',
+    };
+    expect(buildWeeklyReview(input).pr_count).toBe(viaHelper.length);
+    expect(buildWeeklyReview({ ...input, stagnationSignals: [stall] }).pr_count).toBe(viaHelper.length);
+    expect(viaHelper.map((e) => e.exercise_id)).toEqual(['bench']);
+  });
+
+  it('counts headline PRs and milestones achieved within the period, excluding ones outside it and baseline ones', () => {
+    const baseline = completedSession('bench', [set({ exerciseId: 'bench', weight: 90, reps: 8 })], '2026-07-01T10:00:00.000Z');
+    const earlier = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
+    const thisWeek = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
+    const inPeriod = pr({ exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: thisWeek.id });
+    const outOfPeriod = pr({ kind: 'rep', exercise_id: 'bench', achieved_at: '2026-07-20T10:00:00.000Z', source_session_id: earlier.id });
+    const baselineRow = pr({ kind: 'volume', exercise_id: 'bench', achieved_at: '2026-07-01T10:00:00.000Z', source_session_id: baseline.id });
     const achievedMilestone: Milestone = {
       id: 'm-1',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -170,7 +232,11 @@ describe('buildWeeklyReview', () => {
       origin_set_id: 'set-1',
     };
     const review = buildWeeklyReview(
-      baseInput({ personalRecords: [inPeriod, outOfPeriod], milestones: [achievedMilestone] }),
+      baseInput({
+        sessions: [baseline, earlier, thisWeek],
+        personalRecords: [inPeriod, outOfPeriod, baselineRow],
+        milestones: [achievedMilestone],
+      }),
     );
     expect(review.pr_count).toBe(1);
     expect(review.milestone_count).toBe(1);

@@ -117,6 +117,8 @@ export interface Milestone extends SyncMeta {
   /** vNext Handoff 02. 'benchmark_threshold' dimension only -- both set together. */
   target_benchmark_id?: string | null;
   target_percentile?: number | null;
+  /** vNext Handoff 04A. 'benchmark_threshold' only -- how the percentile that achieved this goal was derived, stamped once when it is achieved and never re-read under a different method or benchmark version afterwards (an achieved milestone is never re-evaluated). Absent on any milestone achieved before this field existed. */
+  achieved_benchmark_evaluation?: BenchmarkEvaluationProvenance | null;
   is_builtin: boolean;
   /** Deactivated milestones are excluded from evaluation but kept (distinct from soft-delete). */
   active: boolean;
@@ -127,6 +129,26 @@ export interface Milestone extends SyncMeta {
 
 /** Internal quality classification — never shown on motivational cards. */
 export type BenchmarkEvidenceGrade = 'A' | 'B' | 'C' | 'D';
+
+/**
+ * vNext Handoff 04A. How a benchmark row's percentile may be derived.
+ *
+ * - `strict_anchor`: `percentile_thresholds` are documented anchors. A result
+ *   reports the highest anchor it reaches -- never a value between two.
+ * - `validated_model`: an explicitly validated continuous model. None exists
+ *   yet; the value is reserved, and nothing evaluates it, so it yields no claim.
+ * - `legacy_interpolated`: the v0.0.7 rows -- ATLAS-modeled points that were
+ *   meant to be linearly interpolated. Historical/compatibility only: never
+ *   the basis of a current claim (see `benchmarkEvaluationMethod`).
+ */
+export type BenchmarkEvaluationMethod = 'strict_anchor' | 'validated_model' | 'legacy_interpolated';
+
+/** vNext Handoff 04A. What a benchmark result was derived from -- a current claim is only ever made with one of these. */
+export interface BenchmarkEvaluationProvenance {
+  method: Exclude<BenchmarkEvaluationMethod, 'legacy_interpolated'>;
+  dataset_version: string;
+  benchmark_version: string;
+}
 
 /**
  * `dataset_version` makes a benchmark row's provenance recomputable: the UI
@@ -153,9 +175,10 @@ export interface Benchmark extends SyncMeta {
   dataset_version: string;
   /** vNext Handoff 02. New, optional provenance/eligibility fields for the
    * stricter benchmark-registry infrastructure -- additive alongside the
-   * existing v0.0.7 rows/UI, which are untouched and keep using
-   * `percentile_thresholds` + `interpolatePercentile` exactly as before.
-   * Absent on every v0.0.7 row. See docs/BENCHMARKS.md. */
+   * existing v0.0.7 rows, which are left exactly as stored. Absent on every
+   * v0.0.7 row; since Handoff 04A a row missing them yields no current
+   * comparison (`evaluateBenchmarkStrict`) rather than an interpolated one.
+   * See docs/BENCHMARKS.md. */
   test_protocol_id?: string | null;
   /** 'higher_is_better' (strength, reps, distance) or 'lower_is_better'
    * (assistance load, timed-course results). Absent is treated as
@@ -169,4 +192,8 @@ export interface Benchmark extends SyncMeta {
   /** Distinct from `dataset_version` (the seeded-data-file version) --
    * this versions the benchmark DEFINITION row itself. */
   benchmark_version?: string | null;
+  /** vNext Handoff 04A. Absent on every v0.0.7 row, which therefore reads as
+   * `legacy_interpolated` -- the row is left exactly as stored, never
+   * rewritten. See docs/BENCHMARKS.md "Authority (Handoff 04A)". */
+  evaluation_method?: BenchmarkEvaluationMethod | null;
 }

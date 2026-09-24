@@ -14,6 +14,12 @@ export interface PercentileResult {
  * clamped to the nearest known percentile with `belowMinimum`/`aboveMaximum`
  * set, so the caller can render "below the range we have data for" rather
  * than a fabricated percentile.
+ *
+ * @deprecated Legacy/compatibility only (Handoff 04A). Interpolating between
+ * anchors states a percentile no source documents, so nothing user-facing may
+ * call this -- current comparisons go through `evaluateBenchmarkStrict`. It
+ * stays, isolated and unused by the app, so v0.0.7-era behavior remains
+ * readable and testable; `singleEvaluator.test.ts` fails if `apps/web` imports it.
  */
 export function interpolatePercentile(
   value: number,

@@ -32,15 +32,16 @@ function formatDate(iso: string): string {
  * PR and milestone language.
  */
 export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal }: MilestonesViewProps) {
-  const { milestones, exercises, prs, benchmarks } = data;
+  const { milestones, exercises, prs, benchmarks, testProtocols } = data;
 
   const visible = useMemo(() => milestones.filter((m) => isMilestoneVisible(m)), [milestones]);
   const inProgress = useMemo(() => visible.filter((m) => m.active && m.achieved_at == null), [visible]);
   const achieved = useMemo(() => visible.filter((m) => m.achieved_at != null), [visible]);
   const comparisons = useMemo(
-    () => benchmarkComparisons(benchmarks, prs, exercises),
-    [benchmarks, prs, exercises],
+    () => benchmarkComparisons(benchmarks, prs, exercises, testProtocols),
+    [benchmarks, prs, exercises, testProtocols],
   );
+  const hasVerifiedComparison = comparisons.some((c) => c.evaluation.status === 'MATCHED');
 
   const [chosen, setChosen] = useState<Pane | null>(null);
   const pane: Pane = chosen ?? (inProgress.length > 0 || achieved.length === 0 ? 'progress' : 'achieved');
@@ -79,6 +80,7 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
         <section aria-label="Benchmarks">
           <p className="atlas-milestones__note">
             How your best compares with a reference group. These are comparisons, not goals or records.
+            {!hasVerifiedComparison && ' None can be verified yet.'}
           </p>
           <BenchmarkList comparisons={comparisons} />
         </section>

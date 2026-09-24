@@ -1,6 +1,13 @@
 import { eligibleSetsForExercise, type EligibleSet } from '@atlas/pr-engine';
 import { resolveBodyweightForDate } from '@atlas/body-composition';
-import type { BodyMeasurement, Milestone, PerformedSet, Program, WorkoutSession } from '@atlas/data-model';
+import type {
+  BenchmarkEvaluationProvenance,
+  BodyMeasurement,
+  Milestone,
+  PerformedSet,
+  Program,
+  WorkoutSession,
+} from '@atlas/data-model';
 
 interface MilestoneMatch {
   achievedAt: string;
@@ -10,6 +17,8 @@ interface MilestoneMatch {
   setId: string | null;
   /** Set only for 'bodyweight_multiplier' -- the resolved weight*multiplier target at the moment of achievement, frozen into target_weight so it never silently drifts if a later BodyMeasurement changes. */
   resolvedTargetWeight?: number;
+  /** Set only for 'benchmark_threshold' -- how the achieving percentile was derived, stamped onto the milestone. */
+  benchmarkEvaluation?: BenchmarkEvaluationProvenance;
 }
 
 /**
@@ -30,6 +39,8 @@ export interface BenchmarkAchievementInput {
   percentile: number;
   achieved_at: string;
   session_id?: string | null;
+  /** vNext Handoff 04A. How `percentile` was derived -- the `provenance` of a strict benchmark evaluation. The type excludes `legacy_interpolated`, so an interpolated result cannot become a current achievement. */
+  evaluation: BenchmarkEvaluationProvenance;
 }
 
 /**
@@ -265,7 +276,14 @@ function findBenchmarkThresholdMatch(
     .filter((a) => a.benchmark_id === milestone.target_benchmark_id && a.percentile >= targetPercentile)
     .sort((a, b) => a.achieved_at.localeCompare(b.achieved_at));
   const first = relevant[0];
-  return first ? { achievedAt: first.achieved_at, sessionId: first.session_id ?? null, setId: null } : null;
+  return first
+    ? {
+        achievedAt: first.achieved_at,
+        sessionId: first.session_id ?? null,
+        setId: null,
+        benchmarkEvaluation: first.evaluation,
+      }
+    : null;
 }
 
 /** Dimensions with no exercise_id requirement -- everything else keeps the original "skip if no exercise_id" guard. */
@@ -281,6 +299,11 @@ const EXERCISE_FREE_DIMENSIONS = new Set(['body_weight', 'consistency', 'program
  * recompute over all eligible history every time, so backfilling an older
  * qualifying session correctly assigns the earlier date -- there's no
  * incremental state to get out of sync.
+ *
+ * The same rule keeps a benchmark goal's history intact: an achieved
+ * 'benchmark_threshold' milestone keeps the `achieved_benchmark_evaluation`
+ * stamped when it was achieved and is never re-read under a different
+ * method or benchmark version, whatever the current standing is now.
  *
  * For 'bodyweight_multiplier', the resolved target at the moment of match
  * gets frozen into `target_weight` -- satisfying "do not retroactively
@@ -324,6 +347,7 @@ export function evaluateMilestone(
     achieved_at: match.achievedAt,
     origin_session_id: match.sessionId,
     origin_set_id: match.setId,
+    ...(match.benchmarkEvaluation ? { achieved_benchmark_evaluation: match.benchmarkEvaluation } : {}),
     updated_at: new Date().toISOString(),
     version: milestone.version + 1,
   };

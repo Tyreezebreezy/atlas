@@ -676,6 +676,12 @@ describe('vNext Handoff 02: program_completion dimension (no exercise_id require
 });
 
 describe('vNext Handoff 02: benchmark_threshold dimension (no exercise_id required)', () => {
+  const strict: BenchmarkAchievementInput['evaluation'] = {
+    method: 'strict_anchor',
+    dataset_version: 'atlas-benchmarks-test',
+    benchmark_version: 'pushups-1.0.0',
+  };
+
   it('achieves once a precomputed benchmark achievement crosses the target percentile', () => {
     const milestone = createMilestone({
       title: 'Top 25% Push-Ups',
@@ -684,12 +690,14 @@ describe('vNext Handoff 02: benchmark_threshold dimension (no exercise_id requir
       targetBenchmarkId: 'pushups',
       targetPercentile: 75,
     });
-    const below: BenchmarkAchievementInput[] = [{ benchmark_id: 'pushups', percentile: 60, achieved_at: '2026-08-01T00:00:00.000Z' }];
+    const below: BenchmarkAchievementInput[] = [
+      { benchmark_id: 'pushups', percentile: 60, achieved_at: '2026-08-01T00:00:00.000Z', evaluation: strict },
+    ];
     expect(evaluateMilestone(milestone, [], [], { benchmarkAchievements: below }).achieved_at).toBeNull();
 
     const crossing: BenchmarkAchievementInput[] = [
       ...below,
-      { benchmark_id: 'pushups', percentile: 80, achieved_at: '2026-09-01T00:00:00.000Z', session_id: 'sess-1' },
+      { benchmark_id: 'pushups', percentile: 80, achieved_at: '2026-09-01T00:00:00.000Z', session_id: 'sess-1', evaluation: strict },
     ];
     const result = evaluateMilestone(milestone, [], [], { benchmarkAchievements: crossing });
     expect(result.achieved_at).toBe('2026-09-01T00:00:00.000Z');
@@ -704,7 +712,71 @@ describe('vNext Handoff 02: benchmark_threshold dimension (no exercise_id requir
       targetBenchmarkId: 'pushups',
       targetPercentile: 75,
     });
-    const unrelated: BenchmarkAchievementInput[] = [{ benchmark_id: 'pullups', percentile: 99, achieved_at: '2026-08-01T00:00:00.000Z' }];
+    const unrelated: BenchmarkAchievementInput[] = [
+      { benchmark_id: 'pullups', percentile: 99, achieved_at: '2026-08-01T00:00:00.000Z', evaluation: strict },
+    ];
     expect(evaluateMilestone(milestone, [], [], { benchmarkAchievements: unrelated }).achieved_at).toBeNull();
+  });
+
+  it('stamps how the achieving percentile was derived (method, dataset version, benchmark version) when the goal is achieved', () => {
+    const milestone = createMilestone({
+      title: 'Top 25% Push-Ups',
+      exerciseId: null,
+      dimension: 'benchmark_threshold',
+      targetBenchmarkId: 'pushups',
+      targetPercentile: 75,
+    });
+    const result = evaluateMilestone(milestone, [], [], {
+      benchmarkAchievements: [
+        { benchmark_id: 'pushups', percentile: 80, achieved_at: '2026-09-01T00:00:00.000Z', evaluation: strict },
+      ],
+    });
+    expect(result.achieved_benchmark_evaluation).toEqual(strict);
+    // Other milestones never grow the field.
+    const weight = createMilestone({ title: 'Bench 225', exerciseId: 'bench', dimension: 'weight', targetWeight: 100 });
+    expect(evaluateMilestone(weight, [completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-01T10:00:00.000Z')], []))
+      .not.toHaveProperty('achieved_benchmark_evaluation');
+  });
+
+  it('never revokes or re-reads an achieved benchmark goal: a later, lower or differently-versioned evaluation changes nothing', () => {
+    const milestone = createMilestone({
+      title: 'Top 25% Push-Ups',
+      exerciseId: null,
+      dimension: 'benchmark_threshold',
+      targetBenchmarkId: 'pushups',
+      targetPercentile: 75,
+    });
+    const achieved = evaluateMilestone(milestone, [], [], {
+      benchmarkAchievements: [
+        { benchmark_id: 'pushups', percentile: 80, achieved_at: '2026-09-01T00:00:00.000Z', evaluation: strict },
+      ],
+    });
+    expect(achieved.achieved_at).not.toBeNull();
+
+    const later = evaluateMilestone(achieved, [], [], {
+      benchmarkAchievements: [
+        {
+          benchmark_id: 'pushups',
+          percentile: 10, // standing has dropped under a newer dataset
+          achieved_at: '2026-10-01T00:00:00.000Z',
+          evaluation: { method: 'strict_anchor', dataset_version: 'atlas-benchmarks-later', benchmark_version: 'pushups-2.0.0' },
+        },
+      ],
+    });
+    expect(later).toBe(achieved); // the very same record -- untouched
+    expect(later.achieved_benchmark_evaluation).toEqual(strict);
+    // ...and with no benchmark information at all it is likewise left alone.
+    expect(evaluateMilestone(achieved, [], [], {})).toBe(achieved);
+  });
+
+  it('cannot be given a legacy interpolated result as an achievement (type-level guard)', () => {
+    const legacy: BenchmarkAchievementInput = {
+      benchmark_id: 'pushups',
+      percentile: 99,
+      achieved_at: '2026-08-01T00:00:00.000Z',
+      // @ts-expect-error -- 'legacy_interpolated' is not an accepted evaluation method for a current achievement
+      evaluation: { method: 'legacy_interpolated', dataset_version: 'v', benchmark_version: 'v' },
+    };
+    expect(legacy.evaluation.method).toBe('legacy_interpolated'); // compiles only because of the directive above
   });
 });

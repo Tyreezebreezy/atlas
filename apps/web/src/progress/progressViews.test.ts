@@ -111,6 +111,7 @@ function data(overrides: Partial<ProgressData> = {}): ProgressData {
     prs: prsFor(sessions),
     milestones: [],
     benchmarks: [],
+    testProtocols: [],
     bodyMeasurements: [],
     activeProgram: null,
     templates: new Map(),
