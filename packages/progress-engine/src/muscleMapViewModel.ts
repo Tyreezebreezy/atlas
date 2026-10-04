@@ -1,6 +1,12 @@
 import { getMuscle, muscleMapOf, MUSCLE_GROUPS } from '@atlas/anatomy';
 import { eligibleSets, exposureSessions, type ExposureSessions } from '@atlas/pr-engine';
-import type { Exercise, PersonalRecord, PlannedExercise, WorkoutSession } from '@atlas/data-model';
+import type {
+  Exercise,
+  PersonalRecord,
+  PersonalRecordEvent,
+  PlannedExercise,
+  WorkoutSession,
+} from '@atlas/data-model';
 import { detectStagnation } from './detectStagnation';
 
 /**
@@ -95,8 +101,10 @@ export interface MuscleMapInput {
   periodDays: number;
   sessions: WorkoutSession[];
   exercises: Map<string, Exercise>;
-  /** Current persisted PRs -- performance mode only. */
+  /** Current persisted PRs -- performance mode only, for the stall check (`detectStagnation` reads the standing records; a superseding session is always later, so it is equivalent to reading the event ledger). */
   personalRecords?: PersonalRecord[];
+  /** The PR event history -- performance mode only, for "progressing". */
+  prEvents?: PersonalRecordEvent[];
   /** Focus only: one array per scheduled session in the program's week. */
   plannedSessions?: PlannedExercise[][];
   now?: Date;
@@ -214,15 +222,16 @@ function credit(
  * - `insufficient_data`: no equipment context has two completed exposures
  *   yet, so there is nothing to compare against.
  * - `stalled`: `detectStagnation` flags it.
- * - `progressing`: a current PR was set inside the window by a session that
- *   is NOT the first exposure of its context -- a baseline session's PRs are
- *   just "the first numbers", not progress.
+ * - `progressing`: a PR event (the ledger of performances that beat an
+ *   earlier record -- a baseline is never one) falls inside the window for this
+ *   exercise in that context.
  * - `stable`: enough history, no flag, no new PR in the window.
  */
 export function exercisePerformanceState(
   sessions: WorkoutSession[],
   exercise: Exercise,
   personalRecords: PersonalRecord[],
+  prEvents: PersonalRecordEvent[],
   window: { start: number; end: number },
   /** Pass a prebuilt index when judging many exercises over the same sessions. */
   exposures: ExposureSessions = exposureSessions(sessions),
@@ -232,11 +241,10 @@ export function exercisePerformanceState(
   for (const [locationId, history] of exposures.get(exercise.id) ?? []) {
     if (history.length < 2) continue;
     comparable = true;
-    const first = history[0];
-    progressed ||= personalRecords.some((pr) => {
-      if (pr.exercise_id !== exercise.id || (pr.training_location_id ?? null) !== locationId) return false;
-      const achieved = new Date(pr.achieved_at).getTime();
-      return pr.source_session_id !== first?.id && achieved >= window.start && achieved <= window.end;
+    progressed ||= prEvents.some((event) => {
+      if (event.exercise_id !== exercise.id || (event.training_location_id ?? null) !== locationId) return false;
+      const achieved = new Date(event.achieved_at).getTime();
+      return achieved >= window.start && achieved <= window.end;
     });
   }
 
@@ -285,7 +293,14 @@ function aggregateTraining(
 
     // Performance: judge each exercise once (not per set) and tell every muscle/group it targets.
     if (mode === 'performance' && !performanceByExercise.has(exercise.id)) {
-      const state = exercisePerformanceState(sessions, exercise, input.personalRecords ?? [], window, exposures);
+      const state = exercisePerformanceState(
+        sessions,
+        exercise,
+        input.personalRecords ?? [],
+        input.prEvents ?? [],
+        window,
+        exposures,
+      );
       performanceByExercise.set(exercise.id, state);
       const seenGroups = new Set<string>();
       for (const id of targets.primary) {

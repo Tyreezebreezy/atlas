@@ -7,10 +7,17 @@ import {
   type LogSetInput,
 } from '@atlas/workout-engine';
 import { createBodyMeasurement } from '@atlas/body-composition';
-import { buildHeadlinePREvents, headlinePREventsInPeriod } from '@atlas/pr-engine';
-import type { Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
+import {
+  calculatePRs,
+  derivePREventsForExercise,
+  exposureSessions,
+  planPREventReconciliation,
+  prEventsInPeriod,
+} from '@atlas/pr-engine';
+import type { Exercise, Milestone, PersonalRecordEvent, WorkoutSession } from '@atlas/data-model';
 import { buildWeeklyReview, type WeeklyReviewInput } from './buildWeeklyReview';
 import type { StagnationSignal } from './detectStagnation';
+import { makeExercise } from './testFixtures';
 
 function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   return createPerformedSet({
@@ -27,29 +34,22 @@ function set(input: Partial<LogSetInput> & { exerciseId: string }) {
   });
 }
 
-function completedSession(exerciseId: string, sets: ReturnType<typeof set>[], completedAt: string): WorkoutSession {
+function completedSession(sets: ReturnType<typeof set>[], completedAt: string): WorkoutSession {
   let session = startWorkoutSession({ name: 'Session', templateId: null, programId: null, programDayId: null, plannedSnapshot: [] });
   for (const s of sets) session = addPerformedSet(session, { ...s, completed_at: completedAt });
   session = completeWorkoutSession(session);
   return { ...session, completed_at: completedAt };
 }
 
-function pr(overrides: Partial<PersonalRecord> & { exercise_id: string; achieved_at: string }): PersonalRecord {
-  return {
-    id: `pr-${overrides.exercise_id}-${overrides.achieved_at}`,
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
-    version: 1,
-    device_id: 'seed',
-    deleted_at: null,
-    kind: 'max_load',
-    value: 100,
-    reps: 5,
-    source_session_id: 'sess-1',
-    source_set_id: 'set-1',
-    training_location_id: null,
-    ...overrides,
-  };
+const lift = (exerciseId: string, weight: number, reps: number) => set({ exerciseId, weight, reps });
+
+/** The PR event ledger the app would hold for these sessions -- built by the real derivation and reconciliation. */
+function ledger(sessions: WorkoutSession[], ...exerciseIds: string[]): PersonalRecordEvent[] {
+  const exposures = exposureSessions(sessions);
+  return exerciseIds.flatMap((id) => {
+    const exercise: Exercise = makeExercise({ id, name: id });
+    return planPREventReconciliation([], derivePREventsForExercise(sessions, exercise, exposures), exposures).upsert;
+  });
 }
 
 function baseInput(overrides: Partial<WeeklyReviewInput> = {}): WeeklyReviewInput {
@@ -57,7 +57,7 @@ function baseInput(overrides: Partial<WeeklyReviewInput> = {}): WeeklyReviewInpu
     periodStart: '2026-08-03',
     periodEnd: '2026-08-09',
     sessions: [],
-    personalRecords: [],
+    prEvents: [],
     milestones: [],
     bodyMeasurements: [],
     stagnationSignals: [],
@@ -65,78 +65,60 @@ function baseInput(overrides: Partial<WeeklyReviewInput> = {}): WeeklyReviewInpu
   };
 }
 
+const stall = (exerciseId: string): StagnationSignal => ({
+  exercise_id: exerciseId,
+  training_location_id: null,
+  comparable_exposures: 3,
+  first_exposure_date: '2026-07-01T00:00:00.000Z',
+  last_exposure_date: '2026-08-05T00:00:00.000Z',
+  reason_code: 'PROGRESS_STALLED',
+});
+
 describe('buildWeeklyReview', () => {
   it('reports BASELINE_WEEK when there is no completed session before this period', () => {
-    const session = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
+    const session = completedSession([lift('bench', 100, 8)], '2026-08-05T10:00:00.000Z');
     const review = buildWeeklyReview(baseInput({ sessions: [session] }));
     expect(review.status_code).toBe('BASELINE_WEEK');
     expect(review.completed_sessions).toBe(1);
   });
 
   it('reports ON_TRACK when prior history exists, nothing is stalled, and planned sessions are met', () => {
-    const priorSession = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const thisWeek = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
-    const review = buildWeeklyReview(
-      baseInput({ sessions: [priorSession, thisWeek], plannedSessions: 1 }),
-    );
+    const priorSession = completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+    const thisWeek = completedSession([lift('bench', 100, 8)], '2026-08-05T10:00:00.000Z');
+    const review = buildWeeklyReview(baseInput({ sessions: [priorSession, thisWeek], plannedSessions: 1 }));
     expect(review.status_code).toBe('ON_TRACK');
     expect(review.adherence_ratio).toBe(1);
   });
 
   it('reports INCOMPLETE_WEEK when fewer sessions completed than planned', () => {
-    const priorSession = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const thisWeek = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
+    const priorSession = completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+    const thisWeek = completedSession([lift('bench', 100, 8)], '2026-08-05T10:00:00.000Z');
     const review = buildWeeklyReview(baseInput({ sessions: [priorSession, thisWeek], plannedSessions: 4 }));
     expect(review.status_code).toBe('INCOMPLETE_WEEK');
     expect(review.adherence_ratio).toBe(0.25);
   });
 
   it('reports REVIEW_STALLED_EXERCISE when a stagnation signal exists, taking precedence over an otherwise-complete week', () => {
-    const priorSession = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const thisWeek = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
-    const signal: StagnationSignal = {
-      exercise_id: 'bench',
-      training_location_id: null,
-      comparable_exposures: 3,
-      first_exposure_date: '2026-07-01T00:00:00.000Z',
-      last_exposure_date: '2026-08-05T00:00:00.000Z',
-      reason_code: 'PROGRESS_STALLED',
-    };
+    const priorSession = completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+    const thisWeek = completedSession([lift('bench', 100, 8)], '2026-08-05T10:00:00.000Z');
     const review = buildWeeklyReview(
-      baseInput({ sessions: [priorSession, thisWeek], plannedSessions: 1, stagnationSignals: [signal] }),
+      baseInput({ sessions: [priorSession, thisWeek], plannedSessions: 1, stagnationSignals: [stall('bench')] }),
     );
     expect(review.status_code).toBe('REVIEW_STALLED_EXERCISE');
     expect(review.exercises_stalled).toBe(1);
   });
 
   it('classifies each trained exercise as exactly one of progressed/maintained/stalled -- and leaves a first-ever exercise out of all three', () => {
-    const lifts = (load: number) =>
-      (['squat', 'bench', 'row'] as const).map((exerciseId) => set({ exerciseId, weight: load, reps: 5 }));
-    const priorSession = completedSession('bench', lifts(95), '2026-07-20T10:00:00.000Z');
-    const session = completedSession(
-      'bench',
-      [...lifts(100), set({ exerciseId: 'curl', weight: 30, reps: 10 })],
+    // squat improves; bench and row repeat the same numbers (no improvement); curl is first done this week.
+    const prior = completedSession([lift('squat', 95, 5), lift('bench', 100, 5), lift('row', 100, 5)], '2026-07-20T10:00:00.000Z');
+    const thisWeek = completedSession(
+      [lift('squat', 100, 5), lift('bench', 100, 5), lift('row', 100, 5), lift('curl', 30, 10)],
       '2026-08-05T10:00:00.000Z',
     );
-
-    const squatPr = pr({ exercise_id: 'squat', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id });
-    // The curl's first-ever performance is a baseline: it has rows, but they are not a PR.
-    const curlPr = pr({ exercise_id: 'curl', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id });
-    const rowStall: StagnationSignal = {
-      exercise_id: 'row',
-      training_location_id: null,
-      comparable_exposures: 3,
-      first_exposure_date: '2026-07-01T00:00:00.000Z',
-      last_exposure_date: '2026-08-05T00:00:00.000Z',
-      reason_code: 'PROGRESS_STALLED',
-    };
+    const sessions = [prior, thisWeek];
 
     const review = buildWeeklyReview(
-      baseInput({
-        sessions: [priorSession, session],
-        personalRecords: [squatPr, curlPr],
-        stagnationSignals: [rowStall],
-      }),
+      baseInput({ sessions, prEvents: ledger(sessions, 'squat', 'bench', 'row', 'curl'), stagnationSignals: [stall('row')] }),
     );
     expect(review.exercises_progressed).toBe(1); // squat
     expect(review.exercises_maintained).toBe(1); // bench
@@ -145,68 +127,65 @@ describe('buildWeeklyReview', () => {
     expect(review.pr_count).toBe(1);
   });
 
-  it('counts one PR per exercise performance, however many detailed record rows it set', () => {
-    const prior = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const session = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
-    const rows = (['max_load', 'estimated_1rm', 'rep_at_load', 'rep_range', 'volume'] as const).map((kind) =>
-      pr({ kind, exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
-    );
-    const review = buildWeeklyReview(baseInput({ sessions: [prior, session], personalRecords: rows }));
-    expect(rows).toHaveLength(5);
+  it('counts one PR per exercise performance, however many detailed records it beat', () => {
+    const prior = completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+    const session = completedSession([lift('bench', 100, 8), lift('bench', 95, 10)], '2026-08-05T10:00:00.000Z');
+    const sessions = [prior, session];
+    const prEvents = ledger(sessions, 'bench');
+
+    expect(prEvents).toHaveLength(1);
+    expect(prEvents[0]?.pr_kinds.length).toBeGreaterThanOrEqual(3);
+    const review = buildWeeklyReview(baseInput({ sessions, prEvents }));
     expect(review.pr_count).toBe(1);
     expect(review.exercises_progressed).toBe(1);
   });
 
-  it('does not count a first-ever performance as a PR, even though it has record rows', () => {
-    const session = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
-    const rows = (['max_load', 'estimated_1rm', 'volume'] as const).map((kind) =>
-      pr({ kind, exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
-    );
-    const review = buildWeeklyReview(baseInput({ sessions: [session], personalRecords: rows }));
+  it('does not count a first-ever performance as a PR', () => {
+    const session = completedSession([lift('bench', 100, 8), lift('bench', 105, 5)], '2026-08-05T10:00:00.000Z');
+    const prEvents = ledger([session], 'bench');
+    const review = buildWeeklyReview(baseInput({ sessions: [session], prEvents }));
+    expect(prEvents).toEqual([]);
     expect(review.status_code).toBe('BASELINE_WEEK');
     expect(review.pr_count).toBe(0);
     expect(review.exercises_progressed).toBe(0);
   });
 
-  it('reports the same PR count as the shared headline helper (Today and Progress both read this figure)', () => {
-    const prior = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const session = completedSession(
-      'bench',
-      [set({ exerciseId: 'bench', weight: 100, reps: 8 }), set({ exerciseId: 'squat', weight: 200, reps: 5 })],
-      '2026-08-05T10:00:00.000Z',
+  it('counts an earlier PR that a later session beat: the week reports 3 PRs, not the 1 that still stands', () => {
+    // Every session beats ALL of the previous one's records, so after Wednesday only Wednesday holds any.
+    const prior = completedSession([lift('bench', 215, 5)], '2026-07-20T10:00:00.000Z');
+    const mon = completedSession([lift('bench', 225, 5)], '2026-08-03T10:00:00.000Z');
+    const tue = completedSession([lift('bench', 230, 5), lift('bench', 225, 6)], '2026-08-04T10:00:00.000Z');
+    const wed = completedSession([lift('bench', 235, 5), lift('bench', 230, 6), lift('bench', 225, 7)], '2026-08-05T10:00:00.000Z');
+    const sessions = [prior, mon, tue, wed];
+
+    const standing = new Set(
+      calculatePRs(sessions, makeExercise({ id: 'bench', name: 'bench' })).map((r) => r.source_session_id),
     );
-    const rows = [
-      pr({ kind: 'max_load', exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
-      pr({ kind: 'volume', exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
-      pr({ kind: 'max_load', exercise_id: 'squat', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: session.id }),
-    ];
-    const input = baseInput({ sessions: [prior, session], personalRecords: rows });
-    const viaHelper = headlinePREventsInPeriod(
-      buildHeadlinePREvents(rows, input.sessions),
-      input.periodStart,
-      input.periodEnd,
-    );
-    // Today builds the review with no stagnation signals; Progress builds it with real ones. The count must not depend on that.
-    const stall: StagnationSignal = {
-      exercise_id: 'squat',
-      training_location_id: null,
-      comparable_exposures: 3,
-      first_exposure_date: '2026-07-01T00:00:00.000Z',
-      last_exposure_date: '2026-08-05T00:00:00.000Z',
-      reason_code: 'PROGRESS_STALLED',
-    };
-    expect(buildWeeklyReview(input).pr_count).toBe(viaHelper.length);
-    expect(buildWeeklyReview({ ...input, stagnationSignals: [stall] }).pr_count).toBe(viaHelper.length);
-    expect(viaHelper.map((e) => e.exercise_id)).toEqual(['bench']);
+    expect(standing).toEqual(new Set([prior.id, wed.id])); // Monday and Tuesday hold no record any more
+
+    const review = buildWeeklyReview(baseInput({ sessions, prEvents: ledger(sessions, 'bench') }));
+    expect(review.pr_count).toBe(3);
+    expect(review.exercises_progressed).toBe(1); // one exercise, however many times it progressed
   });
 
-  it('counts headline PRs and milestones achieved within the period, excluding ones outside it and baseline ones', () => {
-    const baseline = completedSession('bench', [set({ exerciseId: 'bench', weight: 90, reps: 8 })], '2026-07-01T10:00:00.000Z');
-    const earlier = completedSession('bench', [set({ exerciseId: 'bench', weight: 95, reps: 8 })], '2026-07-20T10:00:00.000Z');
-    const thisWeek = completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 8 })], '2026-08-05T10:00:00.000Z');
-    const inPeriod = pr({ exercise_id: 'bench', achieved_at: '2026-08-05T10:00:00.000Z', source_session_id: thisWeek.id });
-    const outOfPeriod = pr({ kind: 'rep', exercise_id: 'bench', achieved_at: '2026-07-20T10:00:00.000Z', source_session_id: earlier.id });
-    const baselineRow = pr({ kind: 'volume', exercise_id: 'bench', achieved_at: '2026-07-01T10:00:00.000Z', source_session_id: baseline.id });
+  it('reports the same PR count as the ledger helper, whatever stagnation signals the caller supplies (Today passes none)', () => {
+    const prior = completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+    const session = completedSession([lift('bench', 100, 8), lift('squat', 200, 5)], '2026-08-05T10:00:00.000Z');
+    const sessions = [prior, session];
+    const prEvents = ledger(sessions, 'bench', 'squat');
+    const input = baseInput({ sessions, prEvents });
+
+    const viaHelper = prEventsInPeriod(prEvents, input.periodStart, input.periodEnd);
+    expect(buildWeeklyReview(input).pr_count).toBe(viaHelper.length);
+    expect(buildWeeklyReview({ ...input, stagnationSignals: [stall('squat')] }).pr_count).toBe(viaHelper.length);
+    expect(viaHelper.map((e) => e.exercise_id)).toEqual(['bench']); // squat was first done this week: a baseline
+  });
+
+  it('counts PR events and milestones achieved within the period, excluding ones outside it', () => {
+    const baseline = completedSession([lift('bench', 90, 8)], '2026-07-01T10:00:00.000Z');
+    const earlier = completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+    const thisWeek = completedSession([lift('bench', 100, 8)], '2026-08-05T10:00:00.000Z');
+    const sessions = [baseline, earlier, thisWeek];
     const achievedMilestone: Milestone = {
       id: 'm-1',
       created_at: '2026-01-01T00:00:00.000Z',
@@ -231,14 +210,11 @@ describe('buildWeeklyReview', () => {
       origin_session_id: 'sess-1',
       origin_set_id: 'set-1',
     };
-    const review = buildWeeklyReview(
-      baseInput({
-        sessions: [baseline, earlier, thisWeek],
-        personalRecords: [inPeriod, outOfPeriod, baselineRow],
-        milestones: [achievedMilestone],
-      }),
-    );
-    expect(review.pr_count).toBe(1);
+    const prEvents = ledger(sessions, 'bench');
+    expect(prEvents).toHaveLength(2); // Jul 20 and Aug 5; Jul 1 is the baseline
+
+    const review = buildWeeklyReview(baseInput({ sessions, prEvents, milestones: [achievedMilestone] }));
+    expect(review.pr_count).toBe(1); // only Aug 5 is inside the period
     expect(review.milestone_count).toBe(1);
   });
 

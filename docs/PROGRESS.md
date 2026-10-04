@@ -31,9 +31,10 @@ average). Zero counts and absent averages are omitted, never zero-filled.
 "This week", "planned sessions" and "a week of the program" come from one place
 (`program-engine/weekPlan.ts`), shared with Today.
 
-**PRs are headline PRs** (Handoff 04A, [PRS.md](PRS.md)): one per exercise per
-session, however many detailed records it set, and a first-ever performance is a
-baseline, not a PR. `progressed` counts trained exercises with a headline PR;
+**PRs are headline PR events** (Handoff 04A/04A.1, [PRS.md](PRS.md)): one per
+exercise per session that beat an earlier record, counted from the persisted event
+history — so a PR a later session beat still counts — and a first-ever
+performance is a baseline, not a PR. `progressed` counts trained exercises with a headline PR;
 `maintained` those with an earlier performance to compare against and none; an
 exercise whose only sessions this week were its first is in neither (nor
 `stalled`). Today and Overview read the same `pr_count`, so they cannot
@@ -72,9 +73,10 @@ score:
 V1 volume rule: a set counts once, fully, for each primary muscle; assisting
 muscles are tallied separately and never become fractional sets. Group counts
 count a set once per group (bench press hits Upper and Mid Chest: one set of
-chest work). Performance reuses the weekly review's signals (`detectStagnation`,
-current PRs); a baseline session's PRs are not progress (the same first-exposure
-rule as the headline PR count); the roll-up to a
+chest work). Performance reuses the weekly review's signals (`detectStagnation`
+for a stall, the PR event history for progress — a PR a later session beat still
+counts); a baseline never produces an event (the same first-exposure rule as the
+headline PR count); the roll-up to a
 muscle is stalled > progressing > stable > not enough data with the mix always
 shown. It is exercise performance, never "muscle growth".
 
@@ -108,15 +110,18 @@ rendered; a milestone appears once.
 
 ## Known debt
 
-- **Headline PRs count only records that currently stand** (see PRS.md): a PR a
-  later session beat is no longer a `PersonalRecord` row, so it drops out of the
-  count. A true per-session PR log would need PR events persisted; not built.
 - **No benchmark comparison is verifiable yet.** Every shipped row is a legacy,
   modeled, age-banded reference, and ATLAS holds no age. It needs a benchmark
   dataset pack and profile input (BENCHMARKS.md, "What this means for the
   seeded data").
-- `.atlas-today__freestyle` (Today's "Start Freestyle Workout" button) has never
-  had a CSS rule, so it renders as a browser-default button. Found during 04A QA;
-  outside that handoff, not fixed.
+- **The weekly review buckets by UTC date.** `buildWeeklyReview` slices an ISO
+  timestamp's first ten characters, so a workout after about 8 pm US Eastern lands
+  on the next day's date — and on a Sunday night in the next week, while the week
+  itself (`startOfWeekIso`) is the local one. It decides `completed_sessions` and
+  the PR count identically; pre-existing, not introduced by the PR event history.
+- The PR event history is derived from the sessions as they stand: events
+  recorded under an older evaluator are frozen until their session disappears,
+  and the launch reconcile replays all history once per launch (see PRS.md
+  "Limits").
 - `describeMilestoneProgress` has no partial progress for consistency/body/
   benchmark goals; cards state the target instead.

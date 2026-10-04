@@ -8,6 +8,7 @@ import {
   restoreBackup,
   type AtlasBackupDocument,
 } from '@atlas/import-export';
+import { ensurePREventsUpToDate } from '../progress/prEvents';
 import { useStorage } from '../storage/StorageContext';
 
 const MAX_RESTORE_FILE_BYTES = 20 * 1024 * 1024; // a full history backup can be larger than a single plan
@@ -178,6 +179,10 @@ export function BackupPanel({ onBack }: BackupPanelProps) {
     if (!storage || restoreState.step !== 'confirm') return;
     setRestoreState({ step: 'restoring' });
     const result = await restoreBackup(restoreState.document, storage);
+    // A restore replaces history wholesale, and an older backup carries no PR event history: rebuild it from the restored sessions.
+    await ensurePREventsUpToDate(storage, { force: true }).catch((error: unknown) => {
+      console.error('ATLAS: the PR event history could not be rebuilt after the restore; it is rebuilt at next launch.', error);
+    });
     const total = Object.values(result.restored_counts).reduce((sum, count) => sum + count, 0);
     setRestoreState({
       step: 'done',

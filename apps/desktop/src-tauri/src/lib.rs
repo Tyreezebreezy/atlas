@@ -33,6 +33,12 @@ pub fn run() {
             sql: include_str!("../migrations/0005_add_test_protocols.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add_personal_record_events",
+            sql: include_str!("../migrations/0006_add_personal_record_events.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

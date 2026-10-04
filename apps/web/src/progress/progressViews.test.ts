@@ -7,11 +7,16 @@ import {
   createPerformedSet,
   startWorkoutSession,
 } from '@atlas/workout-engine';
-import { calculatePRs } from '@atlas/pr-engine';
+import {
+  calculatePRs,
+  derivePREventsForExercise,
+  exposureSessions,
+  planPREventReconciliation,
+} from '@atlas/pr-engine';
 import { buildWeeklyReview, detectAllStagnation } from '@atlas/progress-engine';
 import { createMilestone } from '@atlas/milestone-engine';
 import { createBodyMeasurement } from '@atlas/body-composition';
-import type { Exercise, Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
+import type { Exercise, Milestone, PersonalRecord, PersonalRecordEvent, WorkoutSession } from '@atlas/data-model';
 import { BodySummary } from '../body/BodyScreen';
 import { MilestonesView } from './MilestonesView';
 import { MusclesView } from './MusclesView';
@@ -103,12 +108,21 @@ function prsFor(sessions: WorkoutSession[]): PersonalRecord[] {
   return [...EXERCISES.values()].flatMap((e) => calculatePRs(sessions, e));
 }
 
+/** The PR event ledger the app would hold for these sessions -- built by the real derivation. */
+function eventsFor(sessions: WorkoutSession[]): PersonalRecordEvent[] {
+  const exposures = exposureSessions(sessions);
+  return [...EXERCISES.values()].flatMap(
+    (e) => planPREventReconciliation([], derivePREventsForExercise(sessions, e, exposures), exposures).upsert,
+  );
+}
+
 function data(overrides: Partial<ProgressData> = {}): ProgressData {
   const sessions = overrides.sessions ?? [];
   return {
     sessions,
     exercises: EXERCISES,
     prs: prsFor(sessions),
+    prEvents: eventsFor(sessions),
     milestones: [],
     benchmarks: [],
     testProtocols: [],
@@ -172,7 +186,7 @@ describe('Overview — scales with the amount of history', () => {
       periodStart: '2026-09-21',
       periodEnd: '2026-09-27',
       sessions,
-      personalRecords: d.prs,
+      prEvents: d.prEvents,
       milestones: [],
       bodyMeasurements: [],
       stagnationSignals: detectAllStagnation(sessions, EXERCISES, d.prs),
@@ -195,6 +209,39 @@ describe('Overview — scales with the amount of history', () => {
     expect(html).not.toContain('atlas-review__of');
     expect(html).not.toContain('Body weight avg');
     expect(html).toContain('Muscles · last 30 days');
+  });
+});
+
+describe('Overview — the PR count reads the event history, not the standing records', () => {
+  it('counts an earlier PR that a later session beat: the review card says 3 PRs, not the 1 that still stands', () => {
+    // Older history, then a chain in which every session beats ALL of the previous one's records.
+    const sessions = [
+      session([{ exerciseId: 'press', weight: 150, reps: 10 }], 30),
+      session([{ exerciseId: 'press', weight: 160, reps: 10 }], 20),
+      session([{ exerciseId: 'press', weight: 170, reps: 10 }], 14),
+      session([{ exerciseId: 'press', weight: 215, reps: 5 }], 10),
+      session([{ exerciseId: 'press', weight: 225, reps: 5 }], 3), // Monday of this week
+      session(
+        [{ exerciseId: 'press', weight: 230, reps: 5 }, { exerciseId: 'press', weight: 225, reps: 6 }],
+        2,
+      ), // Tuesday
+      session(
+        [
+          { exerciseId: 'press', weight: 235, reps: 5 },
+          { exerciseId: 'press', weight: 230, reps: 6 },
+          { exerciseId: 'press', weight: 225, reps: 7 },
+        ],
+        1,
+      ), // Wednesday
+    ];
+    const d = data({ sessions });
+    const holders = new Set(d.prs.map((r) => r.source_session_id));
+    expect(holders.has(sessions[4]!.id)).toBe(false); // Monday holds no standing record any more
+    expect(holders.has(sessions[5]!.id)).toBe(false); // nor does Tuesday
+
+    const html = overview(d);
+    expect(html).toContain('3 PRs');
+    expect(html).not.toContain('1 PR<');
   });
 });
 

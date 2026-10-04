@@ -28,10 +28,11 @@ import {
   type TodayScheduleEntry,
 } from '@atlas/program-engine';
 import { buildWeeklyReview } from '@atlas/progress-engine';
+import { loadPREvents } from '../progress/prEvents';
 import type {
   Exercise,
   Milestone,
-  PersonalRecord,
+  PersonalRecordEvent,
   Program,
   WorkoutOccurrence,
   WorkoutSession,
@@ -195,7 +196,7 @@ export function TodayScreen() {
   const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
   const [exercisesById, setExercisesById] = useState<Map<string, Exercise>>(new Map());
   const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
-  const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [prEvents, setPrEvents] = useState<PersonalRecordEvent[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
 
   // v0.2.4 browsing state. `selectedDate`/`selectedSequenceIndex` of `null`
@@ -237,14 +238,14 @@ export function TodayScreen() {
     // invariant this preserves.
     const { ensureExercisesSeeded } = await import('@atlas/exercise-library');
     await ensureExercisesSeeded(storage);
-    const [sessions, programs, allTemplates, exercises, allOccurrences, allPRs, allMilestones] =
+    const [sessions, programs, allTemplates, exercises, allOccurrences, allPREvents, allMilestones] =
       await Promise.all([
         storage.workoutSessions.getAll(),
         storage.programs.getAll(),
         storage.workoutTemplates.getAll(),
         storage.exercises.getAll(),
         storage.workoutOccurrences.getAll(),
-        storage.personalRecords.getAll(),
+        loadPREvents(storage),
         storage.milestones.getAll(),
       ]);
     setActiveSession(sessions.find((s) => s.status === 'in_progress') ?? null);
@@ -253,7 +254,7 @@ export function TodayScreen() {
     setAllSessions(sessions);
     setExercisesById(new Map(exercises.map((e) => [e.id, e])));
     setOccurrences(allOccurrences);
-    setPersonalRecords(allPRs);
+    setPrEvents(allPREvents);
     setMilestones(allMilestones);
     setLoading(false);
   }
@@ -516,7 +517,7 @@ export function TodayScreen() {
     periodStart: weekStart,
     periodEnd: weekEnd,
     sessions: allSessions,
-    personalRecords,
+    prEvents,
     milestones,
     bodyMeasurements: [],
     stagnationSignals: [],
@@ -860,7 +861,7 @@ export function TodayScreen() {
 
       <button
         type="button"
-        className="atlas-today__freestyle"
+        className="atlas-btn atlas-btn--secondary atlas-today__freestyle"
         onClick={() => void startFreestyle()}
       >
         Start Freestyle Workout

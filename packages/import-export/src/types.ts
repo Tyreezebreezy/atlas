@@ -4,6 +4,7 @@ import type {
   ExerciseNote,
   Milestone,
   PersonalRecord,
+  PersonalRecordEvent,
   Program,
   ProgramNote,
   ProgressionPolicy,
@@ -121,6 +122,11 @@ export interface AtlasBackupDocument {
      * back (see restoreBackup.ts's `?? []`), same as any other pre-v0.2.0
      * backup restored onto a v0.2.0+ install. */
     workout_occurrences?: WorkoutOccurrence[];
+    /** vNext Handoff 04A.1. Optional, like `workout_occurrences`: absent on a
+     * backup exported before the PR event history existed. Restoring such a
+     * file brings no events back, and the app's startup reconcile rebuilds
+     * them from the restored sessions (see restoreBackup.ts's `?? []`). */
+    personal_record_events?: PersonalRecordEvent[];
   };
 }
 

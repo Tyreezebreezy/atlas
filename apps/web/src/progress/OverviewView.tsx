@@ -57,7 +57,7 @@ const REVIEW_STATUS_LABEL: Record<WeeklyReviewStatus, string> = {
  * function; a card that has nothing to say is simply not rendered.
  */
 export function OverviewView({ data, onOpenStrength, onOpenSegment, onViewExercises }: OverviewViewProps) {
-  const { sessions, exercises, prs, milestones, bodyMeasurements } = data;
+  const { sessions, exercises, prs, prEvents, milestones, bodyMeasurements } = data;
 
   const completedWorkouts = useMemo(
     () => sessions.filter((s) => s.status === 'completed').length,
@@ -77,13 +77,13 @@ export function OverviewView({ data, onOpenStrength, onOpenSegment, onViewExerci
       periodStart,
       periodEnd: addDaysToIso(periodStart, 6),
       sessions,
-      personalRecords: prs,
+      prEvents,
       milestones: visibleMilestones,
       bodyMeasurements,
       stagnationSignals: detectAllStagnation(sessions, exercises, prs),
       plannedSessions: plannedSessionsThisWeek(data.activeProgram, data.templates, data.occurrences, today),
     });
-  }, [sessions, exercises, prs, visibleMilestones, bodyMeasurements, data.activeProgram, data.templates, data.occurrences]);
+  }, [sessions, exercises, prs, prEvents, visibleMilestones, bodyMeasurements, data.activeProgram, data.templates, data.occurrences]);
 
   const muscles = useMemo(
     () =>

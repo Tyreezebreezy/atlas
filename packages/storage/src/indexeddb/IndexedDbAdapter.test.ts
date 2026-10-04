@@ -7,6 +7,7 @@ import type {
   Exercise,
   Milestone,
   PersonalRecord,
+  PersonalRecordEvent,
   TrainingLocation,
   WorkoutOccurrence,
 } from '@atlas/data-model';
@@ -331,5 +332,104 @@ describe('IndexedDbAdapter: v1.0.0 TrainingLocation (second Dexie version bump)'
     const location = makeTrainingLocation();
     await upgraded.trainingLocations.put(location);
     expect(await upgraded.trainingLocations.get(location.id)).toEqual(location);
+  });
+});
+
+function makePersonalRecordEvent(overrides: Partial<PersonalRecordEvent> = {}): PersonalRecordEvent {
+  const now = new Date().toISOString();
+  return {
+    id: 'pr-event:session-1:exercise-1:none',
+    created_at: now,
+    updated_at: now,
+    version: 1,
+    device_id: 'test-device',
+    deleted_at: null,
+    session_id: 'session-1',
+    exercise_id: 'exercise-1',
+    training_location_id: null,
+    achieved_at: '2026-09-21T14:00:00.000Z',
+    pr_kinds: ['max_load', 'estimated_1rm'],
+    evaluator_version: 'pr-events-1/brzycki-v1',
+    estimator_id: 'brzycki',
+    estimator_version: 'v1',
+    ...overrides,
+  };
+}
+
+describe('IndexedDbAdapter: vNext Handoff 04A.1 PersonalRecordEvent (Dexie version 6)', () => {
+  it('round-trips a PersonalRecordEvent', async () => {
+    const adapter = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    const event = makePersonalRecordEvent();
+    await adapter.personalRecordEvents.put(event);
+    expect(await adapter.personalRecordEvents.get(event.id)).toEqual(event);
+    expect(await adapter.personalRecordEvents.getAll()).toEqual([event]);
+  });
+
+  it('writing the same stable id twice replaces the event -- one row, never a duplicate', async () => {
+    const adapter = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    await adapter.personalRecordEvents.put(makePersonalRecordEvent());
+    await adapter.personalRecordEvents.putMany([makePersonalRecordEvent({ pr_kinds: ['max_load'], version: 2 })]);
+    const all = await adapter.personalRecordEvents.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0]?.pr_kinds).toEqual(['max_load']);
+  });
+
+  it('excludes a soft-deleted event from getAll, and a re-written event comes back', async () => {
+    const adapter = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    const event = makePersonalRecordEvent();
+    await adapter.personalRecordEvents.put(event);
+    await adapter.personalRecordEvents.softDelete(event.id);
+    expect(await adapter.personalRecordEvents.getAll()).toEqual([]);
+    await adapter.personalRecordEvents.put(makePersonalRecordEvent());
+    expect(await adapter.personalRecordEvents.getAll()).toHaveLength(1);
+  });
+
+  it('upgrades a real pre-04A.1 database (version 5) without touching existing history, and the new store starts empty', async () => {
+    const dbName = `atlas-test-upgrade-${crypto.randomUUID()}`;
+
+    // Exactly the schema history through version 5 -- what an owner device on 04A holds.
+    const legacyDb = new Dexie(dbName);
+    legacyDb.version(1).stores({
+      exercises: 'id, name, is_custom, deleted_at',
+      programs: 'id, is_active, deleted_at',
+      workoutTemplates: 'id, is_quick_workout, deleted_at',
+      workoutSessions: 'id, status, started_at, deleted_at',
+      exerciseNotes: 'id, exercise_id, deleted_at',
+      programNotes: 'id, program_id, deleted_at',
+      personalRecords: 'id, exercise_id, kind, deleted_at',
+      milestones: 'id, exercise_id, deleted_at',
+      benchmarks: 'id, metric, deleted_at',
+      bodyMeasurements: 'id, date, deleted_at',
+    });
+    legacyDb.version(2).stores({
+      workoutOccurrences: 'id, program_id, effective_date, original_date, deleted_at',
+    });
+    legacyDb.version(3).stores({ trainingLocations: 'id, name, deleted_at' });
+    legacyDb.version(4).stores({
+      exerciseAliases: 'id, exercise_id, normalized_alias, deleted_at',
+      equipmentDefinitions: 'id, type, deleted_at',
+      gymEquipment: 'id, training_location_id, equipment_definition_id, deleted_at',
+      exerciseEquipmentContext: 'id, exercise_id, gym_equipment_id, deleted_at',
+    });
+    legacyDb.version(5).stores({ testProtocols: 'id, measurement_type, deleted_at' });
+    await legacyDb.open();
+    const exercise = makeExercise({ name: 'Owner Bench Press' });
+    await legacyDb.table('exercises').put(exercise);
+    await legacyDb.table('workoutSessions').put({ id: 'session-1', status: 'completed', started_at: '2026-09-21T13:00:00.000Z', deleted_at: null });
+    await legacyDb.table('personalRecords').put({ id: 'pr-1', exercise_id: exercise.id, kind: 'max_load', deleted_at: null });
+    expect(legacyDb.verno).toBe(5);
+    legacyDb.close();
+
+    const upgraded = new IndexedDbAdapter(dbName);
+    expect((await upgraded.exercises.get(exercise.id))?.name).toBe('Owner Bench Press');
+    expect(await upgraded.workoutSessions.get('session-1')).toMatchObject({ status: 'completed' });
+    expect(await upgraded.personalRecords.get('pr-1')).toMatchObject({ kind: 'max_load' });
+    expect(await upgraded.personalRecordEvents.getAll()).toEqual([]);
+
+    const event = makePersonalRecordEvent();
+    await upgraded.personalRecordEvents.put(event);
+    expect(await upgraded.personalRecordEvents.get(event.id)).toEqual(event);
+    // The existing history is still exactly as it was.
+    expect(await upgraded.personalRecords.getAll()).toHaveLength(1);
   });
 });

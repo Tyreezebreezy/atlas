@@ -272,11 +272,24 @@ function validateBackup(
     workoutOccurrences = validated;
   }
 
+  // vNext Handoff 04A.1. Optional for the same reason as workout_occurrences.
+  let personalRecordEvents: unknown[] = [];
+  if (value.entities.personal_record_events !== undefined) {
+    const validated = validateEntityArray(
+      value.entities.personal_record_events,
+      `${path}.entities.personal_record_events`,
+      issues,
+    );
+    if (validated === null) return null;
+    personalRecordEvents = validated;
+  }
+
   return {
     device_id: value.device_id,
     entities: {
       ...entities,
       workout_occurrences: workoutOccurrences,
+      personal_record_events: personalRecordEvents,
     } as AtlasBackupDocument['entities'],
   };
 }

@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import {
+  calculatePRs,
+  derivePREventsForExercise,
+  exposureSessions,
+  planPREventReconciliation,
+} from '@atlas/pr-engine';
+import type { WorkoutSession } from '@atlas/data-model';
 import { buildMuscleMapViewModel, exercisePerformanceState } from './muscleMapViewModel';
 import {
   daysBefore,
   exerciseTargeting,
   makePR,
+  makePREvent,
   makeSession,
   planned,
 } from './testFixtures';
@@ -259,46 +267,89 @@ describe('buildMuscleMapViewModel — focus', () => {
 describe('exercisePerformanceState / buildMuscleMapViewModel — performance', () => {
   const window = { start: NOW.getTime() - 30 * 86_400_000, end: NOW.getTime() };
   const bench = BENCH;
+  // What the app holds for a history: the standing records (the stall check reads these) and the event ledger (progress reads this).
+  const rowsFor = (sessions: WorkoutSession[]) => calculatePRs(sessions, bench);
+  const eventsFor = (sessions: WorkoutSession[]) => {
+    const exposures = exposureSessions(sessions);
+    return planPREventReconciliation([], derivePREventsForExercise(sessions, bench, exposures), exposures).upsert;
+  };
 
   it('is insufficient_data until there are two exposures to compare', () => {
     const s1 = makeSession(benchSets(3), daysBefore(NOW, 3));
-    expect(exercisePerformanceState([s1], bench, [makePR({ source_session_id: s1.id })], window)).toBe(
+    expect(exercisePerformanceState([s1], bench, [makePR({ source_session_id: s1.id })], [], window)).toBe(
       'insufficient_data',
     );
   });
 
-  it('is progressing when a current PR was set inside the window by a non-baseline session', () => {
+  it('is progressing when a PR event falls inside the window', () => {
     const s1 = makeSession([{ exerciseId: 'bench', weight: 100, reps: 8 }], daysBefore(NOW, 10));
     const s2 = makeSession([{ exerciseId: 'bench', weight: 105, reps: 8 }], daysBefore(NOW, 3));
-    const prs = [makePR({ source_session_id: s2.id, achieved_at: daysBefore(NOW, 3) })];
-    expect(exercisePerformanceState([s1, s2], bench, prs, window)).toBe('progressing');
+    const events = [makePREvent({ session_id: s2.id, achieved_at: daysBefore(NOW, 3) })];
+    expect(exercisePerformanceState([s1, s2], bench, [], events, window)).toBe('progressing');
   });
 
-  it('does not count baseline-session PRs as progress', () => {
+  it('does not count a baseline as progress: the ledger has no event for a first exposure', () => {
     const s1 = makeSession([{ exerciseId: 'bench', weight: 120, reps: 8 }], daysBefore(NOW, 10));
     const s2 = makeSession([{ exerciseId: 'bench', weight: 100, reps: 8 }], daysBefore(NOW, 3));
-    // The current best is still the first-ever session's number.
-    const prs = [makePR({ source_session_id: s1.id, achieved_at: daysBefore(NOW, 10) })];
-    expect(exercisePerformanceState([s1, s2], bench, prs, window)).toBe('stable');
+    // A stronger first session, then a weaker one: nothing was beaten, so nothing is in the ledger.
+    expect(exercisePerformanceState([s1, s2], bench, [], [], window)).toBe('stable');
+  });
+
+  it('still counts a PR that a later session beat, while the window only reaches the earlier ones', () => {
+    // Every session beats ALL of the previous one's records, so the middle sessions hold no standing record.
+    const s1 = makeSession([{ exerciseId: 'bench', weight: 215, reps: 5 }], daysBefore(NOW, 20));
+    const s2 = makeSession([{ exerciseId: 'bench', weight: 225, reps: 5 }], daysBefore(NOW, 12));
+    const s3 = makeSession(
+      [{ exerciseId: 'bench', weight: 230, reps: 5 }, { exerciseId: 'bench', weight: 225, reps: 6 }],
+      daysBefore(NOW, 7),
+    );
+    const s4 = makeSession(
+      [
+        { exerciseId: 'bench', weight: 235, reps: 5 },
+        { exerciseId: 'bench', weight: 230, reps: 6 },
+        { exerciseId: 'bench', weight: 225, reps: 7 },
+      ],
+      daysBefore(NOW, 3),
+    );
+    const sessions = [s1, s2, s3, s4];
+    const rows = rowsFor(sessions);
+    expect(new Set(rows.map((r) => r.source_session_id))).toEqual(new Set([s1.id, s4.id]));
+
+    // A window that ends before the last session: reading standing records would find nothing here.
+    const upToLastWeek = { start: window.start, end: NOW.getTime() - 5 * 86_400_000 };
+    expect(exercisePerformanceState(sessions, bench, rows, eventsFor(sessions), upToLastWeek)).toBe('progressing');
   });
 
   it('ignores progress that happened before the window', () => {
     const s1 = makeSession([{ exerciseId: 'bench', weight: 100, reps: 8 }], daysBefore(NOW, 90));
     const s2 = makeSession([{ exerciseId: 'bench', weight: 105, reps: 8 }], daysBefore(NOW, 80));
     const s3 = makeSession([{ exerciseId: 'bench', weight: 105, reps: 8 }], daysBefore(NOW, 3));
-    const prs = [makePR({ source_session_id: s2.id, achieved_at: daysBefore(NOW, 80) })];
-    expect(exercisePerformanceState([s1, s2, s3], bench, prs, window)).toBe('stable');
+    const sessions = [s1, s2, s3];
+    expect(exercisePerformanceState(sessions, bench, rowsFor(sessions), eventsFor(sessions), window)).toBe('stable');
   });
 
   it('is stalled when detectStagnation flags it (three comparable exposures, no PR among them)', () => {
     const sessions = [20, 12, 4].map((d) => makeSession(benchSets(3), daysBefore(NOW, d)));
-    expect(exercisePerformanceState(sessions, bench, [], window)).toBe('stalled');
+    expect(exercisePerformanceState(sessions, bench, [], [], window)).toBe('stalled');
   });
 
   it('keeps equipment contexts apart: one exposure at each of two gyms is not comparable', () => {
     const a = makeSession(benchSets(3), daysBefore(NOW, 10), { training_location_id: 'gym-a' });
     const b = makeSession(benchSets(3), daysBefore(NOW, 3), { training_location_id: 'gym-b' });
-    expect(exercisePerformanceState([a, b], bench, [], window)).toBe('insufficient_data');
+    expect(exercisePerformanceState([a, b], bench, [], [], window)).toBe('insufficient_data');
+  });
+
+  it('reads an event only within its own equipment context', () => {
+    const a1 = makeSession(benchSets(3), daysBefore(NOW, 12), { training_location_id: 'gym-a' });
+    const a2 = makeSession(benchSets(3), daysBefore(NOW, 6), { training_location_id: 'gym-a' });
+    const b1 = makeSession(benchSets(3), daysBefore(NOW, 9), { training_location_id: 'gym-b' });
+    const b2 = makeSession(benchSets(3), daysBefore(NOW, 3), { training_location_id: 'gym-b' });
+    const atB = [makePREvent({ session_id: b2.id, training_location_id: 'gym-b', achieved_at: daysBefore(NOW, 3) })];
+    // gym-b progressed inside the window, so the exercise reads as progressing.
+    expect(exercisePerformanceState([a1, a2, b1, b2], bench, [], atB, window)).toBe('progressing');
+    // The same event dated outside the window does not.
+    const old = [makePREvent({ session_id: b2.id, training_location_id: 'gym-b', achieved_at: daysBefore(NOW, 60) })];
+    expect(exercisePerformanceState([a1, a2, b1, b2], bench, [], old, window)).toBe('stable');
   });
 
   it('rolls exercises up to a muscle with stalled > progressing > stable > insufficient, exposing the mix', () => {
@@ -311,14 +362,15 @@ describe('exercisePerformanceState / buildMuscleMapViewModel — performance', (
     const flySessions = [20, 12, 4].map((d) =>
       makeSession([{ exerciseId: 'fly', weight: 30, reps: 12 }], daysBefore(NOW, d)),
     );
-    const prs = [makePR({ exercise_id: 'press', source_session_id: pressS[1]!.id, achieved_at: daysBefore(NOW, 3) })];
+    const events = [makePREvent({ exercise_id: 'press', session_id: pressS[1]!.id, achieved_at: daysBefore(NOW, 3) })];
 
     const model = buildMuscleMapViewModel({
       mode: 'performance',
       periodDays: 30,
       sessions: [...pressS, ...flySessions],
       exercises: new Map([press, fly].map((e) => [e.id, e])),
-      personalRecords: prs,
+      personalRecords: [],
+      prEvents: events,
       now: NOW,
     });
 

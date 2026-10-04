@@ -51,6 +51,39 @@ export interface PersonalRecord extends SyncMeta {
   load?: number | null;
 }
 
+/**
+ * vNext Handoff 04A.1. One headline PR event: an exercise, in one completed
+ * session, in one equipment context, that improved at least one PR dimension
+ * over every earlier performance in that context. The historical layer next
+ * to `PersonalRecord`, which is only ever the CURRENT best -- a record a later
+ * session beats leaves `personal_records`, but the event stays here, so
+ * "PRs this week" counts every performance that earned a new best.
+ *
+ * - A first-ever performance in a context is a baseline: it makes no event.
+ * - The id is derived from session + exercise + context
+ *   (`personalRecordEventId`), so there can be at most one event for that
+ *   combination and re-deriving it is an upsert, never a duplicate.
+ * - `pr_kinds` lists which detailed records the performance set (max load,
+ *   e1RM, rep-at-load, ...); the detailed rows themselves stay in
+ *   `personal_records`.
+ * - `evaluator_version` says how the event was recognized. A change to the
+ *   evaluator (or the default e1RM estimator) never rewrites or deletes an
+ *   event stamped with an older version. See docs/PRS.md "Headline PR events".
+ */
+export interface PersonalRecordEvent extends SyncMeta {
+  session_id: string;
+  exercise_id: string;
+  /** The equipment context the session ran in; null when none was recorded (all legacy history). */
+  training_location_id: string | null;
+  /** The earliest `achieved_at` among the records the performance set. */
+  achieved_at: string;
+  pr_kinds: PrKind[];
+  evaluator_version: string;
+  /** Set only when an `estimated_1rm` record contributed -- which estimator produced it. */
+  estimator_id?: string | null;
+  estimator_version?: string | null;
+}
+
 export type MilestoneDimension =
   | 'weight'
   | 'reps'

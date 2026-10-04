@@ -30,6 +30,7 @@ export async function restoreBackup(
     storage.milestones.putMany(entities.milestones),
     storage.bodyMeasurements.putMany(entities.body_measurements),
     storage.workoutOccurrences.putMany(entities.workout_occurrences ?? []),
+    storage.personalRecordEvents.putMany(entities.personal_record_events ?? []),
   ]);
 
   return {
@@ -44,6 +45,7 @@ export async function restoreBackup(
       milestones: entities.milestones.length,
       body_measurements: entities.body_measurements.length,
       workout_occurrences: (entities.workout_occurrences ?? []).length,
+      personal_record_events: (entities.personal_record_events ?? []).length,
     },
   };
 }

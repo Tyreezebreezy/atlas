@@ -170,46 +170,129 @@ then diffs the resulting `PersonalRecord[]` against the session id via
 `newPRsFromSession` to populate `WorkoutSummary`'s "New PRs" section. This
 never shows a PR that was only _tied_, per the tie-behavior rule above.
 
-## Headline PRs (vNext Handoff 04A)
+## Headline PR events (vNext Handoff 04A / 04A.1)
 
-The `PersonalRecord` rows above are _detailed_ records: one per kind, per rep
-count, per load, so one good bench session can leave a dozen of them. The
-number a person means by "6 PRs this week" is different — how many exercise
-performances earned a new best. That is a **headline PR**: an aggregation over
-the rows (`pr-engine/headlinePRs.ts`), not a second stored source of truth and
-not a second PR detector.
+The `PersonalRecord` rows above are _detailed_ records — one per kind, per rep
+count, per load, so one good bench session can leave a dozen — and they are only
+ever the **current** bests: a record a later session beats leaves the table. The
+number a person means by "6 PRs this week" is different, and it is a history:
+how many exercise performances beat something. That lives in its own additive
+store, `PersonalRecordEvent`, next to `personal_records` (which is unchanged).
 
-> One headline PR = one exercise, in one completed session, in one equipment
-> context (`training_location_id`), however many detailed rows that performance
-> currently holds.
+| | `PersonalRecord` | `PersonalRecordEvent` |
+| --- | --- | --- |
+| What it is | the current best for one record slot | one headline PR: a performance that beat an earlier record |
+| When it changes | replaced or removed as soon as it is beaten | kept; removed only when its source performance stops existing |
+| Read by | Strength, PR history, the workout summary's "New PRs", the stall check | every "PRs" count (Today, Overview, Weekly Review) and the muscle Performance mode |
 
-- `buildHeadlinePREvents(personalRecords, sessions)` groups the current rows by
-  session + exercise + location and returns `HeadlinePREvent[]` (oldest first,
-  independent of input order). An event keeps every record it groups
-  (`records`), so nothing is discarded, and carries a `primary_kind` label.
+> One event = one exercise, in one completed session, in one equipment context
+> (`training_location_id`), that **beat at least one record an earlier session in
+> that context already held** — however many detailed records it beat.
+
 - **Baseline is not a PR.** The first eligible session of an exercise in an
-  equipment context is its baseline: its rows exist (they are the first
-  numbers) but do not make an event. The same first-exposure index
-  (`exposureSessions`) backs the muscle Performance mode, so the two cannot
-  disagree about what "first" means. A row whose source session is not among
-  the given sessions cannot be shown to be a later one, so it is not counted.
-- `headlinePREventsInPeriod(events, start, end)` filters by the event's day
-  (inclusive `YYYY-MM-DD`, the rule the weekly review always used).
-- **`primary_kind`** is display-only and never changes what counts. First match
-  wins: `max_load` (and its bodyweight analogue `weighted_bodyweight`),
-  `rep_at_load`, `estimated_1rm`, `rep` / `bodyweight`, `timed` / `distance`,
-  then `rep_range` / `volume` — the handoff's order mapped onto the repository's
-  kinds.
-- **Only standing records are visible.** `calculatePRs` keeps just the current
-  best per key, so a record a later session beat is no longer a row, and an
-  event none of whose records still stand is not counted. The figure is
-  "performances that currently hold a record" — conservative, never inflated.
-  (Example: 170 lb × 12 → 14 → 16 is three sessions; the 12-rep one is the
-  baseline, and the 14- and 16-rep ones each still hold a record, so two events —
-  not the dozen rows they set.)
-- **Consumers.** `buildWeeklyReview` (`pr_count`, `exercises_progressed`) is the
-  single place Today and Progress Overview read the figure from; a source-scan
-  test (`apps/web/src/progress/singleEvaluator.test.ts`) fails if either screen
-  starts counting rows itself. The detail surfaces — the workout summary's "New
-  PRs", Strength record markers, PR history — still list every record and were
-  left alone on purpose.
+  equipment context is its baseline: it sets records (the first numbers) but
+  beats nothing, so it is no event. Old history with no location is its own
+  context; no gym is ever guessed. The same first-exposure index
+  (`pr-engine/exposure.ts`) backs the weekly review's progressed/maintained
+  counts and the muscle Performance mode, so they cannot disagree about what
+  "first" means.
+- **A record set for the first time is not beating one.** `calculatePRs` makes a
+  row for every rep count and load ever used, so a lighter day at a load never
+  used before "sets" a `rep_at_load` record. Beating an earlier record is the
+  test, so that day is not an event (and `pr_kinds` lists only the kinds beaten).
+  This is deliberately tighter than 04A's "holds any row" count; dropping the
+  `existing.has(...)` filter in `derivePREventsForExercise` restores it.
+- **Identity.** `personalRecordEventId(session, exercise, location)` =
+  `pr-event:<session>:<exercise>:<location|none>`, so there is at most one event
+  per combination and writing it again is an upsert, never a duplicate.
+- **Content.** `pr_kinds` (distinct, ordered so `pr_kinds[0]` is the primary
+  kind: `max_load`/`weighted_bodyweight`, `rep_at_load`, `estimated_1rm`,
+  `rep`/`bodyweight`, `timed`/`distance`, then `rep_range`/`volume`),
+  `achieved_at` (earliest record), `evaluator_version`, and `estimator_id` /
+  `estimator_version` when an `estimated_1rm` record contributed. The detailed
+  rows are not copied — they stay in `personal_records`. There is no
+  `is_baseline` flag (it would always be false) and no `record_ids` (the rows
+  are recomputed and their ids reused per slot, so stored ids would dangle).
+  `equipment_context_id` is not stored: the PR engine scopes by
+  `training_location_id` only, and an event follows exactly that boundary.
+
+### Derivation
+
+`derivePREventsForExercise` replays an exercise's history chronologically, per
+context. For each later session it runs the existing `calculatePRs` over the
+history up to and including that session; the records it attributes to the
+session (ties go to the earliest, so only a strictly better performance moves a
+record) whose slot already existed in the previous replay are the records it
+beat. That before/after comparison of `calculatePRs`' own output is the only
+definition of improvement — nothing compares one set to another, so there is no
+second PR detector to drift.
+
+An event depends only on the sessions before it, so a later, better session
+**never changes an earlier event** (tested as a prefix property). Cost is
+quadratic in one exercise's session count: ~75 ms for a lift done 400 times,
+~0.7 s to replay 800 sessions in full. `ponytail:` if that ever matters, replay
+only from the finished session onward — the prefix property makes that exact.
+
+### Versioning
+
+`PR_EVENT_EVALUATOR_VERSION` (`pr-events-1/brzycki-v1`) names the derivation and
+the default e1RM estimator, so changing either changes the string. An event
+stamped with an older version is history, not a cache: reconciliation never
+rewrites or removes it because the evaluator or estimator changed. It is removed
+only when its source performance no longer exists (a discarded session, or no
+eligible sets left). A new evaluator may _add_ events for sessions the old one
+did not recognize; it never deletes one.
+
+### Keeping the ledger in step (`apps/web/src/progress/prEvents.ts`)
+
+- **Live and backdated workouts.** `recalculatePRsForExercise` — the one place
+  the post-session PR recompute runs, from `GymModeScreen.handleFinish`, which
+  Log Past Workout also finishes through — also calls
+  `reconcilePREventsForExercise`, so the ledger and the standing records update
+  together, idempotently (finishing the same session again writes nothing and
+  bumps no versions).
+- **Historical backfill and self-healing.** `reconcilePREvents(storage)` walks
+  every exercise's history, adds/updates/removes per
+  `planPREventReconciliation`, and returns counts plus `skipped` — an exercise in
+  completed sessions that is not in the exercise library is reported
+  (`EXERCISE_UNRESOLVED`) and its stored events are left exactly as they are,
+  never invented. `ensurePREventsUpToDate` runs it once per launch (memoized per
+  storage instance, like `ensureBenchmarksSeeded`); Today and Progress load
+  events only through `loadPREvents`, which waits for it. The first launch after
+  the upgrade builds the whole history; every later one finds nothing to change.
+  It also repairs anything that changed history outside the finish path — for
+  example "Replace Existing" in Log Past Workout discards a completed session,
+  which takes its events with it at the next reconcile.
+- **Restore.** A backup carries the events (`personal_record_events`, optional
+  like `workout_occurrences`); a restore then forces a reconcile, which rebuilds
+  them from the restored sessions for an older backup that has none.
+
+### Storage
+
+Additive: Dexie `version(6)` (`personalRecordEvents`, no upgrade function), SQLite
+migration `0006_add_personal_record_events.sql` (same `(id, deleted_at, data)`
+shape), both adapters, backup/restore. Nothing existing is rewritten; a database
+that already holds history simply starts with the store empty. Tested with a
+real v5→v6 Dexie upgrade and the Rust migration round-trip.
+
+### Consumers
+
+`buildWeeklyReview` takes `prEvents` (not `personalRecords`): `pr_count` and
+`exercises_progressed` come from the events in the period — Today's "This Week"
+and the Overview's review card read that one figure, and
+`apps/web/src/progress/singleEvaluator.test.ts` fails if either screen feeds the
+review anything else or counts rows itself. `exercisePerformanceState` reads
+events for "progressing". The stall check (`detectStagnation`) still reads the
+standing records: it flags a stall from "no record among the last K exposures",
+and moving it to events would change _when_ it first fires on a short history
+whose first session is the baseline — a behavior change this handoff does not
+make. The detail surfaces (Strength record markers and PR history, the workout
+summary's "New PRs") still list every detailed record.
+
+### Limits
+
+- Events are derived from history as it stands, so editing or replacing history
+  re-derives current-version events (an event follows the data); older-version
+  events are frozen until their session disappears.
+- The launch reconcile replays all history once per launch. `ponytail:` skip it
+  when a cheap fingerprint of the completed sessions is unchanged if it ever hurts.

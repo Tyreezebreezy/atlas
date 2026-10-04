@@ -14,6 +14,7 @@ import { MilestoneForm } from './MilestoneForm';
 import { MilestonesView } from './MilestonesView';
 import { MusclesView } from './MusclesView';
 import { OverviewView } from './OverviewView';
+import { loadPREvents } from './prEvents';
 import { panelId, ProgressNav, tabId } from './ProgressNav';
 import { PROGRESS_SEGMENTS, type ProgressData, type ProgressSegment } from './progressData';
 import { StrengthView } from './StrengthView';
@@ -63,6 +64,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       await Promise.all([ensureBuiltInMilestonesSeeded(storage), ensureBenchmarksSeeded(storage)]);
       const [
         prs,
+        prEvents,
         milestones,
         benchmarks,
         testProtocols,
@@ -74,6 +76,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
         occurrences,
       ] = await Promise.all([
         storage.personalRecords.getAll(),
+        loadPREvents(storage),
         storage.milestones.getAll(),
         storage.benchmarks.getAll(),
         storage.testProtocols.getAll(),
@@ -86,6 +89,7 @@ export function ProgressScreen({ onViewExercises }: ProgressScreenProps) {
       ]);
       setData({
         prs,
+        prEvents,
         milestones,
         benchmarks,
         testProtocols,

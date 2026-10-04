@@ -5,7 +5,13 @@ import {
   startWorkoutSession,
   type LogSetInput,
 } from '@atlas/workout-engine';
-import type { Exercise, PersonalRecord, PlannedExercise, WorkoutSession } from '@atlas/data-model';
+import type {
+  Exercise,
+  PersonalRecord,
+  PersonalRecordEvent,
+  PlannedExercise,
+  WorkoutSession,
+} from '@atlas/data-model';
 
 /** Builders shared by the vNext Handoff 03B progress-engine tests. Not exported from the package. */
 
@@ -102,6 +108,27 @@ export function makePR(
     achieved_at: '2026-08-01T10:00:00.000Z',
     source_set_id: 'set-1',
     training_location_id: null,
+    ...overrides,
+  };
+}
+
+/** A PR event for tests that need explicit control of the ledger (real ledgers come from pr-engine's derivation). */
+export function makePREvent(
+  overrides: Partial<PersonalRecordEvent> & { session_id: string },
+): PersonalRecordEvent {
+  const exerciseId = overrides.exercise_id ?? 'bench';
+  return {
+    id: `pr-event:${overrides.session_id}:${exerciseId}:${overrides.training_location_id ?? 'none'}`,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    version: 1,
+    device_id: 'seed',
+    deleted_at: null,
+    exercise_id: exerciseId,
+    training_location_id: null,
+    achieved_at: '2026-08-01T10:00:00.000Z',
+    pr_kinds: ['max_load'],
+    evaluator_version: 'test',
     ...overrides,
   };
 }

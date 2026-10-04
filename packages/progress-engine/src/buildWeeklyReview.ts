@@ -1,10 +1,5 @@
-import {
-  buildHeadlinePREvents,
-  exposureSessions,
-  headlinePREventsInPeriod,
-  type ExposureSessions,
-} from '@atlas/pr-engine';
-import type { BodyMeasurement, Milestone, PersonalRecord, WorkoutSession } from '@atlas/data-model';
+import { exposureSessions, prEventsInPeriod, type ExposureSessions } from '@atlas/pr-engine';
+import type { BodyMeasurement, Milestone, PersonalRecordEvent, WorkoutSession } from '@atlas/data-model';
 import type { StagnationSignal } from './detectStagnation';
 
 function toUtcDate(dateStr: string): Date {
@@ -48,7 +43,7 @@ export interface WeeklyReview {
   planned_sessions: number | null;
   completed_sessions: number;
   adherence_ratio: number | null;
-  /** Headline PRs -- exercise performances that earned a new best, one per exercise per session (see pr-engine `buildHeadlinePREvents`), NOT the number of `PersonalRecord` rows. A first-ever performance is a baseline, not a PR. */
+  /** Headline PRs -- exercise performances that beat an earlier record, one per exercise per session per equipment context, counted from the PR event history (`PersonalRecordEvent`). NOT the number of `PersonalRecord` rows, and not only the records that still stand: a PR a later session beat is still a PR that happened. A first-ever performance is a baseline, not a PR. */
   pr_count: number;
   milestone_count: number;
   /** Exercises trained this period that earned a headline PR. */
@@ -66,7 +61,8 @@ export interface WeeklyReviewInput {
   periodStart: string;
   periodEnd: string;
   sessions: WorkoutSession[];
-  personalRecords: PersonalRecord[];
+  /** The PR event history (pr-engine `derivePREventsForExercise`, persisted as `PersonalRecordEvent`) -- the historical layer, so a PR a later session beat still counts. Deliberately not the current-best `PersonalRecord` rows. */
+  prEvents: PersonalRecordEvent[];
   milestones: Milestone[];
   bodyMeasurements: BodyMeasurement[];
   /** Precomputed by the caller (e.g. one detectStagnation call per exercise the owner trains) -- progress-engine doesn't own the exercise library, so it can't enumerate "every exercise" itself. */
@@ -83,7 +79,7 @@ export interface WeeklyReviewInput {
  * "just works" the same way `calculatePRs`/`evaluateMilestones` do.
  */
 export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
-  const { periodStart, periodEnd, sessions, personalRecords, milestones, bodyMeasurements, stagnationSignals } = input;
+  const { periodStart, periodEnd, sessions, prEvents, milestones, bodyMeasurements, stagnationSignals } = input;
   const plannedSessions = input.plannedSessions ?? null;
 
   const completedInPeriod = sessions.filter(
@@ -94,11 +90,7 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
   );
 
   const exposures = exposureSessions(sessions);
-  const headlinePRs = headlinePREventsInPeriod(
-    buildHeadlinePREvents(personalRecords, sessions, exposures),
-    periodStart,
-    periodEnd,
-  );
+  const headlinePRs = prEventsInPeriod(prEvents, periodStart, periodEnd);
   const milestonesInPeriod = milestones.filter(
     (m) => m.achieved_at != null && inPeriod(m.achieved_at, periodStart, periodEnd),
   );

@@ -63,7 +63,12 @@ different purposes:
   installation. Built-in Milestones **are** included despite also being
   seeded, because a milestone's achievement state
   (`achieved_at`/`origin_session_id`/`origin_set_id`) is real user data a
-  reseed would not restore.
+  reseed would not restore. The PR event history (`personal_record_events`,
+  Handoff 04A.1 — see PRS.md) is included and, like `workout_occurrences`,
+  optional: a backup exported before it existed still validates and restores,
+  and the app then rebuilds the events from the restored sessions. Not yet in a
+  backup: training locations, exercise aliases, equipment and test protocols
+  (no UI creates them yet).
 
 ## HTML import (v0.1.4)
 

@@ -142,9 +142,10 @@ export function MusclesView({ data }: { data: ProgressData }) {
         sessions: data.sessions,
         exercises: data.exercises,
         personalRecords: data.prs,
+        prEvents: data.prEvents,
         plannedSessions,
       }),
-    [mode, periodDays, data.sessions, data.exercises, data.prs, plannedSessions],
+    [mode, periodDays, data.sessions, data.exercises, data.prs, data.prEvents, plannedSessions],
   );
 
   const selectedIds = useMemo(() => new Set(selection?.muscleIds ?? []), [selection]);

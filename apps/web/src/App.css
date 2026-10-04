@@ -1351,6 +1351,12 @@ button {
   font-weight: var(--atlas-font-weight-medium);
 }
 
+/* "Start Freestyle Workout": the shared secondary button (.atlas-btn--secondary); this only adds the
+   spacing it lacked, so it no longer sits flush against the card above it. */
+.atlas-today__freestyle {
+  margin-top: var(--atlas-space-4);
+}
+
 /* Today card (v0.2.2) -- one resolved card for today's actual workout,
    replacing the old full-week list. Same accent-card language as
    .atlas-resume-card for visual consistency. */

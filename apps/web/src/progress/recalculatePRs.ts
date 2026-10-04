@@ -1,6 +1,7 @@
 import { calculatePRs } from '@atlas/pr-engine';
 import type { Exercise, PersonalRecord } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
+import { reconcilePREventsForExercise } from './prEvents';
 
 /**
  * vNext Handoff 02: extended for two new dimensions the original kind+reps
@@ -25,6 +26,12 @@ function prKey(record: Pick<PersonalRecord, 'kind' | 'reps' | 'load' | 'training
  * stored before (backfilled history, corrections, replacements). Reuses
  * existing row ids for keys that still exist (upsert by kind+reps), so
  * unrelated screens don't see a PersonalRecord's id change on every finish.
+ *
+ * vNext Handoff 04A.1: this is also where the PR event history is kept in step.
+ * The standing records above are only ever the CURRENT bests; a record a later
+ * session beats leaves them. The events (`prEvents.ts`) are the history of who
+ * beat what, so the same recompute then reconciles them from the same sessions
+ * -- one funnel for live and backdated workouts alike.
  */
 export async function recalculatePRsForExercise(
   storage: AtlasStorage,
@@ -62,6 +69,12 @@ export async function recalculatePRsForExercise(
     toSave.length > 0 ? storage.personalRecords.putMany(toSave) : Promise.resolve(),
     ...toRemove.map((p) => storage.personalRecords.softDelete(p.id)),
   ]);
+
+  // The event history is derived data with its own self-healing pass (`ensurePREventsUpToDate`, every
+  // launch), so a failure here must never stop a finished workout from saving its records and summary.
+  await reconcilePREventsForExercise(storage, exercise, allSessions).catch((error: unknown) => {
+    console.error('ATLAS: the PR event history was not updated for this exercise; it is rebuilt at next launch.', error);
+  });
 }
 
 /** Recalculates PRs for every distinct exercise touched by a just-completed session -- call once on workout finish. */

@@ -9,6 +9,7 @@ import type {
   GymEquipmentInstance,
   Milestone,
   PersonalRecord,
+  PersonalRecordEvent,
   Program,
   ProgramNote,
   SyncMeta,
@@ -58,4 +59,6 @@ export interface AtlasStorage {
   exerciseEquipmentContext: Repository<ExerciseEquipmentContext>;
   /** vNext Handoff 02. See `TestProtocol`'s doc comment. */
   testProtocols: Repository<TestProtocol>;
+  /** vNext Handoff 04A.1. The historical layer next to `personalRecords` -- see `PersonalRecordEvent`'s doc comment. */
+  personalRecordEvents: Repository<PersonalRecordEvent>;
 }

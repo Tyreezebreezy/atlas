@@ -10,6 +10,7 @@ import type {
   GymEquipmentInstance,
   Milestone,
   PersonalRecord,
+  PersonalRecordEvent,
   Program,
   ProgramNote,
   TestProtocol,
@@ -37,6 +38,7 @@ export class AtlasDexie extends Dexie {
   gymEquipment!: Table<GymEquipmentInstance, string>;
   exerciseEquipmentContext!: Table<ExerciseEquipmentContext, string>;
   testProtocols!: Table<TestProtocol, string>;
+  personalRecordEvents!: Table<PersonalRecordEvent, string>;
 
   constructor(name: string) {
     super(name);
@@ -82,6 +84,14 @@ export class AtlasDexie extends Dexie {
     // of those new fields are indexed).
     this.version(5).stores({
       testProtocols: 'id, measurement_type, deleted_at',
+    });
+    // vNext Handoff 04A.1: the PR event history. Only the new store is
+    // declared -- every existing store, and every existing row in it, is
+    // untouched (no upgrade function, no rewrite). A database that already
+    // holds history simply starts with an empty store, which the app's
+    // startup reconcile fills from that history.
+    this.version(6).stores({
+      personalRecordEvents: 'id, session_id, exercise_id, achieved_at, deleted_at',
     });
   }
 }

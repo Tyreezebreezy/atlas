@@ -6,6 +6,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0003_add_training_locations.sql"),
     include_str!("../migrations/0004_add_vnext_foundations.sql"),
     include_str!("../migrations/0005_add_test_protocols.sql"),
+    include_str!("../migrations/0006_add_personal_record_events.sql"),
 ];
 
 const EXPECTED_TABLES: &[&str] = &[
@@ -26,6 +27,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "gym_equipment",
     "exercise_equipment_context",
     "test_protocols",
+    "personal_record_events",
 ];
 
 #[tokio::test]
@@ -156,4 +158,40 @@ async fn migrations_create_expected_tables_and_round_trip() {
         .expect("select should succeed");
 
     assert_eq!(row.0, "{\"name\":\"Continuous Push-Up to Failure\"}");
+
+    // vNext Handoff 04A.1: the one new table from migration 0006 (the PR event
+    // history), same JSON-blob-row shape, round-tripped to prove the sixth
+    // migration actually works. The id is the event's stable session +
+    // exercise + context key, so a second write of the same event must
+    // replace the row rather than add one.
+    sqlx::query("INSERT INTO personal_record_events (id, deleted_at, data) VALUES ($1, NULL, $2)")
+        .bind("pr-event:s1:bench:none")
+        .bind("{\"pr_kinds\":[\"max_load\"]}")
+        .execute(&pool)
+        .await
+        .expect("insert should succeed");
+
+    sqlx::query(
+        "INSERT INTO personal_record_events (id, deleted_at, data) VALUES ($1, NULL, $2)
+         ON CONFLICT(id) DO UPDATE SET deleted_at = excluded.deleted_at, data = excluded.data",
+    )
+    .bind("pr-event:s1:bench:none")
+    .bind("{\"pr_kinds\":[\"max_load\",\"estimated_1rm\"]}")
+    .execute(&pool)
+    .await
+    .expect("upsert should succeed");
+
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM personal_record_events")
+        .fetch_one(&pool)
+        .await
+        .expect("count should succeed");
+    assert_eq!(row.0, 1);
+
+    let row: (String,) = sqlx::query_as("SELECT data FROM personal_record_events WHERE id = $1")
+        .bind("pr-event:s1:bench:none")
+        .fetch_one(&pool)
+        .await
+        .expect("select should succeed");
+
+    assert_eq!(row.0, "{\"pr_kinds\":[\"max_load\",\"estimated_1rm\"]}");
 }

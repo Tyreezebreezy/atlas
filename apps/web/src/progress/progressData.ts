@@ -4,6 +4,7 @@ import type {
   Exercise,
   Milestone,
   PersonalRecord,
+  PersonalRecordEvent,
   Program,
   TestProtocol,
   WorkoutOccurrence,
@@ -15,7 +16,10 @@ import type {
 export interface ProgressData {
   sessions: WorkoutSession[];
   exercises: Map<string, Exercise>;
+  /** The standing (current-best) records -- detail surfaces: Strength, benchmarks, stall checks. */
   prs: PersonalRecord[];
+  /** The PR event history -- every PR count reads this, never `prs`. */
+  prEvents: PersonalRecordEvent[];
   milestones: Milestone[];
   benchmarks: Benchmark[];
   /** The test protocols benchmark definitions name -- the compatibility gate needs them. */

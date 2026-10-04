@@ -66,3 +66,35 @@ describe('one headline PR count', () => {
     expect(filesContaining('.pr_count')).toEqual(['progress/OverviewView.tsx', 'today/TodayScreen.tsx']);
   });
 });
+
+/**
+ * vNext Handoff 04A.1. "PRs this week" counts the PR event history, not the
+ * standing PersonalRecord rows (a record a later session beats leaves the rows).
+ */
+describe('the PR count is fed by the event history', () => {
+  it('Today and Overview give the weekly review `prEvents` and never the PersonalRecord rows', () => {
+    for (const path of ['today/TodayScreen.tsx', 'progress/OverviewView.tsx']) {
+      const source = text(path);
+      expect(source, path).toMatch(/buildWeeklyReview\(\{[^}]*prEvents/s);
+      expect(source, path).not.toMatch(/buildWeeklyReview\(\{[^}]*personalRecords/s);
+    }
+    expect(text('today/TodayScreen.tsx')).not.toContain('personalRecords');
+  });
+
+  it('every screen that counts PRs waits for a current ledger through the same loader', () => {
+    expect(filesContaining('loadPREvents(')).toEqual([
+      'progress/ProgressScreen.tsx',
+      'progress/prEvents.ts',
+      'today/TodayScreen.tsx',
+    ]);
+  });
+
+  it('events are derived in one place -- the persistence layer -- and kept in step by the post-session PR path', () => {
+    expect(filesContaining('derivePREventsForExercise')).toEqual(['progress/prEvents.ts']);
+    expect(text('progress/recalculatePRs.ts')).toContain('reconcilePREventsForExercise(');
+  });
+
+  it('a restored backup rebuilds the ledger', () => {
+    expect(text('importexport/ExportPanel.tsx')).toMatch(/ensurePREventsUpToDate\(storage, \{ force: true \}\)/);
+  });
+});
