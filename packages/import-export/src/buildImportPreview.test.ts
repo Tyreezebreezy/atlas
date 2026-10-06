@@ -152,4 +152,71 @@ describe('buildImportPreview', () => {
     expect(new Set(allKeys).size).toBe(allKeys.length);
     expect(allKeys).toEqual(['0.0.0', '0.0.1', '0.1.0', '0.1.1']);
   });
+
+  describe('absurd numbers (an import must not be able to make Gym Mode draw a billion set rows)', () => {
+    const previewOf = (overrides: Partial<PlanExerciseTarget>) => {
+      const workout: PlanWorkout = {
+        name: 'W',
+        is_quick_workout: true,
+        exercises: [target({ order: 1, exercise_name: 'Bench Press', ...overrides })],
+      };
+      const preview = buildImportPreview({ kind: 'workout', workout }, library);
+      if (preview.kind !== 'workout') throw new Error('expected a workout preview');
+      const entry = preview.workout.exercises[0];
+      if (!entry) throw new Error('expected one exercise');
+      return entry;
+    };
+
+    it('leaves a value beyond the supported range blank, says so, and keeps everything sane next to it', () => {
+      const entry = previewOf({
+        target_sets: 1_000_000_000,
+        target_reps_min: 5,
+        target_reps_max: 5,
+        target_weight: 1e12,
+        rest_seconds: 120,
+      });
+      expect(entry.planned.target_sets).toBeNull();
+      expect(entry.planned.target_weight).toBeNull();
+      expect(entry.planned.target_reps_min).toBe(5);
+      expect(entry.planned.rest_seconds).toBe(120);
+      const messages = entry.warnings.map((w) => w.message);
+      expect(messages).toContain(
+        'Sets 1000000000 is beyond the supported range (up to 100); it was left blank.',
+      );
+      expect(messages.some((m) => m.startsWith('Weight 1000000000000 is beyond'))).toBe(true);
+    });
+
+    it('accepts a value exactly at the limit', () => {
+      const entry = previewOf({
+        target_sets: 100,
+        target_reps_min: 999,
+        target_reps_max: 999,
+        target_weight: 5000,
+        target_rpe: 10,
+      });
+      expect(entry.planned.target_sets).toBe(100);
+      expect(entry.planned.target_reps_max).toBe(999);
+      expect(entry.planned.target_weight).toBe(5000);
+      expect(entry.planned.target_rpe).toBe(10);
+      expect(
+        entry.warnings.filter((w) => w.message.includes('beyond the supported range')),
+      ).toEqual([]);
+    });
+
+    it('gives every out-of-range field its own message (the panel keys warnings by text)', () => {
+      const entry = previewOf({
+        target_reps_min: 5000,
+        target_reps_max: 5000,
+        target_duration_seconds: 999_999,
+        target_distance_meters: 9_999_999,
+        rest_seconds: 999_999,
+        target_rir: 50,
+      });
+      const messages = entry.warnings
+        .map((w) => w.message)
+        .filter((m) => m.includes('beyond the supported range'));
+      expect(messages).toHaveLength(6);
+      expect(new Set(messages).size).toBe(6);
+    });
+  });
 });

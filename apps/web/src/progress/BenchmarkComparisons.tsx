@@ -48,7 +48,11 @@ export function benchmarkComparisons(
     const observed = BENCHMARK_OBSERVATION[metric];
     const benchmark = findBenchmark(benchmarks, metric);
     if (!observed || !benchmark?.exercise_id) continue;
-    const pr = prs.find((p) => p.exercise_id === benchmark.exercise_id && p.kind === observed.prKind);
+    // The person's best result for the benchmark's exercise. Records are kept per place and machine, so there can be
+    // several -- compare the highest, not whichever happens to come first.
+    const pr = prs
+      .filter((p) => p.exercise_id === benchmark.exercise_id && p.kind === observed.prKind)
+      .reduce<PersonalRecord | null>((best, p) => (best === null || p.value > best.value ? p : best), null);
     if (!pr) continue;
 
     const exercise = exercises.get(benchmark.exercise_id);

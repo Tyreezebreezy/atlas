@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { compareByName, newId } from '@atlas/core';
 import {
   createProgram,
@@ -12,6 +12,7 @@ import {
 import { reorder, withSequentialOrder } from '@atlas/workout-engine';
 import type { Program, ProgramDay, ProgramWeek, WorkoutTemplate } from '@atlas/data-model';
 import { ProgressionPolicyFields } from './ProgressionPolicyFields';
+import { TemplateEditor } from './TemplateEditor';
 import type { AtlasStorage } from '@atlas/storage';
 
 const WEEKDAY_LABELS = [
@@ -28,11 +29,34 @@ interface ProgramEditorProps {
   storage: AtlasStorage;
   programId: string | null;
   templates: WorkoutTemplate[];
+  /** A workout was edited, duplicated or deleted from inside this editor: the caller's list is stale. */
+  onTemplatesChanged: () => void;
   onDone: () => void;
 }
 
-export function ProgramEditor({ storage, programId, templates, onDone }: ProgramEditorProps) {
+export function ProgramEditor({
+  storage,
+  programId,
+  templates,
+  onTemplatesChanged,
+  onDone,
+}: ProgramEditorProps) {
   const [program, setProgram] = useState<Program | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  // The confirmation replaces the action row at the bottom of a long page: bring all of it into view.
+  useEffect(() => {
+    if (confirmingDelete) confirmRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [confirmingDelete]);
+  // Editing a day's workout swaps this view for the workout editor while the unsaved program stays in state here.
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const openedFromDayId = useRef<string | null>(null);
+  // Back from the workout editor, land on the day's Edit button again (which also scrolls it into view).
+  useEffect(() => {
+    if (editingTemplateId !== null || openedFromDayId.current === null) return;
+    document.getElementById(`edit-workout-${openedFromDayId.current}`)?.focus();
+    openedFromDayId.current = null;
+  }, [editingTemplateId]);
   // Management/discovery ordering only (v0.2.2) -- picking which template a
   // day uses, not the day's own programmed exercise order.
   const sortedTemplates = [...templates].sort(compareByName);
@@ -50,6 +74,20 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
         <h1>Program</h1>
         <p>Loading&hellip;</p>
       </div>
+    );
+  }
+
+  if (editingTemplateId) {
+    return (
+      <TemplateEditor
+        storage={storage}
+        templateId={editingTemplateId}
+        isQuickWorkoutDefault={false}
+        onDone={() => {
+          setEditingTemplateId(null);
+          onTemplatesChanged();
+        }}
+      />
     );
   }
 
@@ -138,6 +176,27 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
       );
       return { ...prev, weeks };
     });
+  }
+
+  /** Every day's workout is editable from here, whether or not it is also shown in Quick Workouts. */
+  function editWorkoutButton(day: ProgramDay) {
+    const workout = sortedTemplates.find((template) => template.id === day.template_id);
+    // A deleted workout has nothing to edit; the Workout select beside it already says so.
+    if (!workout) return null;
+    return (
+      <button
+        type="button"
+        id={`edit-workout-${day.id}`}
+        className="atlas-program-editor__edit-workout"
+        aria-label={`Edit workout ${workout.name}`}
+        onClick={() => {
+          openedFromDayId.current = day.id;
+          setEditingTemplateId(workout.id);
+        }}
+      >
+        Edit workout
+      </button>
+    );
   }
 
   function finalize(current: Program): Program {
@@ -269,35 +328,45 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
                       updateDay(weekIndex, dayIndex, { template_id: e.target.value })
                     }
                   >
+                    {/* A day whose workout was deleted must say so, not quietly show the first workout in the list. */}
+                    {!sortedTemplates.some((template) => template.id === day.template_id) && (
+                      <option value={day.template_id} disabled>
+                        (this workout no longer exists)
+                      </option>
+                    )}
                     {sortedTemplates.map((template) => (
                       <option key={template.id} value={template.id}>
                         {template.name}
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    aria-label="Move day up"
-                    disabled={dayIndex === 0}
-                    onClick={() => moveDay(weekIndex, dayIndex, -1)}
-                  >
-                    &uarr;
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Move day down"
-                    disabled={dayIndex === week.days.length - 1}
-                    onClick={() => moveDay(weekIndex, dayIndex, 1)}
-                  >
-                    &darr;
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Remove day"
-                    onClick={() => removeDay(weekIndex, dayIndex)}
-                  >
-                    &times;
-                  </button>
+                  {editWorkoutButton(day)}
+                  {/* One unit, so a narrow row wraps the three together instead of scattering them. */}
+                  <div className="atlas-program-editor__day-actions">
+                    <button
+                      type="button"
+                      aria-label="Move day up"
+                      disabled={dayIndex === 0}
+                      onClick={() => moveDay(weekIndex, dayIndex, -1)}
+                    >
+                      &uarr;
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Move day down"
+                      disabled={dayIndex === week.days.length - 1}
+                      onClick={() => moveDay(weekIndex, dayIndex, 1)}
+                    >
+                      &darr;
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${day.label.trim() || 'day'}`}
+                      onClick={() => removeDay(weekIndex, dayIndex)}
+                    >
+                      &times;
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -322,25 +391,60 @@ export function ProgramEditor({ storage, programId, templates, onDone }: Program
         </p>
       )}
 
-      <div className="atlas-template-editor__actions">
-        {programId && (
-          <button type="button" onClick={() => void handleDelete()}>
-            Delete
-          </button>
-        )}
-        {!program.is_active && (
-          <button type="button" onClick={() => void handleActivate()}>
-            Save &amp; Activate
-          </button>
-        )}
-        <button
-          type="button"
-          className="atlas-template-editor__save"
-          onClick={() => void handleSave()}
+      {confirmingDelete ? (
+        <div
+          ref={confirmRef}
+          className="atlas-inline-confirm"
+          role="group"
+          aria-label={`Delete ${program.name.trim() || 'this program'}?`}
         >
-          Save
-        </button>
-      </div>
+          <p>
+            Delete {program.name.trim() || 'this program'}? Past workouts stay in your history.
+            {program.is_active
+              ? ' This is your active program, so Today has no schedule until you activate another.'
+              : ''}{' '}
+            This can&rsquo;t be undone.
+          </p>
+          <button
+            type="button"
+            className="atlas-btn atlas-btn--secondary"
+            onClick={() => setConfirmingDelete(false)}
+          >
+            Keep it
+          </button>
+          <button
+            type="button"
+            className="atlas-btn atlas-btn--primary"
+            onClick={() => void handleDelete()}
+          >
+            Delete {program.name.trim() || 'program'}
+          </button>
+        </div>
+      ) : (
+        <div className="atlas-template-editor__actions">
+          {programId && (
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              aria-expanded={confirmingDelete}
+            >
+              Delete…
+            </button>
+          )}
+          {!program.is_active && (
+            <button type="button" onClick={() => void handleActivate()}>
+              Save &amp; Activate
+            </button>
+          )}
+          <button
+            type="button"
+            className="atlas-template-editor__save"
+            onClick={() => void handleSave()}
+          >
+            Save
+          </button>
+        </div>
+      )}
     </div>
   );
 }

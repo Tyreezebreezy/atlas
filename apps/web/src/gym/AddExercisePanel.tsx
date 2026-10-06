@@ -8,6 +8,8 @@ interface AddExercisePanelProps {
   allExercises: Exercise[];
   /** Exercises already planned in this workout -- don't suggest adding a duplicate. */
   excludeExerciseIds: string[];
+  /** Whether the workout comes from a saved workout that "Add to program too" could add to. A freestyle workout has none, and offering the choice there promised something that never happened. */
+  canChangeProgram: boolean;
   onCancel: () => void;
   onConfirm: (exerciseId: string, scope: AddScope) => void;
 }
@@ -18,6 +20,7 @@ interface AddExercisePanelProps {
 export function AddExercisePanel({
   allExercises,
   excludeExerciseIds,
+  canChangeProgram,
   onCancel,
   onConfirm,
 }: AddExercisePanelProps) {
@@ -36,27 +39,29 @@ export function AddExercisePanel({
   if (selected) {
     return (
       <div className="atlas-replace-panel">
-        <h3>Add {selected.name}?</h3>
-        <div className="atlas-replace-panel__scope">
-          <label>
-            <input
-              type="radio"
-              name="add-scope"
-              checked={scope === 'today'}
-              onChange={() => setScope('today')}
-            />
-            Just today
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="add-scope"
-              checked={scope === 'program'}
-              onChange={() => setScope('program')}
-            />
-            Add to program too
-          </label>
-        </div>
+        <h3>Add {formatExerciseName(selected.name)}?</h3>
+        {canChangeProgram && (
+          <div className="atlas-replace-panel__scope">
+            <label>
+              <input
+                type="radio"
+                name="add-scope"
+                checked={scope === 'today'}
+                onChange={() => setScope('today')}
+              />
+              Just today
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="add-scope"
+                checked={scope === 'program'}
+                onChange={() => setScope('program')}
+              />
+              Add to program too
+            </label>
+          </div>
+        )}
         <div className="atlas-replace-panel__actions">
           <button type="button" onClick={() => setSelected(null)}>
             Back

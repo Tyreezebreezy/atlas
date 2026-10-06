@@ -42,6 +42,11 @@ export interface Program extends SyncMeta {
   name: string;
   description: string | null;
   is_active: boolean;
+  /** Acceptance pass (vNext 04B). When this program last became the active one (set by `setActiveProgram`). A
+   * workout scheduled before a program was created -- or before it was switched to -- was never this program's
+   * to miss, so Today's "Missed" list starts at the later of `created_at` and this. Absent on a program stored
+   * before this field existed: `created_at` stands in, which is what it always was. */
+  activated_at?: string | null;
   weeks: ProgramWeek[];
   /** Added in v0.1.1 (Stage 4A). A program stored before this version has
    * neither field at runtime despite the required type -- every read site

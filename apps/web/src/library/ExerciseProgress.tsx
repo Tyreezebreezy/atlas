@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import { performanceContextLabel, type ContextNames } from '@atlas/equipment-engine';
 import { calculatePRs } from '@atlas/pr-engine';
-import { buildStrengthView, summarizeExercise, type StrengthMetric } from '@atlas/progress-engine';
+import {
+  buildStrengthView,
+  sessionsInContext,
+  summarizeExercise,
+  type StrengthMetric,
+} from '@atlas/progress-engine';
 import type { Exercise, PerformedSet, WorkoutSession } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
+import { formatSessionDate } from '../history/formatSessionDate';
 import { describePR, formatSeconds } from '../progress/formatPR';
 import { TrendChart } from '../progress/TrendChart';
 
 interface ExerciseProgressProps {
   exercise: Exercise;
   sessions: WorkoutSession[];
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /** Whole numbers for rep counts, seconds as m:ss, everything else with its unit. */
@@ -41,44 +44,47 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
   const storage = useStorage();
   const [chosenKey, setChosenKey] = useState<string | null>(null);
   const [chosenLoad, setChosenLoad] = useState<number | null>(null);
-  const [locationNames, setLocationNames] = useState<Map<string, string>>(new Map());
+  const [names, setNames] = useState<ContextNames | null>(null);
 
   const overall = useMemo(() => buildStrengthView(sessions, exercise), [sessions, exercise]);
   const contexts = overall.contexts;
 
-  // Weight-bearing history at one place must not be blended with another's, so once an
-  // exercise has been done in more than one context there is no "all" -- it opens on the
-  // context of the latest session, and the picker switches between them.
-  const latestContext = useMemo(() => {
-    const latest = [...sessions]
-      .filter((s) => s.status === 'completed' && s.performed_sets.some((set) => set.exercise_id === exercise.id))
-      .sort((a, b) => (b.completed_at ?? b.started_at).localeCompare(a.completed_at ?? a.started_at))[0];
-    return latest?.training_location_id ?? null;
-  }, [sessions, exercise.id]);
-  const [chosenContext, setChosenContext] = useState<string | null | undefined>(undefined);
-  const context = contexts.length > 1 ? (chosenContext === undefined ? latestContext : chosenContext) : undefined;
+  // Weight-bearing history in one context -- a place AND the machine used there -- must not be
+  // blended with another's, so once an exercise has more than one context there is no "all": it
+  // opens on the most recently used one (the engine lists them newest first) and the picker
+  // switches between them. With a single context there is nothing to pick between.
+  const [chosenContextKey, setChosenContextKey] = useState<string | undefined>(undefined);
+  const contextKey =
+    contexts.length > 1
+      ? (contexts.find((c) => c.key === chosenContextKey)?.key ?? contexts[0]?.key)
+      : undefined;
 
+  // Names come from every place and machine, archived ones included, so a context at a place the
+  // owner has since archived still reads by its name.
   useEffect(() => {
     if (!storage || contexts.length <= 1) return;
     let cancelled = false;
-    void storage.trainingLocations.getAll().then((all) => {
-      if (!cancelled) setLocationNames(new Map(all.map((l) => [l.id, l.name])));
-    });
+    void Promise.all([storage.trainingLocations.getAll(), storage.gymEquipment.getAll()]).then(
+      ([places, machines]) => {
+        if (cancelled) return;
+        setNames({
+          locations: new Map(places.map((l) => [l.id, l.name])),
+          equipment: new Map(machines.map((m) => [m.id, m.label])),
+        });
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, [storage, contexts.length]);
 
   const view = useMemo(
-    () => buildStrengthView(sessions, exercise, { load: chosenLoad, trainingLocationId: context }),
-    [sessions, exercise, chosenLoad, context],
+    () => buildStrengthView(sessions, exercise, { load: chosenLoad, contextKey }),
+    [sessions, exercise, chosenLoad, contextKey],
   );
   const scopedSessions = useMemo(
-    () =>
-      context === undefined
-        ? sessions
-        : sessions.filter((s) => (s.training_location_id ?? null) === context),
-    [sessions, context],
+    () => sessionsInContext(sessions, exercise.id, contextKey),
+    [sessions, exercise.id, contextKey],
   );
   const summary = useMemo(() => summarizeExercise(scopedSessions, exercise.id), [scopedSessions, exercise.id]);
   const prs = useMemo(() => calculatePRs(scopedSessions, exercise), [scopedSessions, exercise]);
@@ -99,13 +105,10 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
       {contexts.length > 1 && (
         <label className="atlas-strength__context">
           <span>Equipment</span>
-          <select
-            value={context === null ? '' : (context ?? '')}
-            onChange={(e) => setChosenContext(e.target.value === '' ? null : e.target.value)}
-          >
-            {contexts.map((id) => (
-              <option key={id ?? 'none'} value={id ?? ''}>
-                {id == null ? 'No place recorded' : (locationNames.get(id) ?? 'Saved place')}
+          <select value={contextKey ?? ''} onChange={(e) => setChosenContextKey(e.target.value)} disabled={!names}>
+            {contexts.map((c) => (
+              <option key={c.key} value={c.key}>
+                {names ? performanceContextLabel(c, names) : 'Loading…'}
               </option>
             ))}
           </select>
@@ -251,7 +254,7 @@ export function ExerciseProgress({ exercise, sessions }: ExerciseProgressProps) 
               return (
                 <li key={s.id}>
                   <span className="atlas-exercise-progress__history-date">
-                    {formatDate(s.completed_at ?? s.started_at)}
+                    {formatSessionDate(s)}
                   </span>
                   <span className="atlas-exercise-progress__history-sets">
                     {describeSets(sets)}

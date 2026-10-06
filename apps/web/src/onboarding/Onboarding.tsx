@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useModalFocus } from '../a11y/useModalFocus';
 
 /**
  * v0.2.5. First-run orientation + the permanent "How ATLAS Works" help.
@@ -53,9 +54,14 @@ const ONBOARDING_CARDS: Card[] = [
     title: 'Program',
     body: 'Manage your weekly plan and the supporting routines you run anytime.',
   },
-  { title: 'Progress', body: 'See personal records, milestones, and training analytics.' },
-  { title: 'Library', body: 'Browse exercises, demonstrations, and body-part filters.' },
-  { title: 'More', body: 'History, Body, Import/Export, Settings, and this help.' },
+  {
+    title: 'Progress',
+    body: 'See personal records, strength charts, muscles trained, body weight, workout history, and milestones.',
+  },
+  {
+    title: 'More',
+    body: 'The exercise library, Gyms & Equipment, Log Past Workout, Import / Export, Settings, and this help.',
+  },
 ];
 
 export function OnboardingModal({ onDone }: { onDone: () => void }) {
@@ -67,8 +73,19 @@ export function OnboardingModal({ onDone }: { onDone: () => void }) {
     onDone();
   }
 
+  // A modal dialog: focus moves in and stays in, and Escape is the same as Skip.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, finish);
+
   return (
-    <div className="atlas-onboarding" role="dialog" aria-label="Welcome to ATLAS">
+    <div
+      ref={dialogRef}
+      className="atlas-onboarding"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Welcome to ATLAS"
+      tabIndex={-1}
+    >
       <div className="atlas-onboarding__panel">
         <p className="atlas-onboarding__eyebrow">Welcome to ATLAS</p>
         <h2 className="atlas-onboarding__title">{card?.title}</h2>
@@ -137,13 +154,20 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'Progress & History',
-    body: 'Progress shows PRs, milestones, and how your training is distributed by muscle group and movement. History lists every completed session; “Log Past Workout” back-fills one you forgot to log.',
+    body: 'Progress shows PRs, strength charts, how your training is distributed by muscle, body weight, and milestones. Its History tab lists every completed session; “Log Past Workout” (in More) back-fills one you forgot to log.',
+  },
+  {
+    title: 'Gyms & equipment',
+    body: 'Under More, add where you train and what each place has — all optional. A workout remembers its gym, and an exercise remembers its machine, so two machines (or two gyms) keep separate numbers. Both are fixed once you log a set: if you move to another gym, finish the workout and start another.',
   },
 ];
 
 export function HowAtlasWorksScreen({ onBack }: { onBack: () => void }) {
   return (
     <div className="atlas-help">
+      <button type="button" className="atlas-template-editor__back" onClick={onBack}>
+        &larr; Back
+      </button>
       <h1>How ATLAS Works</h1>
       {HELP_SECTIONS.map((section) => (
         <section key={section.title} className="atlas-help__section">
@@ -151,9 +175,6 @@ export function HowAtlasWorksScreen({ onBack }: { onBack: () => void }) {
           <p>{section.body}</p>
         </section>
       ))}
-      <button type="button" className="atlas-template-editor__back" onClick={onBack}>
-        &larr; Back
-      </button>
     </div>
   );
 }

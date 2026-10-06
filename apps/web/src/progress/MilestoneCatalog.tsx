@@ -82,6 +82,7 @@ export function MilestoneCatalog({
                   type="button"
                   className="atlas-progress__milestone-toggle"
                   aria-pressed={m.active}
+                  aria-label={`${m.active ? 'Added' : 'Add'} ${m.title}`}
                   onClick={() => onToggle(m, !m.active)}
                 >
                   {m.active ? 'Added' : 'Add'}

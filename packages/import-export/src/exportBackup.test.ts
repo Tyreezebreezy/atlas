@@ -57,6 +57,19 @@ describe('exportBackup', () => {
     expect(exportedIds).toContain(custom.id);
   });
 
+  it('keeps a favorited canonical exercise (the flag lives on its row; a reseed would not bring it back)', async () => {
+    const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+    await storage.exercises.putMany([
+      { ...canonicalExercise('ex-favorite'), is_favorite: true },
+      { ...canonicalExercise('ex-unfavorited'), is_favorite: false },
+      canonicalExercise('ex-never-touched'),
+    ]);
+
+    const exportedIds = (await exportBackup(storage)).entities.exercises.map((e) => e.id);
+
+    expect(exportedIds).toEqual(['ex-favorite']);
+  });
+
   it('stamps the atlas-plan-v1 envelope on a backup document', async () => {
     const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
     const doc = await exportBackup(storage);

@@ -1,5 +1,6 @@
 import { compareByName } from '@atlas/core';
 import type { Exercise } from '@atlas/data-model';
+import { repairExerciseName } from './formatExerciseName';
 
 export interface ExerciseFilter {
   query?: string;
@@ -19,9 +20,11 @@ export interface ExerciseFilter {
  */
 export function searchExercises(exercises: Exercise[], filter: ExerciseFilter): Exercise[] {
   const query = filter.query?.trim().toLowerCase();
+  const bodyPart = filter.bodyPart?.toLowerCase();
   const filtered = exercises.filter((exercise) => {
-    if (query && !exercise.name.toLowerCase().includes(query)) return false;
-    if (filter.bodyPart && exercise.category !== filter.bodyPart) return false;
+    if (query && !repairExerciseName(exercise.name).toLowerCase().includes(query)) return false;
+    // Case-insensitive: "Shoulders" and "shoulders" are one body part, however the row spelled it.
+    if (bodyPart && exercise.category?.toLowerCase() !== bodyPart) return false;
     if (filter.equipment && !exercise.equipment.includes(filter.equipment)) return false;
     return true;
   });
@@ -34,8 +37,13 @@ export function searchExercises(exercises: Exercise[], filter: ExerciseFilter): 
 }
 
 export function listBodyParts(exercises: Exercise[]): string[] {
-  const values = exercises.map((e) => e.category).filter((c): c is string => c !== null);
-  return [...new Set(values)].sort((a, b) =>
+  // One entry per body part however it is cased (the first spelling met); `searchExercises` matches them all.
+  const bySpelling = new Map<string, string>();
+  for (const { category } of exercises) {
+    if (category !== null && !bySpelling.has(category.toLowerCase()))
+      bySpelling.set(category.toLowerCase(), category);
+  }
+  return [...bySpelling.values()].sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: 'base' }),
   );
 }

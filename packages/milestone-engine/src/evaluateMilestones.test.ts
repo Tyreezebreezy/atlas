@@ -68,7 +68,8 @@ function completedSession(
     session = addPerformedSet(session, { ...s, completed_at: completedAt });
   }
   session = completeWorkoutSession(session);
-  return { ...session, completed_at: completedAt };
+  // The day the workout was performed on: the date part of the fixture's timestamp (a backdated session says so).
+  return { ...session, completed_at: completedAt, performed_local_date: completedAt.slice(0, 10) };
 }
 
 function weighIn(date: string, weight: number): BodyMeasurement {
@@ -636,6 +637,33 @@ describe('vNext Handoff 02: consistency dimension (no exercise_id required)', ()
       completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-24T10:00:00.000Z'),
     ];
     expect(evaluateMilestone(milestone, withGap, []).achieved_at).toBeNull();
+  });
+
+  it('vNext Handoff 04B: a week is the Monday-first calendar week of the workout\'s own local day -- Sunday night belongs to the week it ended', () => {
+    const milestone = createMilestone({ title: '2-Week Streak', exerciseId: null, dimension: 'consistency', targetConsecutiveWeeks: 2 });
+    // Sunday 2026-08-09 at 11:30 pm New York is already Monday 03:30 UTC. By the UTC date it would
+    // start a new week and make Aug 3 + Aug 9 look like two consecutive weeks; by the local day both
+    // are the SAME week (Mon Aug 3 - Sun Aug 9), so there is no streak yet.
+    const sameWeek = [
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-03T14:00:00.000Z'),
+      { ...completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-10T03:30:00.000Z'), performed_local_date: '2026-08-09' },
+    ];
+    expect(evaluateMilestone(milestone, sameWeek, []).achieved_at).toBeNull();
+
+    const nextWeek = [
+      sameWeek[0]!,
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-08-10T15:00:00.000Z'),
+    ];
+    expect(evaluateMilestone(milestone, nextWeek, []).achieved_at).not.toBeNull();
+  });
+
+  it('vNext Handoff 04B: weeks run across a year boundary without a gap', () => {
+    const milestone = createMilestone({ title: '2-Week Streak', exerciseId: null, dimension: 'consistency', targetConsecutiveWeeks: 2 });
+    const acrossYears = [
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2026-12-30T10:00:00.000Z'), // Wednesday
+      completedSession('bench', [set({ exerciseId: 'bench', weight: 100, reps: 5 })], '2027-01-04T10:00:00.000Z'), // next Monday
+    ];
+    expect(evaluateMilestone(milestone, acrossYears, []).achieved_at).not.toBeNull();
   });
 });
 

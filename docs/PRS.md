@@ -98,7 +98,7 @@ two equal performances credit whichever happened earlier ("first
 achieved"). Concretely: matching an existing PR in a later session does
 **not** move `source_session_id` to the later session, and therefore does
 not surface as a "new PR" on that later workout's completion summary
-(`newPRsFromSession` filters on `source_session_id === thisSessionId`).
+(`newPRsFromSession` keeps rows whose `source_session_id` is this session).
 Only a _strictly_ better performance moves the record.
 
 ## Historical recalculation
@@ -133,6 +133,14 @@ recreating everything, so a `PersonalRecord`'s id doesn't churn on every
 workout. Stale keys (a rep count that no longer has a current record — not
 a realistic case since completed-session sets are immutable, but handled
 for correctness) are soft-deleted.
+
+**Records never outlive the workout that set them.** The one place a completed
+workout is removed -- Log Past Workout's "Replace Existing" on a day that already
+has a workout -- runs the same recompute (`recalculatePRsForSession`) for every
+exercise of the discarded workout right after the discard, so its records (and,
+through the same funnel, its PR events) go with it. It used to leave them behind,
+so Strength, the Library and Gym Mode's BEST kept a record from a workout that no
+longer existed.
 
 `ExerciseProgress` (the per-exercise Progress tab) computes PRs **live**
 from history on every render rather than reading the persisted table — at
@@ -170,6 +178,61 @@ then diffs the resulting `PersonalRecord[]` against the session id via
 `newPRsFromSession` to populate `WorkoutSummary`'s "New PRs" section. This
 never shows a PR that was only _tied_, per the tie-behavior rule above.
 
+It also never announces a baseline (acceptance pass): the rows are only listed
+for an exercise in an equipment context that this session has a headline event
+for (`handleFinish` passes the stored `PersonalRecordEvent`s in). A first-ever
+session on a machine sets records but beats nothing, so it has no event, Today /
+Overview / Weekly Review count nothing for it, and the summary no longer calls it
+"New PRs" either; its first numbers are in Strength.
+
+## Equipment-scoped series (vNext Handoff 02 / 04B)
+
+A record is only comparable with performances on the same footing: 170 lb on one
+chest-press machine is not 170 lb on another, and the same make at a harder gym is
+not the same resistance. So every series is scoped by a **comparable context** —
+the training location _and_ the actual equipment instance the exercise was done
+on (`packages/pr-engine/src/context.ts`; the data side is in DATA_MODEL.md
+"Performance context").
+
+- `performanceContextOf(session, exerciseId)` is
+  `{ training_location_id, gym_equipment_id }`: the session's place, and the
+  machine in the session's `exercise_equipment` entry for that exercise. Either
+  can be `null`. `performanceContextKey` is `JSON.stringify([location, equipment])`
+  with `null` for a missing part, and is the only key anything groups by.
+- `calculatePRs` groups the eligible sets by context before computing any kind;
+  each `PersonalRecord` carries `training_location_id` and `gym_equipment_id`. A
+  context's records never compete with another's. For an exercise whose history is
+  all one context (everything recorded before 04B) the output is exactly what it
+  was.
+- **Two machines at one location are two series**, with their own current-best
+  rows and their own event history, and so is one make at two places.
+  `apps/web/src/progress/recalculatePRs.ts` keys the standing rows by
+  `performanceContextKey` (it used to key by place alone, which let a second
+  machine overwrite the first's rows), so a better session on one machine updates
+  only that machine's rows. Pinned by `recalculatePRs.test.ts` and
+  `packages/pr-engine/src/equipmentContext.test.ts`.
+- **Legacy.** A session with no recorded machine is the context
+  `[its place or null, null]`. Rows stored before `gym_equipment_id` existed read
+  as `null` for it and keep their ids; nothing is ever assigned a machine
+  retroactively, and history from before places were recorded stays "Unspecified /
+  Legacy".
+- Equipment is recorded per exercise per session, not per set: the same unit the
+  records and events are scoped by, and what the owner actually knows ("I did
+  chest press on Chest Press #1 today"). That one answer stays true because it is
+  fixed once a set is logged: a workout's place cannot change after its first set,
+  and an exercise's machine cannot change after that exercise's first set
+  (DATA_MODEL.md "The place and each machine are fixed by the sets logged against
+  them"). A series therefore can never be relabeled after the fact by a later change
+  of mind; `packages/progress-engine/src/contextLockIntegrity.test.ts` pins that the
+  records, the headline events and the Strength contexts of a workout that tried to
+  move still say the place and machine it was done on.
+- The Strength view and the stall check scope the same way, so one machine's
+  plateau is not blamed on another. Strength's picker lists the contexts the data
+  actually holds, newest first, and has nothing to pick between when there is one
+  (PROGRESS.md). "Last time" and the progression baseline are looser on purpose —
+  they prefer the same context but fall back to all history (PROGRESSION.md);
+  records, events and Strength never fall back.
+
 ## Headline PR events (vNext Handoff 04A / 04A.1)
 
 The `PersonalRecord` rows above are _detailed_ records — one per kind, per rep
@@ -183,16 +246,18 @@ store, `PersonalRecordEvent`, next to `personal_records` (which is unchanged).
 | --- | --- | --- |
 | What it is | the current best for one record slot | one headline PR: a performance that beat an earlier record |
 | When it changes | replaced or removed as soon as it is beaten | kept; removed only when its source performance stops existing |
-| Read by | Strength, PR history, the workout summary's "New PRs", the stall check | every "PRs" count (Today, Overview, Weekly Review) and the muscle Performance mode |
+| Read by | Strength, PR history, the stall check, and the workout summary's "New PRs" (the rows the session holds, listed only for an exercise-in-context it has an event for) | every "PRs" count (Today, Overview, Weekly Review), the muscle Performance mode, and that summary gate |
 
 > One event = one exercise, in one completed session, in one equipment context
-> (`training_location_id`), that **beat at least one record an earlier session in
-> that context already held** — however many detailed records it beat.
+> (the training location _and_ the actual machine — see "Equipment-scoped
+> series"), that **beat at least one record an earlier session in that context
+> already held** — however many detailed records it beat.
 
 - **Baseline is not a PR.** The first eligible session of an exercise in an
   equipment context is its baseline: it sets records (the first numbers) but
-  beats nothing, so it is no event. Old history with no location is its own
-  context; no gym is ever guessed. The same first-exposure index
+  beats nothing, so it is no event. Old history with no location — and history
+  with a place but no recorded machine — is its own context; no gym and no machine
+  is ever guessed. The same first-exposure index
   (`pr-engine/exposure.ts`) backs the weekly review's progressed/maintained
   counts and the muscle Performance mode, so they cannot disagree about what
   "first" means.
@@ -202,9 +267,12 @@ store, `PersonalRecordEvent`, next to `personal_records` (which is unchanged).
   test, so that day is not an event (and `pr_kinds` lists only the kinds beaten).
   This is deliberately tighter than 04A's "holds any row" count; dropping the
   `existing.has(...)` filter in `derivePREventsForExercise` restores it.
-- **Identity.** `personalRecordEventId(session, exercise, location)` =
-  `pr-event:<session>:<exercise>:<location|none>`, so there is at most one event
-  per combination and writing it again is an upsert, never a duplicate.
+- **Identity.** `personalRecordEventId(session, exercise, location, equipment?)` =
+  `pr-event:<session>:<exercise>:<location|none>`, with `:<equipment>` appended
+  only when the session recorded a machine for the exercise. So there is at most
+  one event per session, exercise and context, writing it again is an upsert, never
+  a duplicate — and a legacy event's id is exactly the id the same session still
+  derives, because no equipment segment is added where none was recorded.
 - **Content.** `pr_kinds` (distinct, ordered so `pr_kinds[0]` is the primary
   kind: `max_load`/`weighted_bodyweight`, `rep_at_load`, `estimated_1rm`,
   `rep`/`bodyweight`, `timed`/`distance`, then `rep_range`/`volume`),
@@ -213,8 +281,11 @@ store, `PersonalRecordEvent`, next to `personal_records` (which is unchanged).
   rows are not copied — they stay in `personal_records`. There is no
   `is_baseline` flag (it would always be false) and no `record_ids` (the rows
   are recomputed and their ids reused per slot, so stored ids would dangle).
-  `equipment_context_id` is not stored: the PR engine scopes by
-  `training_location_id` only, and an event follows exactly that boundary.
+  `gym_equipment_id` is stored when the session recorded a machine (absent =
+  unspecified), so an event follows exactly the boundary the PR engine scopes by:
+  location plus machine. The owner's remembered exercise-to-machine mapping
+  (`ExerciseEquipmentContext`) is not stored on the event — the session's own
+  `exercise_equipment` entry is the record of what was used.
 
 ### Derivation
 
@@ -235,13 +306,25 @@ only from the finished session onward — the prefix property makes that exact.
 
 ### Versioning
 
-`PR_EVENT_EVALUATOR_VERSION` (`pr-events-1/brzycki-v1`) names the derivation and
-the default e1RM estimator, so changing either changes the string. An event
-stamped with an older version is history, not a cache: reconciliation never
-rewrites or removes it because the evaluator or estimator changed. It is removed
-only when its source performance no longer exists (a discarded session, or no
-eligible sets left). A new evaluator may _add_ events for sessions the old one
-did not recognize; it never deletes one.
+`PR_EVENT_EVALUATOR_VERSION` (now `pr-events-2/brzycki-v1`) names the derivation
+and the default e1RM estimator, so changing either changes the string.
+`pr-events-1` (04A.1) scoped a context by place alone; `pr-events-2` (04B) scopes
+it by place plus machine. An event stamped with an older version is history, not a
+cache: reconciliation never rewrites or removes it because the evaluator or
+estimator changed. It is removed only when its source performance — that session,
+that exercise, in that context — no longer exists (a discarded session, no
+eligible sets left, or the session re-recorded on another machine). A new
+evaluator may _add_ events for sessions the old one did not recognize; it never
+deletes one.
+
+**What happens to the 04A.1 events that have no machine.** Nothing. They are valid
+events in the "machine unspecified" context: not rewritten, not re-stamped
+(`evaluator_version` stays `pr-events-1/...`, `gym_equipment_id` stays absent and
+reads as `null`), not deleted, and never given a machine after the fact. A legacy
+session has no `exercise_equipment` entry, so it derives the very same id it had,
+the planner finds a stored event for it and leaves the older-version one alone.
+Only events derived for sessions that recorded a machine carry version 2 and an
+equipment segment in their id.
 
 ### Keeping the ledger in step (`apps/web/src/progress/prEvents.ts`)
 
@@ -293,6 +376,8 @@ summary's "New PRs") still list every detailed record.
 
 - Events are derived from history as it stands, so editing or replacing history
   re-derives current-version events (an event follows the data); older-version
-  events are frozen until their session disappears.
+  events are frozen until their source performance disappears. Moving a session's
+  exercise to a different machine therefore retires the event of the old context
+  and derives one for the new context.
 - The launch reconcile replays all history once per launch. `ponytail:` skip it
   when a cheap fingerprint of the completed sessions is unchanged if it ever hurts.

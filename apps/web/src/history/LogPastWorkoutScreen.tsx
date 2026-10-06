@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
+import { localIsoDate, sessionLocalDate } from '@atlas/core';
 import { startWorkoutSession } from '@atlas/workout-engine';
 import { applyProgressionToSession } from '@atlas/program-engine';
 import type { Exercise, Program, WorkoutSession, WorkoutTemplate } from '@atlas/data-model';
 import { useGymMode } from '../gym/GymModeContext';
 import { useStorage } from '../storage/StorageContext';
+import { recalculatePRsForSession } from '../progress/recalculatePRs';
+import { logPastProblem, pastMinutes } from './logPastProblem';
 
 interface LogPastWorkoutScreenProps {
   onBack: () => void;
-}
-
-function sameCalendarDate(iso: string, date: string): boolean {
-  return iso.slice(0, 10) === date;
 }
 
 /**
@@ -33,11 +32,13 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
   const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
   const [exercisesById, setExercisesById] = useState<Map<string, Exercise>>(new Map());
 
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // The device-local day -- not the UTC date, which is already "tomorrow" on a US evening.
+  const [date, setDate] = useState(localIsoDate());
   const [startTime, setStartTime] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('60');
   const [templateId, setTemplateId] = useState<string>('freestyle');
   const [collision, setCollision] = useState<WorkoutSession | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     if (!storage) return;
@@ -59,8 +60,7 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
   function computeTimestamps(): { startedAt: string; plannedCompletedAt: string } {
     const time = startTime || '12:00';
     const started = new Date(`${date}T${time}:00`);
-    const minutes = Number(durationMinutes) || 60;
-    const completed = new Date(started.getTime() + minutes * 60000);
+    const completed = new Date(started.getTime() + pastMinutes(durationMinutes) * 60000);
     return { startedAt: started.toISOString(), plannedCompletedAt: completed.toISOString() };
   }
 
@@ -94,6 +94,9 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
       groups: template?.groups ?? [],
       startedAt,
       plannedCompletedAt,
+      // vNext Handoff 04B: the date the owner picked IS the calendar day this workout counts toward,
+      // whatever zone this device is in now. No time zone is recorded for it -- it is not known.
+      performedLocalDate: date,
       // v0.2.4: a backfilled Program day should complete/link its own
       // occurrence too (using the owner's chosen historical date, not
       // today) -- otherwise it would keep showing up as Missed despite
@@ -107,8 +110,11 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
   }
 
   function handleSubmit() {
+    const invalid = logPastProblem({ date, startTime, durationMinutes });
+    setProblem(invalid);
+    if (invalid) return;
     const existing = allSessions.find(
-      (s) => s.status === 'completed' && sameCalendarDate(s.completed_at ?? s.started_at, date),
+      (s) => s.status === 'completed' && sessionLocalDate(s) === date,
     );
     if (existing) {
       setCollision(existing);
@@ -140,6 +146,10 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
         <p>
           "{collision.name}" is already logged on {date}. What would you like to do?
         </p>
+        <p className="atlas-settings__hint">
+          Keep Both adds a second workout on that day. Replace Existing discards the earlier one
+          &mdash; its sets, and any records they set &mdash; and starts a new one.
+        </p>
         <div className="atlas-resume-card__actions">
           <button type="button" onClick={() => setCollision(null)}>
             Cancel
@@ -155,6 +165,13 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
               // ATLAS) rather than silently merging two unrelated sessions.
               const { discardWorkoutSession } = await import('@atlas/workout-engine');
               await storage.workoutSessions.put(discardWorkoutSession(collision));
+              // Records are derived from completed history: the discarded workout's go with it (they used to stay,
+              // so Strength / the Library kept a personal record from a workout that no longer exists).
+              await recalculatePRsForSession(
+                storage,
+                collision.performed_sets.map((set) => set.exercise_id),
+                exercisesById,
+              );
               setCollision(null);
               await createAndEnter();
             }}
@@ -175,19 +192,39 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
 
       <label>
         Date
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input
+          type="date"
+          value={date}
+          max={localIsoDate()}
+          onChange={(e) => {
+            setDate(e.target.value);
+            setProblem(null);
+          }}
+        />
       </label>
       <label>
         Approximate start time (optional)
-        <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+        <input
+          type="time"
+          value={startTime}
+          onChange={(e) => {
+            setStartTime(e.target.value);
+            setProblem(null);
+          }}
+        />
       </label>
       <label>
         Duration, minutes (if known)
         <input
           type="number"
           inputMode="numeric"
+          min={1}
+          max={1440}
           value={durationMinutes}
-          onChange={(e) => setDurationMinutes(e.target.value)}
+          onChange={(e) => {
+            setDurationMinutes(e.target.value);
+            setProblem(null);
+          }}
         />
       </label>
       <label>
@@ -202,6 +239,11 @@ export function LogPastWorkoutScreen({ onBack }: LogPastWorkoutScreenProps) {
         </select>
       </label>
 
+      {problem && (
+        <p className="atlas-field__error" role="alert">
+          {problem}
+        </p>
+      )}
       <button type="button" className="atlas-resume-card__resume" onClick={handleSubmit}>
         Start Logging
       </button>

@@ -64,7 +64,8 @@ export const MUSCLES: Muscle[] = [
   // Hamstrings / hip
   { id: 'hamstrings.hamstrings', name: 'Hamstrings', group_id: 'hamstrings', region: 'back', svg_id: 'hamstrings' },
   { id: 'hamstrings.adductors', name: 'Adductors (Inner Thigh)', group_id: 'hamstrings', region: 'front', svg_id: 'adductors' },
-  { id: 'hamstrings.abductors', name: 'Abductors (Outer Thigh)', group_id: 'hamstrings', region: 'back', svg_id: 'abductors' },
+  // Labelled for what the art draws (the gluteus-medius hip pads), not "Outer Thigh" -- owner decision 2026-10-05.
+  { id: 'hamstrings.abductors', name: 'Hip Abductors', group_id: 'hamstrings', region: 'back', svg_id: 'abductors' },
   // Calves
   { id: 'calves.gastrocnemius', name: 'Calves', group_id: 'calves', region: 'back', svg_id: 'calves' },
   { id: 'calves.soleus', name: 'Soleus', group_id: 'calves', region: 'back', svg_id: 'calves' },
@@ -88,6 +89,30 @@ export function musclesInGroup(groupId: string): Muscle[] {
 
 export function groupName(groupId: string): string {
   return groupById.get(groupId)?.name ?? groupId;
+}
+
+/**
+ * The exercise library's own body-part vocabulary (`Exercise.category`, what the Library's body-part filter lists)
+ * for each muscle group. A custom exercise takes its category from here, not from the group's display name: a
+ * category of "Shoulders" next to the library's "shoulders" would be a second filter option that the first never
+ * finds.
+ */
+const BODY_PART_BY_GROUP: Record<string, string> = {
+  chest: 'chest',
+  shoulders: 'shoulders',
+  back: 'back',
+  biceps: 'upper arms',
+  triceps: 'upper arms',
+  forearms: 'lower arms',
+  core: 'waist',
+  glutes: 'upper legs',
+  quads: 'upper legs',
+  hamstrings: 'upper legs',
+  calves: 'lower legs',
+};
+
+export function bodyPartOfGroup(groupId: string): string | null {
+  return BODY_PART_BY_GROUP[groupId] ?? null;
 }
 
 export function muscleName(id: string): string {

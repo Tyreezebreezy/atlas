@@ -70,6 +70,10 @@ export function LibraryScreen({ onBack }: LibraryScreenProps = {}) {
     () => exercisesTargetingMuscles(exercises, selectedMuscleIds),
     [exercises, selectedMuscleIds],
   );
+  // Choosing what is already chosen clears it -- a figure region or a group chip is a toggle, not a one-way switch.
+  const isSelected = (ids: string[]) =>
+    ids.length === selectedMuscleIds.length && ids.every((id) => selectedMuscleIds.includes(id));
+  const toggleSelection = (ids: string[]) => setSelectedMuscleIds(isSelected(ids) ? [] : ids);
 
   async function handleExerciseCreated(exercise: Exercise) {
     if (!storage) return;
@@ -144,26 +148,35 @@ export function LibraryScreen({ onBack }: LibraryScreenProps = {}) {
           <p className="atlas-library__count">Select a muscle to see exercises that train it.</p>
           <BodyMap
             states={selectedMuscleIds.map((id) => ({ muscleId: id, state: 'selected' as const }))}
-            onSelectRegion={(_svgId, muscleIds) => setSelectedMuscleIds(muscleIds)}
+            onSelectRegion={(_svgId, muscleIds) => toggleSelection(muscleIds)}
           />
           <div className="atlas-library__body-groups">
-            {MUSCLE_GROUPS.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                className="atlas-library__body-group"
-                onClick={() => setSelectedMuscleIds(musclesInGroup(group.id).map((m) => m.id))}
-              >
-                {group.name}
-              </button>
-            ))}
+            {MUSCLE_GROUPS.map((group) => {
+              const ids = musclesInGroup(group.id).map((m) => m.id);
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  className="atlas-library__body-group"
+                  aria-pressed={isSelected(ids)}
+                  onClick={() => toggleSelection(ids)}
+                >
+                  {group.name}
+                </button>
+              );
+            })}
           </div>
           {selectedMuscleIds.length > 0 && (
             <>
-              <p className="atlas-library__count">
-                {bodyFiltered.length} exercise{bodyFiltered.length === 1 ? '' : 's'} for{' '}
-                {selectedMuscleIds.map(muscleName).join(', ')}
-              </p>
+              <div className="atlas-library__result-head">
+                <p className="atlas-library__count">
+                  {bodyFiltered.length} exercise{bodyFiltered.length === 1 ? '' : 's'} for{' '}
+                  {selectedMuscleIds.map(muscleName).join(', ')}
+                </p>
+                <button type="button" className="atlas-link-button" onClick={() => setSelectedMuscleIds([])}>
+                  Clear
+                </button>
+              </div>
               <ul className="atlas-library__list">
                 {bodyFiltered.slice(0, MAX_VISIBLE).map((exercise) => (
                   <li key={exercise.id}>

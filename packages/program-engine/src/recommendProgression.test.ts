@@ -425,3 +425,149 @@ describe('vNext Handoff 02: recommendProgression + refineForCurrentSession compo
     expect(refined.reason_code).toBe('CURRENT_SESSION_BELOW_TARGET');
   });
 });
+
+describe('vNext Handoff 04B: real, user-configured equipment constraints', () => {
+  const stepUp: ProgressionPolicy = { ...doubleProgression, load_increment: 10, ceiling_reps_max: 20 };
+
+  /** An exercise whose last session topped out the rep range at `load`. */
+  function toppedOutAt(load: number, reps = 12) {
+    const exercise = makeExercise({ equipment: ['dumbbell'] });
+    const previousSession = sessionWithTarget(
+      exercise.id,
+      { target_weight: load, target_reps_min: 8, target_reps_max: 12 },
+      [set({ exerciseId: exercise.id, weight: load, reps })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    return { exercise, previousSession };
+  }
+
+  const dumbbells = (loads: number[], location = 'main') =>
+    createGymEquipmentInstance({
+      trainingLocationId: location,
+      equipmentDefinitionId: 'eq-dumbbell',
+      label: 'Dumbbells',
+      exactLoads: loads,
+    });
+  const upTo = (max: number, step = 5) => Array.from({ length: max / step }, (_, i) => (i + 1) * step);
+
+  it('an 80 lb dumbbell rack never yields an 85 lb recommendation, from 75 or from 80', () => {
+    const rack = dumbbells(upTo(80));
+    const from75 = toppedOutAt(75);
+    const next = recommendProgression({ exercise: from75.exercise, policy: stepUp, currentTarget, previousSession: from75.previousSession, equipment: rack });
+    expect(next.target_load).toBe(80); // 85 does not exist: the next real load, not the arithmetic one
+    expect(next.target_load).not.toBe(85);
+
+    const from80 = toppedOutAt(80);
+    const capped = recommendProgression({ exercise: from80.exercise, policy: stepUp, currentTarget, previousSession: from80.previousSession, equipment: rack });
+    expect(capped.target_load).toBe(80);
+    expect(capped).toMatchObject({ action: 'increase_reps', reason_code: 'EQUIPMENT_MAX_REACHED' });
+  });
+
+  it('a maximum on its own caps the recommendation just the same -- without inventing the loads below it', () => {
+    const maxOnly = createGymEquipmentInstance({
+      trainingLocationId: 'main',
+      equipmentDefinitionId: 'eq-dumbbell',
+      label: 'Dumbbells',
+      maxLoad: 80,
+    });
+    const from75 = toppedOutAt(75);
+    const next = recommendProgression({ exercise: from75.exercise, policy: stepUp, currentTarget, previousSession: from75.previousSession, equipment: maxOnly });
+    expect(next.target_load).toBe(80); // 85 would overshoot: the confirmed maximum is the next real load
+    expect(next.target_load).not.toBe(85);
+
+    const from80 = toppedOutAt(80);
+    const capped = recommendProgression({ exercise: from80.exercise, policy: stepUp, currentTarget, previousSession: from80.previousSession, equipment: maxOnly });
+    expect(capped).toMatchObject({ action: 'increase_reps', reason_code: 'EQUIPMENT_MAX_REACHED', target_load: 80 });
+  });
+
+  it('with only a maximum, a load that fits under it stands as ATLAS computed it (nothing is rounded to a step ATLAS does not know)', () => {
+    const maxOnly = createGymEquipmentInstance({ trainingLocationId: 'main', equipmentDefinitionId: 'eq', label: 'Stack', maxLoad: 170 });
+    const { exercise, previousSession } = toppedOutAt(100);
+    const next = recommendProgression({ exercise, policy: stepUp, currentTarget, previousSession, equipment: maxOnly });
+    expect(next).toMatchObject({ action: 'increase_load', target_load: 110, constraint_applied: null });
+  });
+
+  it('with only a maximum, ATLAS keeps its own rep suggestion below the maximum and moves to the ceiling reps at it', () => {
+    const maxOnly = createGymEquipmentInstance({ trainingLocationId: 'main', equipmentDefinitionId: 'eq', label: 'Stack', maxLoad: 170 });
+    // No load increment configured: at the top of the range ATLAS can only suggest advancing.
+    const below = toppedOutAt(150);
+    const keep = recommendProgression({ exercise: below.exercise, policy: { ...doubleProgression, ceiling_reps_max: 20 }, currentTarget, previousSession: below.previousSession, equipment: maxOnly });
+    expect(keep.reason_code).toBe('TOP_OF_RANGE'); // no invented next load
+    expect(keep.target_load).toBe(150);
+
+    const atMax = toppedOutAt(170);
+    const ceiling = recommendProgression({ exercise: atMax.exercise, policy: { ...doubleProgression, ceiling_reps_max: 20 }, currentTarget, previousSession: atMax.previousSession, equipment: maxOnly });
+    expect(ceiling).toMatchObject({ action: 'increase_reps', reason_code: 'EQUIPMENT_MAX_REACHED', target_load: 170, target_reps: 13 });
+  });
+
+  it('a 170 lb machine at 170 x 15 progresses reps within the configured ceiling, never a load that does not exist', () => {
+    const machine = chestPress({ trainingLocationId: 'main' });
+    const exercise = makeExercise();
+    const prior = sessionWithTarget(
+      exercise.id,
+      { target_weight: 170, target_reps_min: 8, target_reps_max: 15 },
+      [set({ exerciseId: exercise.id, weight: 170, reps: 15 })],
+      '2026-08-01T10:00:00.000Z',
+    );
+    const next = recommendProgression({
+      exercise,
+      policy: { ...doubleProgression, ceiling_reps_max: 20 },
+      currentTarget,
+      previousSession: prior,
+      equipment: machine,
+    });
+    expect(next).toMatchObject({ action: 'increase_reps', reason_code: 'EQUIPMENT_MAX_REACHED', target_load: 170, target_reps: 16 });
+  });
+
+  it('another gym with 120 lb dumbbells lets the same program progress past 80', () => {
+    const mainGym = dumbbells(upTo(80), 'main');
+    const otherGym = dumbbells(upTo(120, 10).concat(upTo(80)).sort((a, b) => a - b), 'other');
+    const { exercise, previousSession } = toppedOutAt(80);
+    const args = { exercise, policy: stepUp, currentTarget, previousSession };
+    expect(recommendProgression({ ...args, equipment: mainGym })).toMatchObject({ reason_code: 'EQUIPMENT_MAX_REACHED', target_load: 80 });
+    const elsewhere = recommendProgression({ ...args, equipment: otherGym });
+    expect(elsewhere).toMatchObject({ action: 'increase_load', reason_code: 'NEXT_LOAD_AVAILABLE', target_load: 90 });
+  });
+
+  it('a load carried over from heavier equipment elsewhere is never recommended past the maximum of the machine in use', () => {
+    const lighter = createGymEquipmentInstance({
+      trainingLocationId: 'hotel',
+      equipmentDefinitionId: 'eq-press',
+      label: 'Hotel press',
+      minLoad: 10,
+      maxLoad: 120,
+      increment: 10,
+    });
+    const advancing = toppedOutAt(170);
+    const advanced = recommendProgression({ exercise: advancing.exercise, policy: stepUp, currentTarget, previousSession: advancing.previousSession, equipment: lighter });
+    expect(advanced.target_load).toBe(120);
+    expect(advanced.constraint_applied).toMatch(/maximum \(120\)/);
+
+    const holding = toppedOutAt(170, 10); // inside the range, not at the top: a hold
+    const held = recommendProgression({ exercise: holding.exercise, policy: stepUp, currentTarget, previousSession: holding.previousSession, equipment: lighter });
+    expect(held.action).toBe('hold');
+    expect(held.target_load).toBe(120);
+
+    const maxOnly = createGymEquipmentInstance({ trainingLocationId: 'hotel', equipmentDefinitionId: 'eq-press', label: 'Hotel press', maxLoad: 120 });
+    expect(recommendProgression({ exercise: holding.exercise, policy: stepUp, currentTarget, previousSession: holding.previousSession, equipment: maxOnly }).target_load).toBe(120);
+  });
+
+  it('a load already under the maximum is left alone, and unknown equipment caps nothing', () => {
+    const { exercise, previousSession } = toppedOutAt(60, 10);
+    const roomy = createGymEquipmentInstance({ trainingLocationId: 'hotel', equipmentDefinitionId: 'eq-press', label: 'Hotel press', maxLoad: 120 });
+    const result = recommendProgression({ exercise, policy: stepUp, currentTarget, previousSession, equipment: roomy });
+    expect(result.target_load).toBe(60);
+    expect(result.constraint_applied).toBeNull();
+
+    const unknown = createGymEquipmentInstance({ trainingLocationId: 'hotel', equipmentDefinitionId: 'eq-press', label: 'Hotel press' });
+    expect(recommendProgression({ exercise, policy: stepUp, currentTarget, previousSession, equipment: unknown }).target_load).toBe(60);
+  });
+
+  it('unknown equipment -- an instance with no loads at all -- never pretends to have a maximum', () => {
+    const unknown = createGymEquipmentInstance({ trainingLocationId: 'main', equipmentDefinitionId: 'eq', label: 'Some machine' });
+    const { exercise, previousSession } = toppedOutAt(170);
+    const next = recommendProgression({ exercise, policy: stepUp, currentTarget, previousSession, equipment: unknown });
+    expect(next).toMatchObject({ action: 'increase_load', reason_code: 'NEXT_LOAD_AVAILABLE', target_load: 180 });
+    expect(next.reason_code).not.toBe('EQUIPMENT_MAX_REACHED');
+  });
+});

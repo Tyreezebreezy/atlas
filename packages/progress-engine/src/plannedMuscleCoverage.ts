@@ -36,16 +36,20 @@ export function plannedMuscleCoverage(
     if (!map) continue;
     const sets = planned.target_sets ?? 1;
 
+    // A muscle shows the sets aimed at it, but a GROUP counts a planned set once per exercise: a chest press
+    // whose primaries are upper, mid and lower chest is three sets of chest work, not nine -- the same rule
+    // the Muscles view applies to completed training (docs/PROGRESS.md, "a set counts once per group").
+    const groupsHit = new Set<string>();
     for (const muscleId of map.primary) {
       const entry = muscleTotals.get(muscleId) ?? { muscleId, directSets: 0, secondarySets: 0 };
       entry.directSets += sets;
       muscleTotals.set(muscleId, entry);
 
       const groupId = getMuscle(muscleId)?.group_id;
-      if (groupId) {
-        groupTotals.set(groupId, (groupTotals.get(groupId) ?? 0) + sets);
-      }
+      if (groupId) groupsHit.add(groupId);
     }
+    for (const groupId of groupsHit)
+      groupTotals.set(groupId, (groupTotals.get(groupId) ?? 0) + sets);
     for (const muscleId of map.secondary) {
       const entry = muscleTotals.get(muscleId) ?? { muscleId, directSets: 0, secondarySets: 0 };
       entry.secondarySets += sets;

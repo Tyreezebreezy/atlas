@@ -1,4 +1,5 @@
 import type { Exercise } from '@atlas/data-model';
+import { PLAN_LIMITS } from '@atlas/workout-engine';
 import { matchExercise } from './matchExercise';
 import type {
   ImportPreview,
@@ -12,6 +13,39 @@ import type {
 
 export type ParsedPlanInput =
   { kind: 'workout'; workout: PlanWorkout } | { kind: 'program'; program: PlanProgram };
+
+const LIMITED_FIELDS = [
+  ['target_sets', 'Sets', PLAN_LIMITS.sets],
+  ['target_reps_min', 'Minimum reps', PLAN_LIMITS.reps],
+  ['target_reps_max', 'Maximum reps', PLAN_LIMITS.reps],
+  ['target_weight', 'Weight', PLAN_LIMITS.load],
+  ['target_rpe', 'RPE', PLAN_LIMITS.effort],
+  ['target_rir', 'RIR', PLAN_LIMITS.effort],
+  ['target_duration_seconds', 'Duration', PLAN_LIMITS.seconds],
+  ['target_distance_meters', 'Distance', PLAN_LIMITS.meters],
+  ['rest_seconds', 'Rest', PLAN_LIMITS.seconds],
+] as const;
+
+/** A target beyond anything real (PLAN_LIMITS) is left blank, and the preview says so. Kept, "999999999 x 5" would reach Gym
+ * Mode as a billion set rows. Every input path (paste, .json, .html) converges here, so this is the one place to hold it. */
+function withinLimits(planned: PlanExerciseTarget): {
+  planned: PlanExerciseTarget;
+  warnings: ImportWarning[];
+} {
+  const safe = { ...planned };
+  const warnings: ImportWarning[] = [];
+  for (const [field, label, max] of LIMITED_FIELDS) {
+    const value = safe[field];
+    if (value !== null && value > max) {
+      safe[field] = null;
+      warnings.push({
+        message: `${label} ${value} is beyond the supported range (up to ${max}); it was left blank.`,
+        severity: 'warning',
+      });
+    }
+  }
+  return { planned: safe, warnings };
+}
 
 function exerciseWarnings(
   planned: PlanExerciseTarget,
@@ -32,7 +66,8 @@ function exerciseWarnings(
   }
   if (duplicateNames.has(planned.exercise_name.toLowerCase())) {
     warnings.push({
-      message: 'This exercise name appears more than once in this workout.',
+      message:
+        'This exercise appears more than once in this workout. ATLAS keeps one entry per exercise: repeats are merged into the first, adding up their sets.',
       severity: 'info',
     });
   }
@@ -56,7 +91,8 @@ function previewWorkout(
   keyPrefix: string,
 ): ImportPreviewWorkout {
   const duplicateNames = findDuplicateNames(workout.exercises);
-  const previewExercises: ImportPreviewExercise[] = workout.exercises.map((planned, index) => {
+  const previewExercises: ImportPreviewExercise[] = workout.exercises.map((original, index) => {
+    const { planned, warnings: limitWarnings } = withinLimits(original);
     // A same-install export/reimport round trip carries exercise_id -- trust it
     // directly rather than re-matching by name when the id still resolves.
     const byId = planned.exercise_id
@@ -74,7 +110,7 @@ function previewWorkout(
       key: `${keyPrefix}${index}`,
       planned,
       match,
-      warnings: exerciseWarnings(planned, duplicateNames),
+      warnings: [...limitWarnings, ...exerciseWarnings(planned, duplicateNames)],
     };
   });
 

@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { createCustomExercise } from '@atlas/exercise-library';
 import {
+  bodyPartOfGroup,
   getMuscle,
-  groupName,
   muscleName,
   musclesInGroup,
   MUSCLE_GROUPS,
@@ -60,11 +60,11 @@ export function CustomExerciseForm({ onCreated, onCancel }: CustomExerciseFormPr
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
-    // Legacy `category` (used by the older muscle-group analytics) is derived
-    // from the first primary muscle's group so custom exercises never land as
-    // "Uncategorized"; the structured muscle_map is the source of truth.
-    const category =
-      primary.length > 0 ? groupName(getMuscle(primary[0]!)!.group_id) : null;
+    // Legacy `category` (the Library's body-part filter, the older muscle-group analytics) is derived from the first
+    // primary muscle's group, in the library's own body-part words, so custom exercises never land as "Uncategorized"
+    // and filter alongside the library's; the structured muscle_map is the source of truth.
+    const firstGroup = primary.length > 0 ? getMuscle(primary[0]!)?.group_id : undefined;
+    const category = firstGroup ? bodyPartOfGroup(firstGroup) : null;
     const exercise = createCustomExercise({
       name: name.trim(),
       category,

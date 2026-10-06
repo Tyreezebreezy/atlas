@@ -1,5 +1,5 @@
 import { getMuscle, muscleMapOf, MUSCLE_GROUPS } from '@atlas/anatomy';
-import { eligibleSets, exposureSessions, type ExposureSessions } from '@atlas/pr-engine';
+import { eligibleSets, exposureSessions, performanceContextKey, type ExposureSessions } from '@atlas/pr-engine';
 import type {
   Exercise,
   PersonalRecord,
@@ -238,11 +238,14 @@ export function exercisePerformanceState(
 ): MusclePerformanceState {
   let comparable = false;
   let progressed = false;
-  for (const [locationId, history] of exposures.get(exercise.id) ?? []) {
+  // A context is the location AND the machine (Handoff 04B): an event counts for
+  // the context it was earned in, so a PR on one machine never makes another
+  // machine's exercise look like it is progressing.
+  for (const [contextKey, history] of exposures.get(exercise.id) ?? []) {
     if (history.length < 2) continue;
     comparable = true;
     progressed ||= prEvents.some((event) => {
-      if (event.exercise_id !== exercise.id || (event.training_location_id ?? null) !== locationId) return false;
+      if (event.exercise_id !== exercise.id || performanceContextKey(event) !== contextKey) return false;
       const achieved = new Date(event.achieved_at).getTime();
       return achieved >= window.start && achieved <= window.end;
     });

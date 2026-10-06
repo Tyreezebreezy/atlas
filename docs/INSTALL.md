@@ -40,8 +40,8 @@ Same steps as iPhone above. Additionally check once installed:
 
 On the Windows desktop app: **More → Import/Export → Full ATLAS Backup →
 Export Full Backup**. This saves a `.json` file containing every Program,
-Quick Workout, workout session/history, PR, milestone, and body
-measurement — everything except Settings (device-local by design, see
+Quick Workout, workout session/history, PR, milestone, body
+measurement, and your Gyms & Equipment — everything except Settings (device-local by design, see
 docs/ARCHITECTURE.md) and the canonical exercise library (it reseeds
 itself fresh on any new install, so it doesn't need to travel).
 

@@ -34,13 +34,19 @@ function completedSessionAt(completedAt: string, setCount: number): WorkoutSessi
     );
   }
   session = completeWorkoutSession(session);
-  return { ...session, completed_at: completedAt };
+  // The day this workout was performed on, as the device's clock saw it: the
+  // viewer-local day of that instant (a session backdated by a fixture must say
+  // which day it happened on, the way a real backdated entry does).
+  return {
+    ...session,
+    completed_at: completedAt,
+    performed_local_date: dateKey(new Date(completedAt)),
+  };
 }
 
-/** Local-calendar-date key, exactly matching the module under test's own
- * `localDateKey` -- used so these tests never depend on the test runner's
- * timezone matching UTC (a session `completed_at` of 18:00 UTC lands on a
- * different calendar day in timezones ahead of UTC+6). */
+/** Local-calendar-date key -- used so these tests never depend on the test
+ * runner's timezone matching UTC (a session `completed_at` of 18:00 UTC lands
+ * on a different calendar day in timezones ahead of UTC+6). */
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -75,5 +81,32 @@ describe('computeActivityHeatmap', () => {
     const session = { ...completedSessionAt(twoDaysAgoIso, 3), status: 'discarded' as const };
     const result = computeActivityHeatmap([session], 'workouts', 7, now);
     expect(result.every((d) => d.value === 0)).toBe(true);
+  });
+
+  it('files a workout under the day it was performed on (vNext Handoff 04B), not the day its end instant falls on here', () => {
+    // Done late on the day two days ago; the recorded end instant has since rolled past midnight on the viewer's clock.
+    const session = {
+      ...completedSessionAt(twoDaysAgoIso, 3),
+      performed_local_date: twoDaysAgoKey,
+    };
+    const afterMidnight = {
+      ...session,
+      completed_at: new Date(new Date(twoDaysAgoIso).getTime() + 18 * 3600_000).toISOString(),
+    };
+    const day = computeActivityHeatmap([afterMidnight], 'workouts', 7, now).find(
+      (d) => d.date === twoDaysAgoKey,
+    );
+    expect(day?.value).toBe(1);
+  });
+
+  it('a session recorded before local dates were stored falls back to the viewer-local day of its completion', () => {
+    const legacy: WorkoutSession = {
+      ...completedSessionAt(twoDaysAgoIso, 3),
+      performed_local_date: undefined,
+    };
+    const day = computeActivityHeatmap([legacy], 'workouts', 7, now).find(
+      (d) => d.date === twoDaysAgoKey,
+    );
+    expect(day?.value).toBe(1);
   });
 });

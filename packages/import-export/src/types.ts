@@ -1,13 +1,19 @@
 import type {
   BodyMeasurement,
+  EquipmentDefinition,
   Exercise,
+  ExerciseAlias,
+  ExerciseEquipmentContext,
   ExerciseNote,
+  GymEquipmentInstance,
   Milestone,
   PersonalRecord,
   PersonalRecordEvent,
   Program,
   ProgramNote,
   ProgressionPolicy,
+  TestProtocol,
+  TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
@@ -127,6 +133,24 @@ export interface AtlasBackupDocument {
      * file brings no events back, and the app's startup reconcile rebuilds
      * them from the restored sessions (see restoreBackup.ts's `?? []`). */
     personal_record_events?: PersonalRecordEvent[];
+    /**
+     * vNext Handoff 04B. The foundational stores a backup did not carry
+     * before, now that the owner can create and edit them: training
+     * locations, equipment definitions, the equipment configured at each
+     * location, which exercise is remembered on which machine, exercise
+     * aliases and test protocols. All optional, like `workout_occurrences`:
+     * a backup exported before they existed still validates and restores (it
+     * simply has none to bring back), and one of these keys is never required
+     * of an older file. Which stores a backup covers is decided in one place,
+     * `backupStores.ts`, and a test fails if a storage repository is added
+     * without being listed there or explicitly marked as not backed up.
+     */
+    training_locations?: TrainingLocation[];
+    equipment_definitions?: EquipmentDefinition[];
+    gym_equipment?: GymEquipmentInstance[];
+    exercise_equipment_contexts?: ExerciseEquipmentContext[];
+    exercise_aliases?: ExerciseAlias[];
+    test_protocols?: TestProtocol[];
   };
 }
 

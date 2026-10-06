@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { sessionLocalDate } from '@atlas/core';
 import { summarizeSession } from '@atlas/workout-engine';
 import type { Exercise, WorkoutSession } from '@atlas/data-model';
 import { useStorage } from '../storage/StorageContext';
-import { formatSessionDate as formatDate, SessionDetail } from './SessionDetail';
+import { formatSessionDate as formatDate } from './formatSessionDate';
+import { SessionDetail } from './SessionDetail';
 
 interface HistoryScreenProps {
   /** Omit when the screen is a Progress section (its tab row is the navigation). */
@@ -13,13 +15,16 @@ interface HistoryScreenProps {
   onOpenExercise?: (exerciseId: string) => void;
 }
 
-function monthKey(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+/** Months are the months of the days workouts were PERFORMED on (`sessionLocalDate`), the same day every other grouping uses. */
+function monthKey(session: WorkoutSession): string {
+  return sessionLocalDate(session).slice(0, 7);
 }
 
-function monthLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+function monthLabel(session: WorkoutSession): string {
+  return new Date(`${sessionLocalDate(session)}T00:00:00`).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 export function HistoryScreen({ onBack, embedded = false, onOpenExercise }: HistoryScreenProps) {
@@ -54,10 +59,10 @@ export function HistoryScreen({ onBack, embedded = false, onOpenExercise }: Hist
   const months = useMemo(() => {
     const groups: { key: string; label: string; sessions: WorkoutSession[] }[] = [];
     for (const session of completed) {
-      const key = monthKey(session.started_at);
+      const key = monthKey(session);
       const last = groups[groups.length - 1];
       if (last && last.key === key) last.sessions.push(session);
-      else groups.push({ key, label: monthLabel(session.started_at), sessions: [session] });
+      else groups.push({ key, label: monthLabel(session), sessions: [session] });
     }
     return groups;
   }, [completed]);
@@ -113,10 +118,10 @@ export function HistoryScreen({ onBack, embedded = false, onOpenExercise }: Hist
                     <button
                       type="button"
                       onClick={() => setSelectedId(session.id)}
-                      aria-label={`${session.name}, ${formatDate(session.started_at)}, ${summary.durationMinutes} minutes, ${summary.setCount} sets`}
+                      aria-label={`${session.name}, ${formatDate(session)}, ${summary.durationMinutes} minutes, ${summary.setCount} sets`}
                     >
                       <span className="atlas-library__item-name" aria-hidden="true">
-                        {formatDate(session.started_at)} &middot; {session.name}
+                        {formatDate(session)} &middot; {session.name}
                       </span>
                       <span className="atlas-library__item-meta" aria-hidden="true">
                         {summary.durationMinutes} min &middot; {summary.setCount} sets

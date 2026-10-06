@@ -8,8 +8,31 @@ import { applyWorkoutGuideMedia } from './applyWorkoutGuideMedia';
 import type { WorkoutGuideEntry } from './matchWorkoutGuideMedia';
 import { applyFreeExerciseDbMedia } from './applyFreeExerciseDbMedia';
 import type { FreeExerciseDbEntry } from './matchFreeExerciseDbMedia';
+import { repairExerciseName } from './formatExerciseName';
 
 export const seedExercises = seedData as Exercise[];
+
+/**
+ * A device that seeded the library before the "sled 45° ..." names were corrected still stores them as "45в°" (as does
+ * one that restores an older backup). Corrects the stored name in place, by id -- the id, media, notes and every
+ * reference to the row are untouched -- and only on library rows: a custom exercise's name is the owner's own.
+ * Returns the rows as they now are.
+ */
+async function repairGarbledNames(storage: AtlasStorage, rows: Exercise[]): Promise<Exercise[]> {
+  const now = new Date().toISOString();
+  const fixed = rows
+    .filter((e) => !e.is_custom && repairExerciseName(e.name) !== e.name)
+    .map((e) => ({
+      ...e,
+      name: repairExerciseName(e.name),
+      updated_at: now,
+      version: e.version + 1,
+    }));
+  if (fixed.length === 0) return rows;
+  await storage.exercises.putMany(fixed);
+  const byId = new Map(fixed.map((e) => [e.id, e]));
+  return rows.map((e) => byId.get(e.id) ?? e);
+}
 
 /** Media providers apply in priority order -- Workout Guide first (more
  * complete three-frame motion, already the preferred provider), Free
@@ -46,17 +69,21 @@ function resolveMedia(exercises: Exercise[]): Exercise[] {
  * -- they were never part of either provider's source data, and matching
  * by name could otherwise misfire if a user's own exercise happens to
  * share a name with a real one.
+ *
+ * Every later run also repairs the stored name of a library row the catalog
+ * has since corrected (`repairGarbledNames`).
  */
 export async function ensureExercisesSeeded(storage: AtlasStorage): Promise<void> {
-  const existing = await storage.exercises.getAll();
+  const stored = await storage.exercises.getAll();
 
-  if (existing.length === 0) {
+  if (stored.length === 0) {
     const enriched = applyCuratedEnrichment(seedExercises);
     const resolved = resolveMedia(enriched).map((e) => ({ ...e, media: e.media ?? null }));
     await storage.exercises.putMany(resolved);
     return;
   }
 
+  const existing = await repairGarbledNames(storage, stored);
   const unresolved = existing.filter((e) => !e.is_custom && e.media === undefined);
   if (unresolved.length === 0) return;
 

@@ -1,8 +1,8 @@
 import { lazy, Suspense, useState } from 'react';
 import { useGymMode } from '../gym/GymModeContext';
 import { LogPastWorkoutScreen } from '../history/LogPastWorkoutScreen';
+import { GymsScreen } from '../equipment/GymsScreen';
 import { EmptyScreen } from '../screens/EmptyScreen';
-import { EquipmentScreen } from '../settings/EquipmentScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
 import { TodayScreen } from '../today/TodayScreen';
 import {
@@ -30,7 +30,7 @@ const ImportExportScreen = lazy(() =>
   import('../importexport/ImportExportScreen').then((m) => ({ default: m.ImportExportScreen })),
 );
 
-type MoreView = 'menu' | 'equipment' | 'log-past' | 'settings' | 'import-export' | 'help';
+type MoreView = 'menu' | 'gyms' | 'log-past' | 'settings' | 'import-export' | 'help';
 
 interface MoreTabProps {
   /** vNext Handoff 03A: Exercise Library moved out of the permanent bottom
@@ -39,11 +39,13 @@ interface MoreTabProps {
    * `ProgressScreen`'s existing `onViewExercises` callback (which sets
    * `activeTab('library')` directly) keeps working unchanged. */
   onOpenLibrary: () => void;
+  /** vNext Handoff 04B. Opens straight onto a screen -- Today's "set up a gym" link lands on Gyms & Equipment. */
+  initialView?: MoreView;
 }
 
-function MoreTab({ onOpenLibrary }: MoreTabProps) {
-  const [view, setView] = useState<MoreView>('menu');
-  if (view === 'equipment') return <EquipmentScreen onBack={() => setView('menu')} />;
+function MoreTab({ onOpenLibrary, initialView }: MoreTabProps) {
+  const [view, setView] = useState<MoreView>(initialView ?? 'menu');
+  if (view === 'gyms') return <GymsScreen onBack={() => setView('menu')} />;
   if (view === 'log-past') return <LogPastWorkoutScreen onBack={() => setView('menu')} />;
   if (view === 'settings') return <SettingsScreen onBack={() => setView('menu')} />;
   if (view === 'help') return <HowAtlasWorksScreen onBack={() => setView('menu')} />;
@@ -65,13 +67,9 @@ function MoreTab({ onOpenLibrary }: MoreTabProps) {
           </button>
         </li>
         <li>
-          <button
-            type="button"
-            onClick={() => setView('equipment')}
-            aria-label="Equipment / Places"
-          >
+          <button type="button" onClick={() => setView('gyms')} aria-label="Gyms & Equipment">
             <span className="atlas-library__item-name" aria-hidden="true">
-              Equipment / Places
+              Gyms &amp; Equipment
             </span>
           </button>
         </li>
@@ -114,6 +112,10 @@ function MoreTab({ onOpenLibrary }: MoreTabProps) {
 
 export function NavShell() {
   const [activeTab, setActiveTab] = useState<NavTab>('today');
+  // vNext Handoff 04B. Set only by a deep link (Today -> Gyms & Equipment); any tab-bar press clears it.
+  const [moreStart, setMoreStart] = useState<MoreView | undefined>(undefined);
+  // Tapping More while already in one of its screens (Settings, Gyms, ...) returns to the menu, as it already did from the Library.
+  const [moreResetKey, setMoreResetKey] = useState(0);
   const { activeSessionId, exitGymMode } = useGymMode();
   const [showOnboarding, setShowOnboarding] = useState(() => !hasCompletedOnboarding());
 
@@ -134,7 +136,14 @@ export function NavShell() {
   return (
     <div className="atlas-shell">
       <main className="atlas-shell__content">
-        {activeTab === 'today' && <TodayScreen />}
+        {activeTab === 'today' && (
+          <TodayScreen
+            onOpenGyms={() => {
+              setMoreStart('gyms');
+              setActiveTab('more');
+            }}
+          />
+        )}
         {activeTab === 'library' && (
           <Suspense
             fallback={<EmptyScreen title="Exercises" description="Loading exercise library…" />}
@@ -152,7 +161,13 @@ export function NavShell() {
             <ProgressScreen onViewExercises={() => setActiveTab('library')} />
           </Suspense>
         )}
-        {activeTab === 'more' && <MoreTab onOpenLibrary={() => setActiveTab('library')} />}
+        {activeTab === 'more' && (
+          <MoreTab
+            key={moreResetKey}
+            onOpenLibrary={() => setActiveTab('library')}
+            initialView={moreStart}
+          />
+        )}
       </main>
       <nav className="atlas-shell__tabbar" aria-label="Primary">
         {PRIMARY_NAV_TABS.map((tab) => (
@@ -165,7 +180,11 @@ export function NavShell() {
             aria-current={
               activeTab === tab || (tab === 'more' && activeTab === 'library') ? 'page' : undefined
             }
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setMoreStart(undefined);
+              if (tab === 'more' && activeTab === 'more') setMoreResetKey((key) => key + 1);
+              setActiveTab(tab);
+            }}
           >
             {NAV_TAB_LABELS[tab]}
           </button>

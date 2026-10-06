@@ -11,6 +11,7 @@
   "dependencies": {
     "@atlas/anatomy": "*",
     "@atlas/body-composition": "*",
+    "@atlas/core": "*",
     "@atlas/data-model": "*",
     "@atlas/pr-engine": "*",
     "@atlas/workout-engine": "*"

@@ -32,6 +32,12 @@ describe('formatRecommendation', () => {
     expect(formatRecommendation(recommendation({ action: 'review' }))).toBe('Review needed');
   });
 
+  it('a review never says the same thing twice: the value says review, the reason says why', () => {
+    const review = recommendation({ action: 'review', reason_code: 'PROGRAM_REVIEW_REQUIRED' });
+    expect(formatRecommendation(review)).toBe('Review needed');
+    expect(REASON_TEXT[review.reason_code]).not.toBe(formatRecommendation(review));
+  });
+
   it('formats load and reps together, e.g. an equipment-ceiling target', () => {
     expect(formatRecommendation(recommendation({ target_load: 170, target_reps: 16 }))).toBe(
       '170 lb × 16',

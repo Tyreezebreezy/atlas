@@ -264,6 +264,37 @@ export interface WorkoutSession extends SyncMeta {
    * "no equipment data" is never treated as "at max" in the Handoff 01
    * progression work. */
   training_location_id?: string | null;
+  /**
+   * vNext Handoff 04B. Which actual machine/implement each exercise was
+   * performed on in this session -- one entry per exercise, keyed by
+   * `exercise_id` exactly like `performed_sets`, `skipped_exercises` and
+   * `replacements` (a session never holds one exercise twice), rather than
+   * the same id copied onto every set. Together with `training_location_id`
+   * this is an exercise's comparable context: two chest-press machines at one
+   * gym are two series, and 170 on one is never compared with 170 on the
+   * other (see `performanceContextOf` in `@atlas/pr-engine`). An exercise with
+   * no entry was done on unspecified equipment. Absent on every session
+   * before this field existed -- old history is never assigned equipment.
+   */
+  exercise_equipment?: SessionExerciseEquipment[];
+  /** vNext Handoff 04B. The calendar day (YYYY-MM-DD) on the device's clock
+   * when the workout started -- the day it counts toward, however the viewer's
+   * time zone changes later. Absent on older sessions, which `sessionLocalDate`
+   * (`@atlas/core`) falls back for. */
+  performed_local_date?: string | null;
+  /** vNext Handoff 04B. IANA zone the device reported when the workout
+   * started, when it reported one. Provenance only -- never used to re-derive
+   * `performed_local_date`, and never inferred from a location's address. */
+  time_zone_id?: string | null;
+  /** vNext Handoff 04B. Minutes east of UTC at that moment. Provenance only. */
+  utc_offset_minutes?: number | null;
+}
+
+/** vNext Handoff 04B. See `WorkoutSession.exercise_equipment`. */
+export interface SessionExerciseEquipment {
+  exercise_id: string;
+  /** The `GymEquipmentInstance` the exercise was performed on. */
+  gym_equipment_id: string;
 }
 
 export interface PerformedSet {

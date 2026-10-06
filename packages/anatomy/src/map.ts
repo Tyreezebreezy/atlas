@@ -91,8 +91,30 @@ const CATEGORY_FALLBACK: Record<string, string[]> = {
   'lower legs': ['calves.gastrocnemius'],
 };
 
-/** Hand-curated precision for common exercises, keyed by lowercase name. */
-const CURATED_MUSCLE_MAP: Record<string, { primary: string[]; secondary: string[] }> = {
+type CuratedMap = { primary: string[]; secondary: string[] };
+
+// Shapes shared by several curated names below.
+const FLAT_PRESS: CuratedMap = { primary: ['chest.mid'], secondary: ['shoulders.anterior', 'arms.triceps'] };
+const PUSH_UP: CuratedMap = { primary: ['chest.mid'], secondary: ['arms.triceps', 'shoulders.anterior'] };
+const OVERHEAD_PRESS: CuratedMap = { primary: ['shoulders.anterior', 'shoulders.lateral'], secondary: ['arms.triceps'] };
+const FACE_PULL: CuratedMap = {
+  primary: ['shoulders.posterior'],
+  secondary: ['back.traps_mid', 'back.rhomboids', 'shoulders.rotator_cuff'],
+};
+const SCAPULAR_PUSH_UP: CuratedMap = { primary: ['core.serratus'], secondary: ['back.traps_mid'] };
+const TRICEPS_ISOLATION: CuratedMap = { primary: ['arms.triceps'], secondary: [] };
+const LEG_PRESS: CuratedMap = { primary: ['quads.quadriceps', 'glutes.max'], secondary: ['hamstrings.hamstrings'] };
+const LEG_CURL: CuratedMap = { primary: ['hamstrings.hamstrings'], secondary: ['calves.gastrocnemius'] };
+
+/**
+ * Hand-curated precision for common exercises, keyed by lowercase name.
+ *
+ * The owner's own starter exercises (`ownerStarterData`) are custom rows with a category and nothing else, so the
+ * category fallback below is all they would get -- and it cannot tell a pressdown from a curl (biceps AND triceps),
+ * a leg curl from a leg press (quads AND hamstrings), or a face pull from a lateral raise. They are mapped here by
+ * name instead, which also corrects rows already stored (the table is read, never written back).
+ */
+const CURATED_MUSCLE_MAP: Record<string, CuratedMap> = {
   'barbell bench press': {
     primary: ['chest.mid', 'chest.upper'],
     secondary: ['shoulders.anterior', 'arms.triceps'],
@@ -157,6 +179,43 @@ const CURATED_MUSCLE_MAP: Record<string, { primary: string[]; secondary: string[
   'hanging leg raise': { primary: ['core.rectus_abdominis'], secondary: ['quads.hip_flexors'] },
   'calf raise': { primary: ['calves.gastrocnemius', 'calves.soleus'], secondary: [] },
   'hip thrust': { primary: ['glutes.max'], secondary: ['hamstrings.hamstrings'] },
+
+  // The owner's starter program (see the note above).
+  'machine chest press': FLAT_PRESS,
+  'cable or machine chest press': FLAT_PRESS,
+  'incline dumbbell press': { primary: ['chest.upper'], secondary: ['shoulders.anterior', 'arms.triceps'] },
+  'low-incline machine or dumbbell press': {
+    primary: ['chest.upper', 'chest.mid'],
+    secondary: ['shoulders.anterior', 'arms.triceps'],
+  },
+  'push-ups': PUSH_UP,
+  'push-up progression': PUSH_UP,
+  'assisted dip': { primary: ['chest.lower'], secondary: ['arms.triceps', 'shoulders.anterior'] },
+  'scapular push-ups': SCAPULAR_PUSH_UP,
+  'scapular push-up': SCAPULAR_PUSH_UP,
+  'dumbbell or machine shoulder press': OVERHEAD_PRESS,
+  'rope face pull': FACE_PULL,
+  'light face pull': FACE_PULL,
+  'neutral-grip cable row': {
+    primary: ['back.rhomboids', 'back.lats'],
+    secondary: ['arms.biceps', 'shoulders.posterior'],
+  },
+  'neutral-grip lat pulldown': { primary: ['back.lats'], secondary: ['arms.biceps', 'back.rhomboids'] },
+  'rope pressdown': TRICEPS_ISOLATION,
+  'cable pressdown': TRICEPS_ISOLATION,
+  'overhead cable triceps extension': TRICEPS_ISOLATION,
+  'curl machine': { primary: ['arms.biceps'], secondary: ['arms.brachialis'] },
+  'leg press': LEG_PRESS,
+  'single-leg leg press': LEG_PRESS,
+  'leg curl': LEG_CURL,
+  'seated or lying leg curl': LEG_CURL,
+  'glute bridge': { primary: ['glutes.max'], secondary: ['hamstrings.hamstrings'] },
+  'cable pull-through': { primary: ['glutes.max', 'hamstrings.hamstrings'], secondary: ['back.erectors'] },
+  'supported bodyweight squat': { primary: ['quads.quadriceps', 'glutes.max'], secondary: [] },
+  'supported step-up': { primary: ['quads.quadriceps', 'glutes.max'], secondary: ['hamstrings.hamstrings'] },
+  'farmer carry': { primary: ['arms.forearm_flexors', 'back.traps_upper'], secondary: ['core.obliques'] },
+  'standing or seated calf raise': { primary: ['calves.gastrocnemius', 'calves.soleus'], secondary: [] },
+  'tibialis raise': { primary: ['calves.tibialis'], secondary: [] },
 };
 
 function dedupe(ids: string[]): string[] {
@@ -167,17 +226,39 @@ function mapStrings(strings: string[], table: Record<string, string[]>): string[
   return dedupe(strings.flatMap((s) => table[s.trim().toLowerCase()] ?? []));
 }
 
+/**
+ * The source dataset files every squat, lunge, step-up and leg press under "glutes" with the quadriceps as a mere
+ * secondary (every deadlift, good morning and pull-through the same way, with the hamstrings), and every overhead
+ * press under the whole of "delts", rear head included. Left alone, a leg day shows no direct quad work and a
+ * shoulder press credits the rear deltoid. The exercise's own name says which pattern it is, so these complete or
+ * narrow the imported guess; a curated entry or a stored mapping still wins over them.
+ */
+const SQUAT_PATTERN = /\b(?:squat|lunge|step-up|leg press)\b/i;
+const HINGE_PATTERN = /\b(?:deadlift|good morning|pull[- ]through)\b/i;
+const PRESS_PATTERN = /\b(?:overhead|shoulder|military) press\b/i;
+
 export function deriveImportedMuscleMap(exercise: Exercise): ExerciseMuscleMapping | null {
   const target = exercise.target_muscle?.trim().toLowerCase() ?? null;
-  const primary = target ? mapStrings([target], TARGET_MUSCLE_MAP) : [];
+  const listsSecondary = (name: string) => exercise.secondary_muscles.some((s) => s.trim().toLowerCase() === name);
+  let primary = target ? mapStrings([target], TARGET_MUSCLE_MAP) : [];
+  if (target === 'glutes' && SQUAT_PATTERN.test(exercise.name) && listsSecondary('quadriceps')) {
+    primary = [...primary, 'quads.quadriceps'];
+  }
+  if (target === 'glutes' && HINGE_PATTERN.test(exercise.name) && listsSecondary('hamstrings')) {
+    primary = [...primary, 'hamstrings.hamstrings'];
+  }
+  if (target === 'delts' && PRESS_PATTERN.test(exercise.name)) primary = ['shoulders.anterior', 'shoulders.lateral'];
   const primaryFallback =
     primary.length === 0 && exercise.category
       ? mapStrings([exercise.category.toLowerCase()], CATEGORY_FALLBACK)
       : [];
-  const secondary = mapStrings(exercise.secondary_muscles, SECONDARY_MUSCLE_MAP).filter(
-    (id) => !primary.includes(id) && !primaryFallback.includes(id),
-  );
   const resultPrimary = primary.length > 0 ? primary : primaryFallback;
+  // A bare "shoulders" among a chest exercise's secondaries is the front deltoid -- the head a press works.
+  const chestLed = resultPrimary.some((id) => id.startsWith('chest.'));
+  const secondary = mapStrings(
+    exercise.secondary_muscles,
+    chestLed ? { ...SECONDARY_MUSCLE_MAP, shoulders: ['shoulders.anterior'] } : SECONDARY_MUSCLE_MAP,
+  ).filter((id) => !resultPrimary.includes(id));
   if (resultPrimary.length === 0 && secondary.length === 0) return null;
   return {
     primary: resultPrimary,

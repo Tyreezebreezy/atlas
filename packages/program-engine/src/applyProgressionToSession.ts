@@ -1,10 +1,24 @@
-import type { Exercise, PlannedExercise, Program, WorkoutSession } from '@atlas/data-model';
+import type {
+  Exercise,
+  GymEquipmentInstance,
+  PlannedExercise,
+  Program,
+  WorkoutSession,
+} from '@atlas/data-model';
 import { effectiveProgressionPolicy } from './progressionPolicy';
-import {
-  computeProgressionDecision,
-  findPreviousNormalSession,
-  targetSnapshotOf,
-} from './progressionDecision';
+import { findPreviousNormalSession, targetSnapshotOf } from './progressionDecision';
+import { decideWithinEquipment } from './recommendProgression';
+
+/**
+ * vNext Handoff 04B. What a workout that is about to start knows about where one
+ * exercise will be done -- the same two things the live "Today" line is given.
+ */
+export interface SessionStartContext {
+  /** The machine this exercise will be on (the one remembered for it at the chosen place), or null when none is known. A target is never held to a machine nobody picked. */
+  equipment: GymEquipmentInstance | null;
+  /** The sessions to progress from: the same machine at the same place when this exercise has been done there, otherwise all history. */
+  history: WorkoutSession[];
+}
 
 /**
  * Resolves each planned exercise's progression-adjusted target before a
@@ -22,6 +36,12 @@ import {
  * historical workout (see docs/PROGRESSION.md "Chronology safety"), so a
  * backfilled entry resolves its progression against what was actually true
  * at that point in history, not against sessions that hadn't happened yet.
+ *
+ * `contextFor` (vNext Handoff 04B) supplies, per exercise, the machine it will
+ * be on and the history to progress from. With it, the stamped target never
+ * exceeds a load that machine can give (see `decideWithinEquipment`); without it
+ * -- a backdated entry has no place or machine -- every target is exactly what
+ * the unconstrained engine decides, as before.
  */
 export function applyProgressionToSession(
   plannedExercises: PlannedExercise[],
@@ -29,19 +49,25 @@ export function applyProgressionToSession(
   exercisesById: Map<string, Exercise>,
   allSessions: WorkoutSession[],
   nowIso: string = new Date().toISOString(),
+  contextFor?: (exerciseId: string) => SessionStartContext,
 ): PlannedExercise[] {
   return plannedExercises.map((planned) => {
     const exercise = exercisesById.get(planned.exercise_id);
     if (!exercise) return planned; // Exercise deleted/missing -- leave the plan's own target as-is.
 
     const policy = effectiveProgressionPolicy(program, planned);
-    const previousSession = findPreviousNormalSession(allSessions, exercise.id, nowIso);
-    const decision = computeProgressionDecision(
-      policy,
+    const start = contextFor?.(exercise.id);
+    const decision = decideWithinEquipment({
       exercise,
-      targetSnapshotOf(planned),
-      previousSession,
-    );
+      policy,
+      currentTarget: targetSnapshotOf(planned),
+      previousSession: findPreviousNormalSession(
+        start?.history ?? allSessions,
+        exercise.id,
+        nowIso,
+      ),
+      equipment: start?.equipment ?? null,
+    });
 
     return {
       ...planned,

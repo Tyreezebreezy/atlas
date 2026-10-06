@@ -1,5 +1,6 @@
 import { getOrCreateDeviceId, newId } from '@atlas/core';
 import type { EquipmentDefinition, ExerciseEquipmentContext, GymEquipmentInstance, LoadUnit } from '@atlas/data-model';
+import { APP_LOAD_UNIT } from './units';
 
 function stamp() {
   const now = new Date().toISOString();
@@ -25,8 +26,11 @@ export interface CreateGymEquipmentInstanceInput {
   minLoad?: number | null;
   maxLoad?: number | null;
   increment?: number | null;
+  /** Defaults to the unit logged history is in (`APP_LOAD_UNIT`, lb). */
   unit?: LoadUnit;
   notes?: string | null;
+  /** The legacy `TrainingLocation.equipment` string this was configured from, if any. */
+  legacyEquipment?: string | null;
 }
 
 export function createGymEquipmentInstance(input: CreateGymEquipmentInstanceInput): GymEquipmentInstance {
@@ -41,8 +45,9 @@ export function createGymEquipmentInstance(input: CreateGymEquipmentInstanceInpu
     min_load: input.minLoad ?? null,
     max_load: input.maxLoad ?? null,
     increment: input.increment ?? null,
-    unit: input.unit ?? 'lb',
+    unit: input.unit ?? APP_LOAD_UNIT,
     notes: input.notes ?? null,
+    ...(input.legacyEquipment ? { legacy_equipment: input.legacyEquipment } : {}),
   };
 }
 

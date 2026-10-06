@@ -6,28 +6,14 @@ import { resolveDayWeekday, resolveWeekSchedule } from './todaySchedule';
  * vNext Handoff 03B. The one definition of "this week" and "a week of the
  * program", shared by Today's This Week card and Progress's Weekly Review /
  * Muscles > Focus so they can never disagree.
+ *
+ * vNext Handoff 04B: the date arithmetic itself (`localIsoDate`,
+ * `addDaysToIso`, `startOfWeekIso`) moved down to `@atlas/core` so packages
+ * that cannot depend on program-engine (the weekly review, the consistency
+ * milestone) can bucket by the very same calendar. Re-exported here, so every
+ * existing import keeps working.
  */
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-/** Device-local (not UTC) YYYY-MM-DD. */
-export function localIsoDate(date: Date = new Date()): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-export function addDaysToIso(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return localIsoDate(d);
-}
-
-/** Monday of the calendar week containing `iso` -- the same Monday-first convention as `resolveWeekSchedule`. */
-export function startOfWeekIso(iso: string): string {
-  const weekday = new Date(`${iso}T00:00:00`).getDay();
-  return addDaysToIso(iso, weekday === 0 ? -6 : 1 - weekday);
-}
+export { addDaysToIso, localIsoDate, startOfWeekIso } from '@atlas/core';
 
 /**
  * How many real (non-rest) sessions the active program schedules in the

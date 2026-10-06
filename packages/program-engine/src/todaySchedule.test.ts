@@ -53,12 +53,19 @@ const MONDAY = '2026-09-07';
 const TUESDAY = '2026-09-08';
 const SUNDAY = '2026-09-13';
 
+/** Created long before any date these tests look at, so nothing is excluded for being too early. */
+const LONG_AGO = '2026-01-01T12:00:00.000Z';
+
 function weeklyProgram(): { program: Program; templates: Map<string, WorkoutTemplate> } {
   const monday = { ...createProgramDay(1, 'Monday · Upper A', 'tpl-monday'), weekday: 1 };
   const tuesday = { ...createProgramDay(2, 'Tuesday · Lower', 'tpl-tuesday'), weekday: 2 };
   const sunday = { ...createProgramDay(3, 'Sunday · Rest', 'tpl-sunday'), weekday: 0 };
   const week = { ...createProgramWeek(1, null), days: [monday, tuesday, sunday] };
-  const program: Program = { ...createProgram('Weekly Workout Guide', null), weeks: [week] };
+  const program: Program = {
+    ...createProgram('Weekly Workout Guide', null),
+    created_at: LONG_AGO,
+    weeks: [week],
+  };
   const templates = new Map([
     ['tpl-monday', template('tpl-monday', 'Upper A')],
     ['tpl-tuesday', template('tpl-tuesday', 'Lower')],
@@ -276,6 +283,39 @@ describe('resolveMissedWorkouts', () => {
     expect(dismissed.status).toBe('planned'); // dismissal is not skip/complete
     const missed = resolveMissedWorkouts(program, templates, [dismissed], TUESDAY, 1);
     expect(missed).toHaveLength(0);
+  });
+
+  it('a program created today has no missed workouts: nothing scheduled before it existed was its to miss', () => {
+    const { program, templates } = weeklyProgram();
+    const brandNew = { ...program, created_at: '2026-09-08T09:00:00' }; // created on the Tuesday itself
+    expect(resolveMissedWorkouts(brandNew, templates, [], TUESDAY, 7)).toEqual([]);
+    expect(resolveMissedWorkouts(brandNew, templates, [], '2026-09-09', 7)).toEqual([
+      expect.objectContaining({ date: TUESDAY }), // Tuesday was scheduled AFTER the program existed
+    ]);
+  });
+
+  it('a program only misses days from the one it was created on', () => {
+    const { program, templates } = weeklyProgram();
+    const createdOnSunday = { ...program, created_at: '2026-09-13T20:00:00' };
+    // Looking back a full week from the next Tuesday: the Monday/Tuesday of the week BEFORE creation are not missed.
+    const dates = resolveMissedWorkouts(createdOnSunday, templates, [], '2026-09-15', 7).map(
+      (m) => m.date,
+    );
+    expect(dates).toEqual(['2026-09-14']);
+  });
+
+  it('switching to a program restarts its schedule: days before it was last activated are not missed', () => {
+    const { program, templates } = weeklyProgram();
+    const switchedToOnTuesday = { ...program, activated_at: '2026-09-08T08:00:00' };
+    expect(resolveMissedWorkouts(switchedToOnTuesday, templates, [], TUESDAY, 7)).toEqual([]);
+    expect(
+      resolveMissedWorkouts(switchedToOnTuesday, templates, [], '2026-09-14', 7).map((m) => m.date),
+    ).toEqual([TUESDAY]);
+    // A program stored before activated_at existed falls back to its creation date, as it always behaved.
+    const legacy = { ...program, activated_at: undefined };
+    expect(resolveMissedWorkouts(legacy, templates, [], TUESDAY, 1).map((m) => m.date)).toEqual([
+      MONDAY,
+    ]);
   });
 
   it('never flags a rest day as missed', () => {

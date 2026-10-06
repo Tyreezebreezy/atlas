@@ -37,7 +37,7 @@ Three tiers, each audited by `anatomyMapping.test.ts`:
    | --- | --- | --- |
    | `chest-mid` | sternal pec (`chest-lower-*`) | accepted — reads as the body of the pec; cannot tell Mid from Lower Chest |
    | `mid-back` (rhomboids) | mid trapezius (`traps-mid-*`) | accepted — sits where the rhomboids are; cannot tell them from mid/lower traps |
-   | `abductors` | gluteus medius (`gluteus-medius-*`) | **needs-custom-svg-patch** — only the hip pad lights while the taxonomy says "Outer Thigh"; follow-up recorded on the entry |
+   | `abductors` | gluteus medius (`gluteus-medius-*`) | accepted (owner, 2026-10-05) — only the hip pads light, so the region is labelled **Hip Abductors**, not "Outer Thigh"; the muscle id `hamstrings.abductors` is unchanged and a custom lateral-thigh path stays deferred (the entry's `followUp`) |
 
    Nothing here invents anatomy. A `needs-custom-svg-patch` verdict requires a
    `followUp` (test-enforced) and waits for real art.
@@ -54,6 +54,41 @@ fallback is left `unreviewed`.
 Shared regions select everything they represent: tapping the sternal pec
 selects both Lower and Mid Chest, and its accessible name says so ("Lower
 Chest / Mid Chest").
+
+## Exercise → muscle mapping (`packages/anatomy/src/map.ts`)
+
+`muscleMapOf(exercise)` is the one read path. In order: a stored user-defined
+`muscle_map`, then the **curated** table (lowercase exercise name), then the
+**imported** normalization of the dataset's `target_muscle` /
+`secondary_muscles` / `category` strings. Nothing is written back, so a fix to
+the curated table or the rules corrects rows already stored.
+
+The acceptance pass audited ~45 exercises (the dataset's common lifts and every
+strength exercise in the owner's starter program) against what the app derived,
+and corrected what was plainly wrong:
+
+- **The owner's starter exercises** are custom rows with a category and nothing
+  else, so they only ever got the category fallback — which put biceps _and_
+  triceps on a pressdown, quads _and_ hamstrings on a leg curl, the lateral
+  deltoid on a face pull and calves on a tibialis raise. ~30 of them are now
+  curated by name.
+- **Dataset squats, lunges, step-ups and leg presses** are filed under "glutes"
+  with the quadriceps only secondary; a leg day showed no direct quad work. When
+  the target is glutes, the name says squat / lunge / step-up / leg press and
+  the quadriceps are listed, the quadriceps are primary too. The same for
+  deadlifts, good mornings and pull-throughs with the hamstrings. A stretch or a
+  bridge with the same dataset signature is untouched (the rule needs the name).
+- **Overhead / shoulder / military presses** filed under all of "delts" no
+  longer credit the rear deltoid.
+- A bare "shoulders" secondary on a chest exercise is the **front** deltoid (what
+  a press works), not the lateral head.
+
+Known coarse spots, left as the dataset states them rather than guessed: "delts"
+on a raise is all three heads; "forearms" is flexors and extensors; a bare
+"shoulders" secondary on a non-chest exercise is the lateral head; "pectorals" is
+all three chest regions (so an incline press does not favor the upper chest). An
+exercise whose strings map to nothing simply has no muscles — never invented
+ones.
 
 ## Renderer contract
 

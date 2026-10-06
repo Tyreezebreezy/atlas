@@ -57,7 +57,7 @@ export const ATLAS_REGION_LABEL: Readonly<Record<string, string>> = {
   erectors: 'Spinal Erectors',
   triceps: 'Triceps',
   glutes: 'Glutes',
-  abductors: 'Abductors',
+  abductors: 'Hip Abductors',
   hamstrings: 'Hamstrings',
   calves: 'Calves',
 };
@@ -188,14 +188,14 @@ export const SHARED_REGION_ALLOWLIST: readonly SharedRegionEntry[] = [
     atlasSvgId: 'abductors',
     renderOnUpstreamIds: ['gluteus-medius-left', 'gluteus-medius-right'],
     reason:
-      'Upstream has no outer-thigh (TFL / IT-band) shape. Gluteus medius is the principal hip abductor, so Abductors is drawn on -- and selected with -- the gluteus-medius shapes it shares with Glutes. The lateral-thigh part of the abductor group has no art.',
+      'Upstream has no outer-thigh (TFL / IT-band) shape. Gluteus medius is the principal hip abductor, so Hip Abductors is drawn on -- and selected with -- the gluteus-medius shapes it shares with Glutes. The lateral-thigh part of the abductor group has no art.',
     // Reviewed 2026-09-24 on the exercise anatomy for Lever Seated Hip Abduction: only the small
-    // gluteus-medius pads at the top of the hip light up, while the taxonomy names this muscle
-    // "Abductors (Outer Thigh)". Defensible for the hip abductors, but under-drawn against its own
-    // label -- flagged rather than papered over with invented anatomy.
-    visualStatus: 'needs-custom-svg-patch',
+    // gluteus-medius pads at the top of the hip light up, which under-drew the old "Abductors (Outer
+    // Thigh)" label. Owner decision 2026-10-05: accept the geometry and rename the region "Hip
+    // Abductors" so the label says what is drawn. The muscle id (`hamstrings.abductors`) is unchanged.
+    visualStatus: 'accepted',
     followUp:
-      'Commission a lateral-thigh (TFL / IT-band) path for the back view so Abductors (Outer Thigh) lights the outer thigh as well as the gluteus-medius pad; until then the label promises more than the art shows.',
+      'Deferred: a custom lateral-thigh (TFL / IT-band) path for the back view would let Hip Abductors light the outer thigh as well as the gluteus-medius pad. Needs real art; do not invent it.',
   },
 ];
 

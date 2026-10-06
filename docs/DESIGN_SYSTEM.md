@@ -102,3 +102,26 @@ errors.
   the two vocabularies of the shared Body Map never look alike.
 - `--atlas-space-5` does not exist (see `docs/PROGRESS.md` known debt); use
   `space-4` / `space-6`.
+
+## Acceptance pass additions (vNext 04B)
+
+- **Overlays are real dialogs.** A full-screen overlay (the Gym Mode options sheet,
+  the welcome overlay) uses `useModalFocus` (`apps/web/src/a11y/`): `role="dialog"`
+  `aria-modal="true"` `tabIndex={-1}`, focus moves in when it opens, Tab / Shift+Tab
+  stay inside (and pull back focus that slipped behind the overlay), Escape closes
+  it (the welcome overlay: same as Skip), and focus returns to whatever opened it.
+  Every view inside the sheet puts focus on its own first control, and every heading
+  clears the 44px close button pinned to the corner.
+- **A button sets a full `border`, never just `border-color`.** A `<button>` with
+  only a colour keeps the browser's 2px outset bevel (seen on the completed-set check,
+  and on `.atlas-template-editor__save` wherever it is used outside the editor's
+  action row). Every control that shares a rule must also carry its own border style.
+- **Repeated actions name what they act on.** "Add" x18, "Edit"/"Delete" x8 and
+  "Remove exercise" read identically in a list of buttons; give each an
+  `aria-label` that includes the item ("Add 185 lb Bench Press", "Delete the Oct 4,
+  2026 measurement"). Fields inside a list item whose own text names the row are left
+  as they are.
+- **Destructive actions confirm inline, in place**, and name the consequence ("Delete
+  X? Past workouts stay in your history ... This can't be undone."). Done for program,
+  workout, milestone, place, equipment, body measurement, discard and
+  replace-existing.

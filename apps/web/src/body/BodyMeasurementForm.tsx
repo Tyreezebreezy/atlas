@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { createBodyMeasurement } from '@atlas/body-composition';
+import { localIsoDate } from '@atlas/core';
+import { bodyMeasurementProblem, createBodyMeasurement } from '@atlas/body-composition';
 import type { BodyMeasurement } from '@atlas/data-model';
 
 interface BodyMeasurementFormProps {
@@ -9,8 +10,9 @@ interface BodyMeasurementFormProps {
   onCancel: () => void;
 }
 
+/** The device-local calendar day -- the UTC date would already be tomorrow on a US evening. */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 function parseNum(value: string): number | null {
@@ -39,10 +41,10 @@ export function BodyMeasurementForm({ existing, onSaved, onCancel }: BodyMeasure
   const [boneMass, setBoneMass] = useState(numToStr(existing?.bone_mass ?? null));
   const [bmr, setBmr] = useState(numToStr(existing?.bmr ?? null));
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [problem, setProblem] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!date) return;
 
     const fields = {
       date,
@@ -57,6 +59,12 @@ export function BodyMeasurementForm({ existing, onSaved, onCancel }: BodyMeasure
       bmr: parseNum(bmr),
       notes: notes.trim() || null,
     };
+
+    // Nothing entered, a negative or absurd number, an empty or future date: refused here, with the reason, rather than
+    // saved as a weigh-in that stretches the chart. A blank number is fine ("not measured") -- but not all of them.
+    const invalid = bodyMeasurementProblem(fields);
+    setProblem(invalid);
+    if (invalid) return;
 
     if (existing) {
       onSaved({
@@ -94,6 +102,7 @@ export function BodyMeasurementForm({ existing, onSaved, onCancel }: BodyMeasure
         id="bm-date"
         type="date"
         value={date}
+        max={today()}
         onChange={(e) => setDate(e.target.value)}
         required
       />
@@ -180,6 +189,12 @@ export function BodyMeasurementForm({ existing, onSaved, onCancel }: BodyMeasure
         onChange={(e) => setNotes(e.target.value)}
         placeholder="e.g. Fasted, morning"
       />
+
+      {problem && (
+        <p className="atlas-field__error" role="alert">
+          {problem}
+        </p>
+      )}
 
       <div className="atlas-body-form__actions">
         <button type="button" onClick={onCancel}>

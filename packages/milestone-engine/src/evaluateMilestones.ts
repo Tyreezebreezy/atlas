@@ -1,3 +1,4 @@
+import { mondayWeekIndex, sessionLocalDate } from '@atlas/core';
 import { eligibleSetsForExercise, type EligibleSet } from '@atlas/pr-engine';
 import { resolveBodyweightForDate } from '@atlas/body-composition';
 import type {
@@ -178,19 +179,21 @@ function findBodyWeightMatch(
   return null;
 }
 
-/** ponytail: epoch-anchored 7-day buckets, not calendar Mon-Sun weeks -- close
- * enough for a streak count without taking a cross-package dependency on
- * program-engine's Mon-Sun WeekNavigator concept. Upgrade to a shared
- * week-boundary helper if the two ever need to agree exactly on where a
- * week starts. */
-const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
-function weekBucket(iso: string): number {
-  return Math.floor(new Date(iso).getTime() / MS_PER_WEEK);
+/**
+ * vNext Handoff 04B. The calendar week a session counts toward: Monday-first,
+ * on the session's own local day (`sessionLocalDate`) -- the same week, and the
+ * same day, the weekly review and Today's "this week" use. This replaces
+ * epoch-anchored 7-day buckets (which began on a Thursday, in UTC) that agreed
+ * with neither; the shared week arithmetic now lives in `@atlas/core`, so there
+ * is no cross-package dependency to avoid any more.
+ */
+function weekBucket(session: WorkoutSession): number {
+  return mondayWeekIndex(sessionLocalDate(session));
 }
 
 /** vNext Handoff 02. No exercise_id. Exactly one of `target_total_sessions`
  * (lifetime completed-session count) or `target_consecutive_weeks`
- * (consecutive 7-day buckets each containing >=1 completed session) is
+ * (consecutive calendar weeks each containing >=1 completed session) is
  * expected to be set on the milestone. */
 function findConsistencyMatch(milestone: Milestone, sessions: WorkoutSession[]): MilestoneMatch | null {
   const completed = [...sessions]
@@ -205,7 +208,7 @@ function findConsistencyMatch(milestone: Milestone, sessions: WorkoutSession[]):
 
   if (milestone.target_consecutive_weeks != null) {
     const byBucket = new Map<number, WorkoutSession>();
-    for (const s of completed) byBucket.set(weekBucket(s.completed_at ?? s.started_at), s);
+    for (const s of completed) byBucket.set(weekBucket(s), s);
     const buckets = [...byBucket.keys()].sort((a, b) => a - b);
     let streak = 1;
     for (let i = 0; i < buckets.length; i++) {

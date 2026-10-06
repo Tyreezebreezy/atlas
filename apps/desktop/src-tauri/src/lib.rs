@@ -1,5 +1,9 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+/// Runs before any page script on every load: evicts an installed PWA service worker (which cannot update inside this shell and would
+/// keep serving an old bundle forever) and stops a new one registering. See the file for the whole story.
+const DESKTOP_INIT: &str = include_str!("desktop_init.js");
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let migrations = vec![
@@ -47,6 +51,19 @@ pub fn run() {
                 .add_migrations("sqlite:atlas.db", migrations)
                 .build(),
         )
+        .setup(|app| {
+            // The main window is described in tauri.conf.json (`"create": false`) and built here, so that it can carry the script above.
+            let config = app
+                .config()
+                .app
+                .windows
+                .first()
+                .expect("tauri.conf.json defines the main window");
+            tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
+                .initialization_script(DESKTOP_INIT)
+                .build()?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running ATLAS");
 }

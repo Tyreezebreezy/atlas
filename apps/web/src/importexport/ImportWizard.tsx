@@ -14,6 +14,7 @@ import {
   type ParsedPlanInput,
 } from '@atlas/import-export';
 import { useStorage } from '../storage/StorageContext';
+import { FilePicker } from './FilePicker';
 import { ImportPreviewPanel } from './ImportPreviewPanel';
 
 // Generous relative to any real pasted/typed workout or program, well below
@@ -77,6 +78,11 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
 
   async function parseAndPreview(kind: 'text' | 'json' | 'html', text: string, fileName = '') {
     if (!storage) return;
+    // Pasting nothing is refused (handlePasteSubmit); an empty file used to preview as an approvable empty workout.
+    if (!text.trim()) {
+      setState({ step: 'source', error: 'That file is empty.' });
+      return;
+    }
 
     if (kind === 'html') {
       const parsed = parseHtmlPlan(text);
@@ -286,11 +292,10 @@ export function ImportWizard({ mode, onBack }: ImportWizardProps) {
             Import an ATLAS plan file (.json), a plain text/Markdown workout (.txt, .md), or a
             checkbox-tracked workout page (.html) exported from a browser-based tracker.
           </p>
-          <input
-            type="file"
+          <FilePicker
+            label="Choose file to import"
             accept=".json,.txt,.md,.html,application/json,text/plain,text/markdown,text/html"
             onChange={handleFileChange}
-            aria-label="Choose a file to import"
           />
         </>
       )}

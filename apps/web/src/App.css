@@ -27,12 +27,16 @@ body {
 input,
 select,
 textarea {
+  /* A textarea otherwise falls back to the UA's monospace face. */
+  font-family: inherit;
   color: var(--atlas-color-text-primary);
   -webkit-text-fill-color: var(--atlas-color-text-primary);
 }
 
+/* The text-fill rule above also paints placeholders, so a hint like "Main Gym" read as a typed value. */
 ::placeholder {
   color: var(--atlas-color-text-secondary);
+  -webkit-text-fill-color: var(--atlas-color-text-secondary);
   opacity: 1;
 }
 
@@ -353,6 +357,43 @@ button {
 
 /* Exercise detail */
 
+/* Title and the favorite star on one row; the star is a real control, not the browser's gray default. */
+
+.atlas-exercise-detail__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-exercise-detail__title-row h1 {
+  min-width: 0;
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+
+.atlas-exercise-detail__favorite {
+  flex: none;
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-secondary);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.atlas-exercise-detail__favorite:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-exercise-detail__favorite[aria-pressed='true'] {
+  border-color: var(--atlas-color-warning);
+  color: var(--atlas-color-warning);
+}
+
 .atlas-exercise-detail__meta {
   color: var(--atlas-color-text-secondary);
   text-transform: capitalize;
@@ -653,6 +694,8 @@ button {
 }
 
 .atlas-milestone-form__exercise button {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-2);
   border: none;
   background: transparent;
   color: var(--atlas-color-accent);
@@ -1019,8 +1062,15 @@ button {
   display: flex;
   align-items: center;
   gap: var(--atlas-space-2);
+  min-height: var(--atlas-touch-target);
   font-weight: 600;
   cursor: pointer;
+}
+
+.atlas-template-editor__exercise-select input {
+  flex: none;
+  width: 20px;
+  height: 20px;
 }
 
 .atlas-template-editor__group {
@@ -1124,6 +1174,10 @@ button {
 }
 
 .atlas-template-editor__save {
+  /* Used outside .atlas-template-editor__actions too (workout summary "Done", Add / Replace Exercise confirms), where
+     nothing else sets a border -- the browser's 2px outset bevel was showing. */
+  border-style: solid;
+  border-width: 1px;
   border-color: var(--atlas-color-accent) !important;
   background: var(--atlas-color-accent) !important;
   color: var(--atlas-color-surface) !important;
@@ -1185,6 +1239,22 @@ button {
   font-size: 0.85rem;
 }
 
+/* "+ Add Day" sits directly in the week box, below the days: a real button, not a 23px sliver of default chrome. */
+.atlas-program-editor__week > button {
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-4);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.atlas-program-editor__week > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .atlas-program-editor__days {
   list-style: none;
   margin: var(--atlas-space-3) 0;
@@ -1236,6 +1306,19 @@ button {
 .atlas-program-editor__day button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* The text button that opens the day's workout in the workout editor. */
+.atlas-program-editor__day .atlas-program-editor__edit-workout {
+  padding: 0 var(--atlas-space-3);
+  font-size: 0.85rem;
+}
+
+/* Move up / Move down / Remove travel as one unit; on a narrow row they sit together at the right. */
+.atlas-program-editor__day-actions {
+  display: flex;
+  gap: var(--atlas-space-2);
+  margin-left: auto;
 }
 
 /* Shared visually-hidden utility */
@@ -1299,12 +1382,18 @@ button {
   flex: 1;
   min-height: 48px;
   border-radius: var(--atlas-radius-sm);
-  border: 1px solid var(--atlas-color-border);
-  background: var(--atlas-color-surface);
   cursor: pointer;
 }
 
+/* A button that is part of the shared .atlas-btn system keeps its own border and fill: this card rule used to paint
+   the "Yes, Discard" confirm (primary: dark text) onto the same dark surface, leaving a box with no visible label. */
+.atlas-resume-card__actions button:not(.atlas-btn) {
+  border: 1px solid var(--atlas-color-border);
+  background: var(--atlas-color-surface);
+}
+
 .atlas-resume-card__resume {
+  border-style: solid !important;
   border-color: var(--atlas-color-accent) !important;
   background: var(--atlas-color-accent) !important;
   color: var(--atlas-color-surface) !important;
@@ -1979,7 +2068,9 @@ button {
   display: block;
   margin-top: 2px;
   max-width: 72px;
-  font-size: 0.65rem;
+  /* Compact on purpose, but not a 15px sliver: a thumb has to be able to mark a warm-up. */
+  min-height: 28px;
+  font-size: 0.7rem;
   border: 1px solid var(--atlas-color-border);
   border-radius: var(--atlas-radius-sm);
   background: var(--atlas-color-surface);
@@ -2022,7 +2113,8 @@ button {
 }
 
 .atlas-gym-exercise__done {
-  border-color: var(--atlas-color-success);
+  /* A full `border`, not just a colour: the browser's own 2px outset bevel was showing through. */
+  border: 2px solid var(--atlas-color-success);
   background: var(--atlas-color-success);
   color: var(--atlas-color-surface);
 }
@@ -2327,6 +2419,13 @@ button {
   fill: var(--atlas-color-accent);
   stroke: var(--atlas-color-surface);
   stroke-width: 1.5;
+  pointer-events: none;
+}
+
+/* The invisible, larger circle a finger or a keyboard actually lands on (the dot above is only 7px). */
+.atlas-trend-chart__hit {
+  fill: transparent;
+  stroke: transparent;
   cursor: pointer;
 }
 
@@ -3163,6 +3262,7 @@ button {
 
 .atlas-importexport__actions {
   display: flex;
+  align-items: center;
   gap: var(--atlas-space-3);
   margin-top: var(--atlas-space-4);
 }
@@ -3175,6 +3275,21 @@ button {
   background: transparent;
   color: var(--atlas-color-text-primary);
   cursor: pointer;
+}
+
+/* The row's own rule above is more specific than the approve button's, so without this the one action that matters
+   looked like Cancel -- and its top margin pushed it out of line with it. */
+.atlas-importexport__actions .atlas-importexport__approve {
+  margin-top: 0;
+  border-color: var(--atlas-color-accent);
+  background: var(--atlas-color-accent);
+  color: var(--atlas-color-surface);
+  font-weight: 600;
+}
+
+.atlas-importexport__actions .atlas-importexport__approve:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .atlas-importexport__done {
@@ -3235,7 +3350,34 @@ button {
 }
 
 .atlas-context-sheet__panel h3 {
-  margin: 0 var(--atlas-space-6) var(--atlas-space-4) 0;
+  /* Clear the 44px close button that is pinned to the panel's top-right corner. */
+  margin: 0 calc(var(--atlas-touch-target) + var(--atlas-space-2)) var(--atlas-space-4) 0;
+}
+
+/* Plate Calculator: a stacked label + a styled field (these were bare inline inputs). */
+.atlas-context-sheet__field {
+  display: grid;
+  gap: var(--atlas-space-1);
+  margin-bottom: var(--atlas-space-3);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-context-sheet__field input {
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  color: var(--atlas-color-text-primary);
+  font: inherit;
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-context-sheet__field input:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 1px;
 }
 
 .atlas-context-sheet__history-row {
@@ -3615,6 +3757,25 @@ summary {
   background: var(--atlas-color-hover);
 }
 
+.atlas-library__body-group[aria-pressed='true'] {
+  border-color: var(--atlas-color-accent);
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+/* "N exercises for X" with its Clear control on the same row. */
+.atlas-library__result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-library__result-head .atlas-link-button {
+  flex: none;
+  white-space: nowrap;
+}
+
 .atlas-exercise-detail__muscles {
   margin-top: var(--atlas-space-4);
 }
@@ -3644,6 +3805,9 @@ summary {
 .atlas-custom-exercise-form__mode-button {
   flex: 1;
   min-height: var(--atlas-touch-target);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   border-radius: calc(var(--atlas-radius-md) - var(--atlas-space-1));
   color: var(--atlas-color-text-secondary);
   font-size: var(--atlas-font-size-caption);
@@ -3727,6 +3891,28 @@ summary {
   letter-spacing: 0.04em;
   color: var(--atlas-color-text-secondary);
   margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-template-editor__muscle-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+  margin: var(--atlas-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-template-editor__muscle-preview li {
+  padding: var(--atlas-space-1) var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: 999px;
+  background: var(--atlas-color-surface);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-template-editor__muscle-preview strong {
+  color: var(--atlas-color-text-primary);
 }
 
 /* =============================================================================
@@ -4095,7 +4281,7 @@ summary {
   stroke-width: 1.5;
 }
 
-.atlas-trend-chart__point:focus-visible {
+.atlas-trend-chart__hit:focus-visible {
   outline: none;
   stroke: var(--atlas-color-text-primary);
   stroke-width: 2;
@@ -4684,6 +4870,9 @@ summary {
 }
 
 .atlas-body__composition summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--atlas-touch-target);
   cursor: pointer;
   font-weight: var(--atlas-font-weight-semibold);
   color: var(--atlas-color-text-secondary);
@@ -4738,7 +4927,8 @@ summary {
 }
 
 .atlas-body__history-actions button {
-  min-height: 36px;
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
   padding: 0;
   border: 0;
   color: var(--atlas-color-accent);
@@ -4824,6 +5014,7 @@ summary {
 
 .atlas-milestone-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--atlas-space-3);
@@ -4895,6 +5086,21 @@ summary {
   font: inherit;
   font-size: var(--atlas-font-size-caption);
   cursor: pointer;
+}
+
+/* "Remove this goal?" -- a full row under the card. */
+.atlas-milestone-card__confirm {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-milestone-card__confirm p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--atlas-font-size-caption);
 }
 
 .atlas-milestone-card__actions button:focus-visible {
@@ -4982,4 +5188,689 @@ summary {
 
 .atlas-history .atlas-program-screen__list {
   gap: var(--atlas-space-2);
+}
+
+/* =============================================================================
+   vNext Handoff 04B -- Gyms & Equipment, the training-location picker and the
+   live equipment panel. Dark surfaces; elevation rather than borders; Default
+   and Archived are text badges, never color alone.
+   ============================================================================= */
+
+.atlas-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 var(--atlas-space-2);
+  border-radius: 999px;
+  background: var(--atlas-color-surface-raised);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-micro);
+  font-weight: var(--atlas-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.atlas-badge--accent {
+  background: var(--atlas-color-accent-mist);
+  color: var(--atlas-color-text-primary);
+}
+
+/* Form fields: a label, the control, an optional hint, and an error that is text. */
+.atlas-field {
+  display: grid;
+  gap: var(--atlas-space-1);
+  min-width: 0;
+  margin: 0 0 var(--atlas-space-3);
+  padding: 0;
+  border: 0;
+}
+
+.atlas-field > label,
+.atlas-field > legend {
+  padding: 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+}
+
+.atlas-field input[type='text'],
+.atlas-field select,
+.atlas-field textarea {
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  font: inherit;
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-field textarea {
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  resize: vertical;
+}
+
+.atlas-field input:focus-visible,
+.atlas-field select:focus-visible,
+.atlas-field textarea:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 1px;
+}
+
+.atlas-field [aria-invalid='true'] {
+  border-color: var(--atlas-color-danger);
+}
+
+.atlas-field__hint {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-field__error {
+  margin: 0;
+  color: var(--atlas-color-danger);
+  font-size: var(--atlas-font-size-caption);
+}
+
+/* ---- Gyms & Equipment ---------------------------------------------------------- */
+
+.atlas-gyms {
+  display: grid;
+  gap: var(--atlas-space-4);
+  max-width: var(--atlas-content-max-width);
+  align-content: start;
+}
+
+.atlas-gyms h1,
+.atlas-gyms h2,
+.atlas-gyms h3 {
+  margin: 0;
+}
+
+.atlas-gyms h2 {
+  margin-bottom: var(--atlas-space-3);
+  font-size: var(--atlas-font-size-title);
+}
+
+.atlas-gyms .atlas-template-editor__back {
+  justify-self: start;
+}
+
+.atlas-gyms__intro {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+}
+
+.atlas-gyms__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-2) var(--atlas-space-3);
+}
+
+.atlas-gyms__empty p {
+  margin: 0;
+  color: var(--atlas-color-text-secondary);
+}
+
+/* A hint inside a panel sits above the controls it explains, with room before them. */
+.atlas-gyms .atlas-panel > .atlas-field__hint {
+  margin-bottom: var(--atlas-space-3);
+}
+
+.atlas-gyms__cards,
+.atlas-gyms__list {
+  display: grid;
+  gap: var(--atlas-space-2);
+  margin: 0 0 var(--atlas-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.atlas-gyms__cards {
+  margin-bottom: 0;
+}
+
+.atlas-gyms__card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'main chevron'
+    'meta chevron';
+  align-items: center;
+  gap: 2px var(--atlas-space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--atlas-space-3) var(--atlas-space-4);
+  border: 0;
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-gyms__card:hover,
+.atlas-gyms__row:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-gyms__card:focus-visible,
+.atlas-gyms__row:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 2px;
+}
+
+.atlas-gyms__card-main {
+  grid-area: main;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  min-width: 0;
+}
+
+.atlas-gyms__card-name {
+  font-size: var(--atlas-font-size-body);
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-gyms__card-meta {
+  grid-area: meta;
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-gyms__chevron {
+  grid-area: chevron;
+  color: var(--atlas-color-text-secondary);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.atlas-gyms__add {
+  display: grid;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gyms__add > label {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  font-weight: var(--atlas-font-weight-medium);
+}
+
+.atlas-gyms__add-row {
+  display: flex;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gyms__add-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--atlas-touch-target);
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  font: inherit;
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-gyms__add-row input:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 1px;
+}
+
+.atlas-gyms__add-row input[aria-invalid='true'] {
+  border-color: var(--atlas-color-danger);
+}
+
+.atlas-gyms__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gyms__row {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--atlas-touch-target);
+  padding: var(--atlas-space-2) var(--atlas-space-3);
+  border: 0;
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-gyms__row-name {
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-gyms__row-meta {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-gyms__legacy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+  min-height: var(--atlas-touch-target);
+  padding: var(--atlas-space-1) var(--atlas-space-3);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+}
+
+.atlas-gyms__legacy-row .atlas-gyms__row {
+  padding: 0;
+  background: transparent;
+}
+
+.atlas-gyms__details {
+  display: grid;
+}
+
+.atlas-gyms__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-gyms__saved {
+  color: var(--atlas-color-success);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-gyms__place-actions {
+  display: grid;
+  justify-items: start;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gyms__place-actions .atlas-field__hint {
+  margin: 0;
+}
+
+.atlas-gyms__notice p {
+  margin: 0 0 var(--atlas-space-3);
+}
+
+.atlas-gyms__archived summary {
+  min-height: var(--atlas-touch-target);
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  color: var(--atlas-color-text-secondary);
+  cursor: pointer;
+}
+
+/* `display: flex` removes the browser's disclosure triangle, so draw one: a chevron that turns when open. */
+.atlas-gyms__archived summary::before {
+  content: '›';
+  display: inline-block;
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: transform var(--atlas-duration-fast) var(--atlas-ease-standard);
+}
+
+.atlas-gyms__archived[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.atlas-gyms__danger {
+  display: grid;
+  justify-items: start;
+  gap: var(--atlas-space-2);
+  padding-top: var(--atlas-space-4);
+  border-top: 1px solid var(--atlas-chart-grid, var(--atlas-color-border));
+}
+
+.atlas-gyms__danger .atlas-field__hint {
+  margin: 0;
+}
+
+/* Text-style buttons carry their own side padding; pull them left so their words line up with the hint above. */
+.atlas-gyms__danger .atlas-btn--tertiary {
+  margin-left: calc(var(--atlas-space-4) * -1);
+}
+
+.atlas-gyms__danger .atlas-btn--quiet-danger {
+  margin-left: calc(var(--atlas-space-2) * -1);
+}
+
+/* An inline confirmation that must be read before it is accepted. The inset strip is the edge accent. */
+.atlas-inline-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  width: 100%;
+  padding: var(--atlas-space-3);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface-raised);
+  box-shadow: inset 3px 0 0 var(--atlas-color-warning);
+}
+
+.atlas-inline-confirm p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ---- Equipment form ------------------------------------------------------------- */
+
+.atlas-equipment-form h3 {
+  margin: 0 0 var(--atlas-space-3);
+  font-size: var(--atlas-font-size-title);
+}
+
+.atlas-equipment-form__loads .atlas-segmented {
+  margin-bottom: var(--atlas-space-1);
+}
+
+/* The explanation of the chosen way to describe loads, with room before the field it introduces. */
+.atlas-equipment-form__loads > .atlas-field__hint {
+  margin-bottom: var(--atlas-space-2);
+}
+
+.atlas-equipment-form__range {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--atlas-space-2);
+}
+
+.atlas-equipment-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+}
+
+/* ---- Training location picker (Today, live workout) ------------------------------ */
+
+.atlas-location-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-1) var(--atlas-space-3);
+  margin: 0 0 var(--atlas-space-3);
+}
+
+.atlas-location-picker__label {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-location-picker select {
+  min-height: var(--atlas-touch-target);
+  max-width: 100%;
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  font: inherit;
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-location-picker select:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 1px;
+}
+
+/* On Today the picker follows the week strip directly, so it needs air above it. */
+.atlas-today .atlas-location-picker {
+  margin-top: var(--atlas-space-3);
+}
+
+.atlas-today__setup-link {
+  justify-self: start;
+  /* A text-style button carries its own side padding; pull it left so its words line up with the text above. */
+  margin-left: calc(var(--atlas-space-4) * -1);
+}
+
+/* ---- Live workout: equipment for the exercise on screen --------------------------- */
+
+.atlas-gym-equipment {
+  display: grid;
+  gap: var(--atlas-space-2);
+  margin: 0 0 var(--atlas-space-3);
+  padding: var(--atlas-space-3);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface-raised);
+}
+
+/* The machine's name and facts take the room they need and wrap inside their own column; the action stays top-right instead of dropping to a line of its own. */
+.atlas-gym-equipment__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--atlas-space-2) var(--atlas-space-3);
+}
+
+.atlas-gym-equipment__line > .atlas-btn {
+  margin: calc(var(--atlas-space-2) * -1) calc(var(--atlas-space-2) * -1) 0 0;
+}
+
+.atlas-gym-equipment__label {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-gym-equipment__name {
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-gym-equipment__meta {
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+}
+
+.atlas-gym-equipment__question {
+  margin: 0;
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-gym-equipment__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-2);
+}
+
+.atlas-gym-equipment__choices .atlas-btn {
+  flex: 1 1 auto;
+}
+
+.atlas-gym-equipment--offer {
+  box-shadow: inset 3px 0 0 var(--atlas-color-accent);
+}
+
+.atlas-gym-equipment .atlas-equipment-form h3 {
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-gym-mode__location {
+  margin-bottom: var(--atlas-space-3);
+}
+
+.atlas-gym-mode__location .atlas-location-picker {
+  margin-bottom: var(--atlas-space-2);
+}
+
+/* Once a set is logged the workout's place is shown, not offered: the name, a text badge, and the reason in words. */
+.atlas-gym-mode__location-fixed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--atlas-space-1) var(--atlas-space-3);
+  margin: 0 0 var(--atlas-space-2);
+}
+
+.atlas-gym-mode__location-name {
+  font-weight: var(--atlas-font-weight-semibold);
+}
+
+.atlas-gym-mode__location-fixed > .atlas-field__hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* The exercise's machine once a set of it is logged: the record, a badge, and why it cannot be changed. */
+.atlas-gym-equipment--locked .atlas-field__hint {
+  margin: 0;
+}
+
+/* The panel is itself a raised surface, so a raised badge would vanish into it: sit the pill on the page color. */
+.atlas-gym-equipment .atlas-badge {
+  background: var(--atlas-color-surface);
+}
+
+/* A choice that names the machine and, beneath it, what ATLAS knows of its loads -- two Chest Press machines stay tellable apart. */
+.atlas-gym-equipment__choice {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  padding-top: var(--atlas-space-2);
+  padding-bottom: var(--atlas-space-2);
+  text-align: left;
+}
+
+.atlas-gym-equipment__choice[aria-pressed='true'] {
+  border-color: var(--atlas-color-accent);
+  background: var(--atlas-color-accent-mist);
+}
+
+/* In a superset round the panel takes a full row under its member's fields. */
+.atlas-superset__member > .atlas-gym-equipment {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+/* The exercise name and its options button. Neither had a rule, so the "..." rendered as a default grey
+   browser button on its own line; the options menu (history, plates, alternatives) deserves a real control. */
+.atlas-gym-exercise__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--atlas-space-3);
+}
+
+.atlas-gym-exercise__header h2 {
+  min-width: 0;
+  margin: 0;
+}
+
+.atlas-gym-exercise__menu-button {
+  flex: none;
+  min-width: var(--atlas-touch-target);
+  min-height: var(--atlas-touch-target);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  color: var(--atlas-color-text-primary);
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.atlas-gym-exercise__menu-button:hover {
+  background: var(--atlas-color-hover);
+}
+
+.atlas-gym-exercise__menu-button:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 2px;
+}
+
+.atlas-gym-equipment__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--atlas-space-1);
+}
+
+.atlas-gym-equipment__other summary {
+  display: flex;
+  align-items: center;
+  gap: var(--atlas-space-2);
+  min-height: var(--atlas-touch-target);
+  color: var(--atlas-color-text-secondary);
+  font-size: var(--atlas-font-size-caption);
+  cursor: pointer;
+}
+
+.atlas-gym-equipment__other summary::before {
+  content: '›';
+  display: inline-block;
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: transform var(--atlas-duration-fast) var(--atlas-ease-standard);
+}
+
+.atlas-gym-equipment__other[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.atlas-gym-equipment__other .atlas-gym-equipment__choices {
+  margin-top: var(--atlas-space-1);
+}
+
+/* A file chooser drawn as a secondary button (the native control stays, visually hidden, as the accessible input). */
+.atlas-file-picker {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--atlas-space-3);
+}
+
+.atlas-file-picker:focus-within {
+  box-shadow: var(--atlas-focus-ring);
+}
+
+/* An exercise the workout already has: listed in the picker, but not selectable. */
+.atlas-library__list button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* A template that repeats an exercise (saved before workouts were limited to one entry per exercise). */
+.atlas-template-editor__repeat-warning {
+  margin: var(--atlas-space-3) 0;
+  padding: var(--atlas-space-3);
+  border-radius: var(--atlas-radius-md);
+  background: var(--atlas-color-surface-raised);
+  box-shadow: inset 3px 0 0 var(--atlas-color-warning);
+  font-size: var(--atlas-font-size-caption);
+}
+
+/* Selects that sit directly in a row rather than in a form field (the progression kind, the activity metric) were
+   the browser's grey default; they match the app's other selects now. */
+.atlas-settings__row select,
+.atlas-activity-heatmap__header select {
+  min-height: var(--atlas-touch-target);
+  max-width: 100%;
+  padding: 0 var(--atlas-space-3);
+  border: 1px solid var(--atlas-color-border);
+  border-radius: var(--atlas-radius-sm);
+  background: var(--atlas-color-surface-raised);
+  font: inherit;
+  font-size: var(--atlas-font-size-body);
+}
+
+.atlas-settings__row select:focus-visible,
+.atlas-activity-heatmap__header select:focus-visible {
+  outline: 2px solid var(--atlas-color-focus);
+  outline-offset: 1px;
+}
+
+/* Why a set was not logged (a set must be a possible set) -- in words, beside the row, never a silent refusal. */
+.atlas-gym-exercise__row-error,
+.atlas-superset__error {
+  margin: var(--atlas-space-1) 0 var(--atlas-space-2);
+  color: var(--atlas-color-danger);
+  font-size: var(--atlas-font-size-caption);
 }

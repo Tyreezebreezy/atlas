@@ -6,12 +6,16 @@ import {
   addPerformedSet,
   adjustActiveTimer,
   buildGymSlots,
+  changeSessionLocation,
   clearActiveTimer,
   completeWorkoutSession,
   createPerformedSet,
   executionModeOf,
+  isExerciseEquipmentLocked,
   isGroupComplete,
+  isLocationLocked,
   isOptionalExercise,
+  locationChangeImpact,
   orGroupMembers,
   previousPerformance,
   removePerformedSet,
@@ -23,6 +27,7 @@ import {
   restTimerEnabled,
   applyExerciseReplacementToTemplate,
   setExecutionMode,
+  setExerciseEquipment,
   setExerciseGoal,
   setSessionNote,
   skipExerciseInSession,
@@ -32,12 +37,17 @@ import {
   type GymSlot,
   type LogSetInput,
 } from '@atlas/workout-engine';
-import { newPRsFromSession } from '@atlas/pr-engine';
+import { newPRsFromSession, sessionsPreferringContext } from '@atlas/pr-engine';
 import { ensureBuiltInMilestonesSeeded } from '@atlas/milestone-engine';
-import { resolveExerciseEquipment } from '@atlas/equipment-engine';
+import {
+  activeLocations,
+  availableEquipmentForLocation,
+  effectiveExerciseEquipment,
+  matchesExerciseEquipment,
+  maximumConfirmationOffer,
+} from '@atlas/equipment-engine';
 import type {
   Exercise,
-  ExerciseEquipmentContext,
   ExerciseGroup,
   ExerciseReplacement,
   GymEquipmentInstance,
@@ -59,10 +69,22 @@ import {
 } from '@atlas/program-engine';
 import { recalculatePRsForSession } from '../progress/recalculatePRs';
 import { evaluateMilestonesForSession } from '../progress/evaluateMilestonesForSession';
+import {
+  confirmMaximum,
+  declineMaximum,
+  EMPTY_GYMS_DATA,
+  equipmentChoicesFor,
+  loadGymsData,
+  rememberEquipmentChoice,
+  type GymsData,
+} from '../equipment/equipmentActions';
+import { restampUntouchedTargets } from '../equipment/sessionStartContext';
+import { TrainingLocationPicker } from '../equipment/TrainingLocationPicker';
 import { loadSettings } from '../settings/settings';
 import { useStorage } from '../storage/StorageContext';
 import { AddExercisePanel } from './AddExercisePanel';
 import { bestPRForExercise } from './bestPR';
+import { ExerciseEquipmentPanel } from './ExerciseEquipmentPanel';
 import { ExerciseLogger } from './ExerciseLogger';
 import { ReplaceExercisePanel } from './ReplaceExercisePanel';
 import { fireTimerCompletionSignal } from './timerSignal';
@@ -122,8 +144,12 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
-  const [equipmentContexts, setEquipmentContexts] = useState<ExerciseEquipmentContext[]>([]);
-  const [gymEquipmentList, setGymEquipmentList] = useState<GymEquipmentInstance[]>([]);
+  // vNext Handoff 04B: the places and equipment the owner has configured -- one load, refreshed after any write here.
+  const [gyms, setGyms] = useState<GymsData>(EMPTY_GYMS_DATA);
+  // A requested place change waiting on the owner's confirmation (undefined = none pending; null = "no location").
+  const [pendingLocation, setPendingLocation] = useState<string | null | undefined>(undefined);
+  // Exercises whose "which equipment?" question the owner waved off in this workout -- asked once, not on every visit.
+  const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(new Set());
   const [finished, setFinished] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [showNoteField, setShowNoteField] = useState(false);
@@ -146,8 +172,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         allPRs,
         allPrograms,
         allOccurrences,
-        allEquipmentContexts,
-        allGymEquipment,
+        gymsData,
       ] = await Promise.all([
         storage.workoutSessions.get(sessionId),
         storage.exercises.getAll(),
@@ -155,11 +180,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         storage.personalRecords.getAll(),
         storage.programs.getAll(),
         storage.workoutOccurrences.getAll(),
-        storage.exerciseEquipmentContext.getAll(),
-        storage.gymEquipment.getAll(),
+        loadGymsData(storage),
       ]);
-      setEquipmentContexts(allEquipmentContexts);
-      setGymEquipmentList(allGymEquipment);
+      setGyms(gymsData);
       setActiveProgram(
         (existing?.program_id && allPrograms.find((p) => p.id === existing.program_id)) || null,
       );
@@ -226,10 +249,88 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     await persist(setExerciseGoal(currentSession, currentPlanned.exercise_id, goal));
   }
 
+  /**
+   * vNext Handoff 04B. A machine that is only REMEMBERED for an exercise at this
+   * place (the owner never picked it in this workout) is used on screen, and is
+   * written onto the session the moment the exercise is actually performed -- so
+   * the history records the machine each performance really used. An exercise
+   * with no remembered or chosen machine is recorded with none, never a guess.
+   */
+  function withRememberedEquipment(session: WorkoutSession, exerciseIds: string[]): WorkoutSession {
+    let next = session;
+    for (const exerciseId of new Set(exerciseIds)) {
+      const effective = effectiveExerciseEquipment(next, exerciseId, gyms.contexts, gyms.instances);
+      if (effective.source === 'remembered' && effective.instance) {
+        next = setExerciseEquipment(next, exerciseId, effective.instance.id);
+      }
+    }
+    return next;
+  }
+
+  async function reloadGyms() {
+    setGyms(await loadGymsData(activeStorage));
+  }
+
+  /** What the targets are worked out from -- see `restampUntouchedTargets`. */
+  function restampInputs(data: GymsData) {
+    return { ...data, program: activeProgram, exercisesById: exercises, history: priorSessions };
+  }
+
+  async function handleChooseEquipment(exerciseId: string, instance: GymEquipmentInstance) {
+    // The panel offers no choice once a set of this exercise is logged; this is the backstop. The session keeps one
+    // machine per exercise, so changing it now would relabel the sets already logged -- and the remembered default
+    // is not touched either.
+    if (isExerciseEquipmentLocked(currentSession, exerciseId)) return;
+    // Choosing is the confirmation: remember it for this exercise at this place, so next time it needs no asking.
+    await rememberEquipmentChoice(activeStorage, gyms, exerciseId, instance);
+    const fresh = await loadGymsData(activeStorage);
+    setGyms(fresh);
+    // The target was worked out before this machine was known (the first time here); an exercise nothing is
+    // logged on yet takes the target for this machine, so the card never asks for a load it cannot give.
+    await persist(
+      restampUntouchedTargets(setExerciseEquipment(currentSession, exerciseId, instance.id), restampInputs(fresh), exerciseId),
+    );
+  }
+
+  async function handleConfirmMaximum(instance: GymEquipmentInstance, load: number) {
+    await confirmMaximum(activeStorage, instance, load);
+    await reloadGyms();
+  }
+
+  async function handleDeclineMaximum(instance: GymEquipmentInstance) {
+    await declineMaximum(activeStorage, instance);
+    await reloadGyms();
+  }
+
+  /**
+   * Asks first when the change would clear machines the owner picked; otherwise just moves. Once a set is logged the
+   * place is fixed: the control is not offered then, and this refuses too.
+   */
+  function requestLocationChange(locationId: string | null) {
+    if (locationId === (currentSession.training_location_id ?? null)) return;
+    const impact = locationChangeImpact(currentSession, locationId, gyms.instances);
+    if (impact.blocked) return;
+    if (impact.needsConfirmation) {
+      setPendingLocation(locationId);
+      return;
+    }
+    void applyLocationChange(locationId);
+  }
+
+  async function applyLocationChange(locationId: string | null) {
+    setPendingLocation(undefined);
+    if (isLocationLocked(currentSession)) return;
+    // Exercises nothing is logged on yet are re-targeted for the machines remembered at the new place.
+    await persist(
+      restampUntouchedTargets(changeSessionLocation(currentSession, locationId, gyms.instances), restampInputs(gyms)),
+    );
+  }
+
   async function handleCompleteSet(input: LogSetInput) {
+    const base = withRememberedEquipment(currentSession, [input.exerciseId]);
     // Immediate autosave: every completed set is written the instant it's marked done.
     let updated = addPerformedSet(
-      currentSession,
+      base,
       createPerformedSet({
         ...input,
         completedAt: currentSession.planned_completed_at ?? undefined,
@@ -291,8 +392,11 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     // ones this session actually holds -- see recalculatePRs.ts.
     const touchedExerciseIds = completed.performed_sets.map((s) => s.exercise_id);
     await recalculatePRsForSession(activeStorage, touchedExerciseIds, exercises);
-    const allPRs = await activeStorage.personalRecords.getAll();
-    setNewPRs(newPRsFromSession(allPRs, completed.id));
+    const [allPRs, prEvents] = await Promise.all([
+      activeStorage.personalRecords.getAll(),
+      activeStorage.personalRecordEvents.getAll(),
+    ]);
+    setNewPRs(newPRsFromSession(allPRs, completed.id, prEvents));
 
     setNewMilestones(await evaluateMilestonesForSession(activeStorage));
 
@@ -392,7 +496,10 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     sets: LogSetInput[],
     slot: Extract<GymSlot, { kind: 'group' }>,
   ) {
-    let updated = currentSession;
+    let updated = withRememberedEquipment(
+      currentSession,
+      sets.map((input) => input.exerciseId),
+    );
     for (const input of sets) {
       updated = addPerformedSet(
         updated,
@@ -431,6 +538,39 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
     );
   }
 
+  const sessionLocationId = session.training_location_id ?? null;
+  // Fixed from the first logged set: a workout with sets stays associated with the place those sets were done at.
+  const locationLocked = isLocationLocked(session);
+  const sessionLocation = sessionLocationId ? gyms.locations.find((l) => l.id === sessionLocationId) : undefined;
+  const locationName = sessionLocation?.name ?? null;
+  // What is known to be at this place, for the "equipment unavailable" check; null when nothing is known yet.
+  const equipmentInventory = availableEquipmentForLocation(sessionLocation ?? null, gyms.instances, gyms.definitions);
+
+  /** The equipment panel for one exercise -- the same for a lone exercise and for a member of a superset round. */
+  function renderEquipmentPanel(exercise: Exercise) {
+    const effective = effectiveExerciseEquipment(currentSession, exercise.id, gyms.contexts, gyms.instances);
+    return (
+      <ExerciseEquipmentPanel
+        key={`equipment-${exercise.id}`}
+        storage={activeStorage}
+        data={gyms}
+        exercise={exercise}
+        locationId={sessionLocationId}
+        locationName={locationName}
+        effective={effective}
+        choices={equipmentChoicesFor(gyms, sessionLocationId, (type) => matchesExerciseEquipment(type, exercise))}
+        locked={isExerciseEquipmentLocked(currentSession, exercise.id)}
+        offer={effective.instance ? maximumConfirmationOffer(effective.instance, priorSessions) : null}
+        promptDismissed={dismissedPrompts.has(exercise.id)}
+        onDismissPrompt={() => setDismissedPrompts((prev) => new Set(prev).add(exercise.id))}
+        onChoose={(instance) => void handleChooseEquipment(exercise.id, instance)}
+        onCreated={(instance) => void handleChooseEquipment(exercise.id, instance)}
+        onConfirmMax={(instance, load) => void handleConfirmMaximum(instance, load)}
+        onDeclineMax={(instance) => void handleDeclineMaximum(instance)}
+      />
+    );
+  }
+
   const exerciseCount = slots.length;
   const skippedEntry = currentPlanned
     ? session.skipped_exercises.find((s) => s.exercise_id === currentPlanned.exercise_id)
@@ -446,6 +586,57 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
           {exerciseCount > 0 ? `Exercise ${exerciseIndex + 1} of ${exerciseCount}` : 'No exercises'}
         </span>
       </div>
+
+      {(activeLocations(gyms.locations).length > 0 || !!session.training_location_id) && (
+        <div className="atlas-gym-mode__location">
+          {locationLocked ? (
+            <div className="atlas-gym-mode__location-fixed" role="group" aria-label="Location" aria-describedby="atlas-location-fixed-hint">
+              <span className="atlas-location-picker__label">Location</span>
+              <span className="atlas-gym-mode__location-name">{locationName ?? 'No location'}</span>
+              <span className="atlas-badge">Locked</span>
+              <p className="atlas-field__hint" id="atlas-location-fixed-hint">
+                {locationName
+                  ? `A workout with logged sets stays at ${locationName}.`
+                  : 'A workout with logged sets keeps the location it had, which was none.'}{' '}
+                If you are training somewhere else now, finish this workout and start another.
+              </p>
+            </div>
+          ) : (
+            <TrainingLocationPicker
+              locations={gyms.locations}
+              value={session.training_location_id ?? null}
+              onChange={requestLocationChange}
+              label="Location"
+            />
+          )}
+          {!locationLocked && pendingLocation !== undefined &&
+            (() => {
+              const impact = locationChangeImpact(session, pendingLocation, gyms.instances);
+              const nameOf = (id: string | null | undefined) =>
+                (id ? gyms.locations.find((l) => l.id === id)?.name : null) ?? null;
+              const from = nameOf(session.training_location_id);
+              const to = nameOf(pendingLocation);
+              return (
+                <div className="atlas-inline-confirm" role="group" aria-label="Confirm location change">
+                  <p>
+                    Change location to <strong>{to ?? 'no location'}</strong>?
+                  </p>
+                  {impact.clearedEquipment > 0 && (
+                    <p className="atlas-field__hint">
+                      Equipment you picked{from ? ` at ${from}` : ''} will be cleared. You can choose again here.
+                    </p>
+                  )}
+                  <button type="button" className="atlas-btn atlas-btn--secondary" onClick={() => setPendingLocation(undefined)}>
+                    Keep {from ?? 'no location'}
+                  </button>
+                  <button type="button" className="atlas-btn atlas-btn--primary" onClick={() => void applyLocationChange(pendingLocation)}>
+                    Change location
+                  </button>
+                </div>
+              );
+            })()}
+        </div>
+      )}
 
       {hasGroups && (
         <div className="atlas-gym-mode__execution-row">
@@ -498,6 +689,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
           exercises={exercises}
           performedSets={session.performed_sets}
           onCompleteRound={(sets) => void handleCompleteRound(sets, currentSlot)}
+          memberExtras={(_member, memberExercise) =>
+            memberExercise ? renderEquipmentPanel(memberExercise) : null
+          }
         />
       ) : currentPlanned ? (
         skippedEntry ? (
@@ -521,10 +715,31 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
             const performedForExercise = session.performed_sets.filter(
               (s) => s.exercise_id === currentPlanned.exercise_id,
             );
+            // vNext Handoff 04B: the machine this exercise is on -- chosen for this workout, else remembered for
+            // this place -- is what progression is constrained by. No machine, or one with no loads, means the
+            // unconstrained decision; ATLAS never assumes a maximum it was not told.
+            const effectiveEquipment = exercise
+              ? effectiveExerciseEquipment(session, exercise.id, gyms.contexts, gyms.instances)
+              : null;
+            // "Last time" and the progression baseline come from the same machine at the same place when this
+            // exercise has been done there; otherwise from all history, so a new machine or a second gym still
+            // starts from the program rather than blank (see `sessionsPreferringContext`).
+            const comparisonSessions = exercise
+              ? sessionsPreferringContext(priorSessions, exercise.id, {
+                  training_location_id: session.training_location_id ?? null,
+                  gym_equipment_id: effectiveEquipment?.instance?.id ?? null,
+                })
+              : priorSessions;
             const previousSets = exercise
-              ? previousPerformance(priorSessions, exercise.id, session.id)
+              ? previousPerformance(comparisonSessions, exercise.id, session.id)
               : [];
-            const bestPR = exercise ? bestPRForExercise(personalRecords, exercise) : null;
+            // BEST is a record, and records never fall back to other machines or places (unlike "last time" above).
+            const bestPR = exercise
+              ? bestPRForExercise(personalRecords, exercise, {
+                  training_location_id: session.training_location_id ?? null,
+                  gym_equipment_id: effectiveEquipment?.instance?.id ?? null,
+                })
+              : null;
             // vNext Handoff 03A: live, display-only recommendation --
             // recomputed fresh via the equipment-aware stack (Handoff 01/02)
             // rather than reading the session-start `progression_decision`
@@ -537,13 +752,8 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                     exercise,
                     policy: effectiveProgressionPolicy(activeProgram, currentPlanned),
                     currentTarget: targetSnapshotOf(currentPlanned),
-                    previousSession: findPreviousNormalSession(priorSessions, exercise.id, session.started_at),
-                    equipment: resolveExerciseEquipment(
-                      exercise.id,
-                      equipmentContexts,
-                      gymEquipmentList,
-                      loadSettings().activeTrainingLocationId,
-                    ),
+                    previousSession: findPreviousNormalSession(comparisonSessions, exercise.id, session.started_at),
+                    equipment: effectiveEquipment?.constraints ?? null,
                   }),
                   performedForExercise,
                   effectiveProgressionPolicy(activeProgram, currentPlanned),
@@ -594,6 +804,9 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                   onRemoveCompletedSet={(id) => void handleRemoveSet(id)}
                   onStartExerciseTimer={(duration) => void handleStartExerciseTimer(duration)}
                   onStopExerciseTimer={() => void handleClearTimer()}
+                  equipmentPanel={renderEquipmentPanel(exercise)}
+                  equipmentInventory={equipmentInventory}
+                  locationName={locationName}
                 />
 
                 {showReplacePanel ? (
@@ -603,6 +816,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
                     excludeExerciseIds={session.planned_snapshot
                       .map((p) => p.exercise_id)
                       .filter((id) => id !== exercise.id)}
+                    canChangeProgram={session.template_id != null}
                     onCancel={() => setShowReplacePanel(false)}
                     onConfirm={(replacementId, reason, scope) =>
                       void handleConfirmReplace(replacementId, reason, scope)
@@ -667,6 +881,7 @@ export function GymModeScreen({ sessionId, onExit }: GymModeScreenProps) {
         <AddExercisePanel
           allExercises={[...exercises.values()]}
           excludeExerciseIds={session.planned_snapshot.map((p) => p.exercise_id)}
+          canChangeProgram={session.template_id != null}
           onCancel={() => setShowAddPanel(false)}
           onConfirm={(exerciseId, scope) => void handleConfirmAdd(exerciseId, scope)}
         />

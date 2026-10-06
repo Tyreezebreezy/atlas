@@ -66,9 +66,67 @@ different purposes:
   reseed would not restore. The PR event history (`personal_record_events`,
   Handoff 04A.1 — see PRS.md) is included and, like `workout_occurrences`,
   optional: a backup exported before it existed still validates and restores,
-  and the app then rebuilds the events from the restored sessions. Not yet in a
-  backup: training locations, exercise aliases, equipment and test protocols
-  (no UI creates them yet).
+  and the app then rebuilds the events from the restored sessions.
+
+## Backup contents (vNext Handoff 04B)
+
+`packages/import-export/src/backupStores.ts` is the single answer to "which durable
+stores does a backup carry?" — export, restore, validation and the parity test all
+read it. `backupParity.test.ts` walks every repository the storage adapter has and
+fails unless each is either carried or listed in `STORES_NOT_IN_BACKUP`, so adding a
+store without deciding about its backup is a failing test, not a gap found after a
+restore.
+
+- **Always carried** (a file lacking one is not a valid backup): custom exercises
+  (and any canonical exercise the owner annotated or **favorited** -- a favorite is a
+  flag on the canonical row, so it is exported with it), programs, workout templates, workout sessions (which hold `training_location_id`,
+  `exercise_equipment` and the local-day fields), exercise notes, program notes,
+  personal records, milestones, body measurements.
+- **Carried, optional in the file** (an older backup still validates and restores,
+  the missing store reading as empty): workout occurrences, PR events, training
+  locations (including the default flag and archived state), equipment definitions,
+  gym equipment instances, exercise-equipment contexts, exercise aliases, test
+  protocols.
+- **Deliberately not in a backup:** `benchmarks` — pure reference data with no
+  per-user field, recreated under the same ids from the bundled dataset by
+  `ensureBenchmarksSeeded` on any install. The canonical exercise library is the same
+  kind of thing (reseeded). Device-local settings — timer preferences, onboarding
+  flags (`localStorage`, not a storage repository) — describe the device, not the
+  owner's data, and are not backed up; nothing the owner configures about their gyms
+  lives there any more.
+- **Restore is a MERGE, not a replace.** It upserts every row by id: a row with the
+  same id is replaced by the backup's version, and everything already on the device
+  that the backup does not mention stays (the confirmation says so: "This will add N
+  records ... and keep everything already here"). It then rebuilds the PR event
+  history from the restored sessions. Three singletons are reconciled so a merge
+  never leaves two of something the app treats as one:
+  - **the default place** -- a backup that carries one makes it _the_ default and
+    clears any other default on the device;
+  - **the active program** -- a backup that carries an active program makes it _the_
+    active one and deactivates any other (Today, Program and Progress all read
+    `programs.find(is_active)`);
+  - **built-in milestones** -- a restored built-in milestone retires the destination's
+    seeded copy of the same goal (matched on title, exercise and dimension) when the
+    ids differ, so the catalog never lists a goal twice and a second restore changes
+    nothing.
+    The canonical exercise catalog is seeded **before** a restore lands, so a restore into
+    a brand-new install still ends with the full library.
+- **Tombstones are not exported.** `getAll()` hides soft-deleted rows, so a backup
+  carries none: a restore neither resurrects a deleted record nor deletes one the
+  target device still has.
+
+## Numbers in an imported plan
+
+Every input path (paste, `.json`, `.html`) converges on `buildImportPreview`, which is
+where a target beyond anything real is held: sets over 100, reps over 999, a load over
+5,000 lb, work or rest over a day, a distance over 1,000,000 m, RPE/RIR over 10 (the
+`PLAN_LIMITS` in `@atlas/workout-engine`, also the bounds of the workout editor and of
+set logging). An out-of-range value is left **blank** and the preview says so per field
+("Sets 1000000000 is beyond the supported range (up to 100); it was left blank.") --
+kept, `999999999 × 5` would reach Gym Mode as a billion set rows. A syntactically valid
+file of the wrong shape, a negative number, an unknown `format`, a full backup handed to
+the plan importer, an empty file, a file over 5 MB and an HTML page with no checkbox
+exercises are each refused with a plain message and write nothing.
 
 ## HTML import (v0.1.4)
 
@@ -133,6 +191,28 @@ rather than silently rounding it away. A non-numeric dose ("Optional",
 "Valid choice") produces no invented numeric fields, just the original
 text as a note.
 
+## Limits of the current importer (acceptance pass, as found)
+
+Recorded rather than changed -- the matcher/alias redesign is out of scope for now.
+
+- **Only a weekday line names a day.** A plain title ("Upper Body A") or a Markdown
+  heading ("# Leg Day") is read as an _exercise_ of that name, shown unmatched (skip
+  it); the workout is called "Imported Workout".
+- **Matching is exact, normalized or alias only.** Everyday gym names ("Lat Pulldown",
+  "Leg Press", "Plank", "DB Incline Bench") do not match the dataset's names
+  ("cable pulldown", "sled 45° leg press", "front plank with twist", ...), so a real
+  plan needs its exercises resolved by hand each time: ranked candidates, "Search
+  library…", "Create custom exercise" or "Skip". Nothing is guessed.
+- **Custom exercises created by an import carry no category, equipment or muscles**
+  (so no anatomy until the owner edits them).
+- **An imported program is saved inactive** (activate it from Program). Its day labels
+  carry the weekday ("Wednesday — Pull"), which is what places it on the schedule.
+- A same-install export re-imports as a separate copy and does **not** trigger the
+  duplicate warning (the duplicate check fingerprints the source text, not the saved
+  plan). Export Workout / Export Program give no on-screen confirmation of the file;
+  the Full Backup panel does.
+- CSV is not supported (it is treated as plain text if forced past the file chooser).
+
 ## A standalone workout import must stay reachable
 
 A `WorkoutTemplate` is only visible in the UI if `is_quick_workout: true` or
@@ -144,3 +224,11 @@ source document said — otherwise the import would silently create an
 unreachable orphan template. A day imported as part of a `kind: "program"`
 document keeps `is_quick_workout: false`, since it's reached through its
 `ProgramDay` instead. Found via manual testing during v0.0.9, not assumed.
+
+"Reached" includes editing: the program editor shows an **Edit workout** button
+beside each day's Workout, which opens that workout in the workout editor and
+returns to the (still unsaved) program. It works the same whether or not the
+workout is also shown in Quick Workouts, and never changes that flag (the
+acceptance pass found a day's workout could only be edited by flagging it a Quick
+Workout first). A day whose workout was deleted has no button, since there is
+nothing to edit. Covered by `programWorkoutEditing.test.ts`.

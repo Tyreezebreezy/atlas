@@ -40,6 +40,22 @@ exercise whose only sessions this week were its first is in neither (nor
 `stalled`). Today and Overview read the same `pr_count`, so they cannot
 disagree; the Overview simply shows it from the sixth workout on.
 
+## Days and weeks are the workout's local day
+
+Every "which day does this belong to" question — the weekly review's sessions,
+PR count and milestone counts, the activity heatmap, milestone days, the
+consistency milestones' weeks, History's month grouping, the default date in Log Past Workout —
+goes through one function, `sessionLocalDate` (`@atlas/core`): the local calendar
+day stored on the session when it started (`performed_local_date`), or, for a
+session recorded before that existed, the viewer-local day of its completion.
+Weeks are Monday-first (`startOfWeekIso`, `mondayWeekIndex`). Nothing slices an ISO
+timestamp for its date any more: that is the UTC date, which put a 9 pm Sunday
+workout in the US into Monday and into the next week. See DATA_MODEL.md "Local
+time" for the stored fields and the fallback;
+`packages/progress-engine/src/localDayGuard.test.ts` pins it by reading the source,
+and the engines' tests pin it by behavior (a stored local day beats the UTC day of
+the same instant).
+
 ## Strength: reps at load vs estimated 1RM
 
 `buildStrengthView(sessions, exercise, { load, trainingLocationId })` returns
@@ -53,10 +69,18 @@ the metrics that exist for the exercise, the one it opens on, PR markers
   It is the default when the last two sessions topped out at the same weight
   (an equipment ceiling: 170 lb × 12 → 14 → 16 → 18) or when no session has a
   supported set.
-- Weight-bearing history is never blended across equipment contexts: once an
-  exercise has history in more than one `training_location_id`, the view scopes
-  to one at a time. (Today no UI records a location on a session, so this is
-  dormant but tested.)
+- Weight-bearing history is never blended across equipment contexts. A context is
+  a place **and** the machine used there (`StrengthContext`, built by
+  `strengthContexts` from the sessions' recorded context), so two machines at one
+  gym, and one make at two gyms, are separate. When an exercise has more than one
+  context an **Equipment** picker appears; its options are exactly the contexts
+  the data holds, newest first ("Main Gym — Chest Press #1", "Hotel Gym — Hotel
+  press", "Unspecified / Legacy"), and the view opens on the most recent one —
+  there is no blended "all". With one context there is nothing to choose, so no
+  picker. Names resolve through archived places and machines (a context at a
+  place the owner has since archived still reads by its name); a name that no
+  longer exists at all reads "Removed place" / "Removed equipment" rather than a
+  raw id.
 
 ## Muscles
 
@@ -114,11 +138,17 @@ rendered; a milestone appears once.
   modeled, age-banded reference, and ATLAS holds no age. It needs a benchmark
   dataset pack and profile input (BENCHMARKS.md, "What this means for the
   seeded data").
-- **The weekly review buckets by UTC date.** `buildWeeklyReview` slices an ISO
-  timestamp's first ten characters, so a workout after about 8 pm US Eastern lands
-  on the next day's date — and on a Sunday night in the next week, while the week
-  itself (`startOfWeekIso`) is the local one. It decides `completed_sessions` and
-  the PR count identically; pre-existing, not introduced by the PR event history.
+- **Sessions recorded before 04B use an approximate day.** They have no stored
+  `performed_local_date`, so they fall back to the day of their completion in the
+  _viewer's_ time zone; an old workout viewed from a different zone than it was
+  done in can land a day off (the zone it was done in was never recorded and is not
+  guessed). Every session since carries the stored day.
+- **Some labels still format a date from the instant.** History's per-workout date labels,
+  the per-exercise History lists and the backup file name now use the stored local day
+  (or the device's day), but the chart x-axis labels, milestone "Achieved" dates and
+  Today's "Completed Monday 7:15 PM" are formatted from the completion instant in the
+  viewer's zone, so they can differ from the day the workout is counted on near midnight
+  or after travelling. Display only; no count depends on them.
 - The PR event history is derived from the sessions as they stand: events
   recorded under an older evaluator are frozen until their session disappears,
   and the launch reconcile replays all history once per launch (see PRS.md

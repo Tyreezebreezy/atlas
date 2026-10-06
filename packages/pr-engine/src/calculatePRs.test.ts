@@ -369,7 +369,7 @@ describe('calculatePRs: tie behavior', () => {
     expect(maxLoad?.source_session_id).toBe(earlier.id);
 
     // and detectNewPRs correctly does NOT surface this as "new" for the later session
-    expect(newPRsFromSession(prs, later.id)).toEqual([]);
+    expect(newPRsFromSession(prs, later.id, [])).toEqual([]);
   });
 
   it('is order-independent -- passing sessions newest-first produces the same result', () => {
@@ -511,15 +511,58 @@ describe('calculatePRs: non-weighted exercises', () => {
 });
 
 describe('newPRsFromSession', () => {
-  it('surfaces exactly the PR rows sourced from the given session', () => {
-    const bench = makeExercise({ id: 'bench' });
-    const session = completedSession(
-      bench.id,
-      [set({ exerciseId: bench.id, weight: 225, reps: 1 })],
-      '2026-08-15T10:00:00.000Z',
+  const bench = makeExercise({ id: 'bench' });
+  const first = completedSession(
+    bench.id,
+    [set({ exerciseId: bench.id, weight: 225, reps: 1 })],
+    '2026-08-15T10:00:00.000Z',
+  );
+  const better = completedSession(
+    bench.id,
+    [set({ exerciseId: bench.id, weight: 235, reps: 1 })],
+    '2026-08-22T10:00:00.000Z',
+  );
+  const eventFor = (session: WorkoutSession, context: { training_location_id?: string; gym_equipment_id?: string } = {}) => ({
+    session_id: session.id,
+    exercise_id: bench.id,
+    training_location_id: context.training_location_id ?? null,
+    gym_equipment_id: context.gym_equipment_id ?? null,
+  });
+
+  it('surfaces exactly the PR rows sourced from the given session that beat an earlier record', () => {
+    const prs = calculatePRs([first, better], bench);
+    const surfaced = newPRsFromSession(prs, better.id, [eventFor(better)]);
+    expect(surfaced.length).toBeGreaterThan(0);
+    expect(surfaced.every((pr) => pr.source_session_id === better.id)).toBe(true);
+    expect(newPRsFromSession(prs, 'some-other-session', [eventFor(better)])).toEqual([]);
+  });
+
+  it('a first-ever session is a baseline: it sets records but, with no event, announces none', () => {
+    const prs = calculatePRs([first], bench);
+    expect(prs.length).toBeGreaterThan(0);
+    expect(newPRsFromSession(prs, first.id, [])).toEqual([]);
+  });
+
+  it("only an event for this session counts -- another session's event does not announce this one's records", () => {
+    const prs = calculatePRs([first, better], bench);
+    expect(newPRsFromSession(prs, better.id, [eventFor(first)])).toEqual([]);
+  });
+
+  it('is scoped to the machine: an event on one machine does not announce a baseline on another', () => {
+    const onMachine = (session: WorkoutSession, machine: string): WorkoutSession => ({
+      ...session,
+      training_location_id: 'gym',
+      exercise_equipment: [{ exercise_id: bench.id, gym_equipment_id: machine }],
+    });
+    // #1 has history and is improved today; today's #2 set is that machine's first, so its baseline.
+    const sessions = [onMachine(first, 'm1'), onMachine(better, 'm1')];
+    const todayOn2 = onMachine(
+      completedSession(bench.id, [set({ exerciseId: bench.id, weight: 100, reps: 5 })], '2026-08-22T11:00:00.000Z'),
+      'm2',
     );
-    const prs = calculatePRs([session], bench);
-    expect(newPRsFromSession(prs, session.id)).toEqual(prs);
-    expect(newPRsFromSession(prs, 'some-other-session')).toEqual([]);
+    const prs = calculatePRs([...sessions, todayOn2], bench);
+    const events = [eventFor(sessions[1]!, { training_location_id: 'gym', gym_equipment_id: 'm1' })];
+    expect(newPRsFromSession(prs, todayOn2.id, events)).toEqual([]);
+    expect(newPRsFromSession(prs, sessions[1]!.id, events).length).toBeGreaterThan(0);
   });
 });

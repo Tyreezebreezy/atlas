@@ -299,3 +299,22 @@ served the new build at all. If a desktop CDP test ever shows unexpectedly
 stale UI right after a rebuild, check the loaded script hash
 (`[...document.querySelectorAll('script[src]')].map(s => s.src)`) against
 `apps/web/dist/assets/` before assuming the app itself has a bug.
+
+### Correction: that stale `index.html` was the PWA service worker, and real users hit it (vNext acceptance pass)
+
+The caching gotcha above was written off as a same-machine testing artefact. It is not: the web build registers a PWA service
+worker, and inside the packaged app that worker **can never update** -- `registration.update()` fails there with "An unknown error
+occurred when fetching the script" (reproduced on a fresh registration, on the real WebView2 window, with the script itself fetchable
+from the page). Once a worker is registered, Workbox's precache keeps serving the **old** `index.html` and bundle on every launch, so
+a newer desktop build never shows. The installer does not clear the WebView2 profile on upgrade (`installMode: currentUser`), so an
+owner who updates keeps the stuck worker; the production profile of this repo's own owner holds a worker whose cache was last written
+by v0.1.4 (6 September) although later builds were produced.
+
+The desktop shell now removes it. `apps/desktop/src-tauri/src/desktop_init.js` is injected as an `initialization_script` (so it runs
+before any page script, including when the page is being served by the stale worker): it unregisters every service worker, deletes
+every cache, reloads once (guarded by a `sessionStorage` flag) so the page comes from the embedded assets, and replaces
+`navigator.serviceWorker.register` with a promise that never settles so the web bundle's own PWA runtime cannot register a new one.
+To carry the script the main window is no longer auto-created: `tauri.conf.json` has `"create": false` on it and `lib.rs` builds it in
+`setup` from the same config entry (same label, size, title and minimum size). The browser/PWA build is unchanged. Covered by
+`desktopInit.test.ts` (stubbed browser environment) and, in the packaged app, by launching the fixed build over a profile that already
+held an activated worker.

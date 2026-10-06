@@ -11,7 +11,9 @@ export const REASON_TEXT: Record<ProgressionReasonCode, string> = {
   EQUIPMENT_MAX_REACHED: 'Max available load',
   BELOW_TARGET_RANGE: 'Hold',
   CURRENT_SESSION_FATIGUE: 'Hold',
-  PROGRAM_REVIEW_REQUIRED: 'Review needed',
+  // The value above this line already says "Review needed"; this is why. It fires only when the load can go
+  // no higher (the machine's maximum, or the configured rep ceiling) and so does the rep range.
+  PROGRAM_REVIEW_REQUIRED: 'Load and reps at their limit',
   CURRENT_SESSION_BELOW_TARGET: 'Current-session adjustment',
 };
 

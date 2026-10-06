@@ -46,6 +46,23 @@ describe('searchExercises', () => {
     expect(searchExercises(all, { bodyPart: 'chest' })).toEqual([bench, pushup]);
   });
 
+  it('treats "Shoulders" and "shoulders" as one body part (a custom exercise spelled it with a capital)', () => {
+    const press = makeExercise({ name: 'Landmine Press', category: 'Shoulders', is_custom: true });
+    const raise = makeExercise({ name: 'Lateral Raise', category: 'shoulders' });
+    expect(searchExercises([press, raise], { bodyPart: 'shoulders' })).toEqual(
+      [raise, press].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    expect(searchExercises([press, raise], { bodyPart: 'Shoulders' })).toHaveLength(2);
+    expect(listBodyParts([raise, press])).toEqual(['shoulders']);
+    expect(searchExercises([press, raise], { bodyPart: 'chest' })).toEqual([]);
+  });
+
+  it('finds the "sled 45° ..." presses by their degree sign even though the stored name is garbled', () => {
+    const sled = makeExercise({ name: 'sled 45в° leg press', category: 'upper legs' });
+    expect(searchExercises([sled, bench], { query: '45° leg' })).toEqual([sled]);
+    expect(searchExercises([sled, bench], { query: 'sled' })).toEqual([sled]);
+  });
+
   it('filters by equipment', () => {
     expect(searchExercises(all, { equipment: 'body weight' })).toEqual([pushup]);
   });

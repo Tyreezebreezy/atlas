@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { calculatePlateBreakdown, DEFAULT_AVAILABLE_PLATES } from '@atlas/workout-engine';
+import { equipmentUnavailable } from '@atlas/equipment-engine';
 import { suggestSubstitutes } from '@atlas/substitution-engine';
 import { formatExerciseName } from '@atlas/exercise-library';
-import type { Exercise, PlannedExercise, TrainingLocation, WorkoutSession } from '@atlas/data-model';
-import { useStorage } from '../storage/StorageContext';
-import { loadSettings } from '../settings/settings';
+import type { Exercise, PlannedExercise, WorkoutSession } from '@atlas/data-model';
+import { formatSessionDate } from '../history/formatSessionDate';
+import { useModalFocus } from '../a11y/useModalFocus';
 
 type SheetView = 'menu' | 'history' | 'plates' | 'why' | 'alternatives';
 
@@ -13,6 +14,10 @@ interface ExerciseContextSheetProps {
   planned: PlannedExercise;
   allSessions: WorkoutSession[];
   library: Exercise[];
+  /** vNext Handoff 04B. The kinds of equipment known to be at the workout's place -- the legacy list unioned with the kinds of the structured equipment configured there -- or null when nothing is known yet (then nothing is ever flagged unavailable). */
+  equipmentInventory: string[] | null;
+  /** The workout's place, for the alternatives heading. */
+  locationName: string | null;
   canGroupWithNext?: boolean;
   onGroupWithNext?: () => void;
   onClose: () => void;
@@ -54,30 +59,26 @@ export function ExerciseContextSheet({
   planned,
   allSessions,
   library,
+  equipmentInventory,
+  locationName,
   canGroupWithNext,
   onGroupWithNext,
   onClose,
 }: ExerciseContextSheetProps) {
   const [view, setView] = useState<SheetView>('menu');
-  const storage = useStorage();
-  const [activeLocation, setActiveLocation] = useState<TrainingLocation | null>(null);
+  // A modal dialog: focus moves in and stays in, Escape closes it, and focus returns to the "..." that opened it.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, onClose);
+  // The control just activated is replaced by the next view -- put focus on that view's first control (not Close).
+  useEffect(() => {
+    dialogRef.current
+      ?.querySelector<HTMLElement>(
+        '.atlas-context-sheet__panel :is(button, input):not(.atlas-context-sheet__close)',
+      )
+      ?.focus();
+  }, [view]);
   const isWeighted = exercise.measurement_type === 'reps_weight';
   const decision = planned.progression_decision;
-
-  useEffect(() => {
-    const id = loadSettings().activeTrainingLocationId;
-    if (!storage || !id) {
-      setActiveLocation(null);
-      return;
-    }
-    let cancelled = false;
-    void storage.trainingLocations.get(id).then((loc) => {
-      if (!cancelled) setActiveLocation(loc ?? null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [storage]);
 
   const [plateTarget, setPlateTarget] = useState(String(planned.target_weight ?? 135));
   const [barWeight, setBarWeight] = useState('45');
@@ -87,24 +88,24 @@ export function ExerciseContextSheet({
     DEFAULT_AVAILABLE_PLATES,
   );
 
-  // No active location: equipment-aware substitutions are simply off (see
-  // settings.ts's doc comment) -- every exercise is "available."
-  const equipmentUnavailable =
-    !!activeLocation &&
-    exercise.equipment.length > 0 &&
-    !exercise.equipment.some((eq) => activeLocation.equipment.includes(eq));
-  const alternatives = activeLocation
+  // No known inventory (no place, or a place that is only a name): equipment-aware
+  // substitutions are simply off -- every exercise is "available".
+  const unavailable = equipmentUnavailable(exercise.equipment, equipmentInventory);
+  const alternatives = equipmentInventory
     ? suggestSubstitutes(exercise, library, {
-        availableEquipment: activeLocation.equipment,
+        availableEquipment: equipmentInventory,
         limit: 5,
       })
     : [];
 
   return (
     <div
+      ref={dialogRef}
       className="atlas-context-sheet"
       role="dialog"
+      aria-modal="true"
       aria-label={`${formatExerciseName(exercise.name)} options`}
+      tabIndex={-1}
     >
       <div className="atlas-context-sheet__panel">
         <button
@@ -117,41 +118,44 @@ export function ExerciseContextSheet({
         </button>
 
         {view === 'menu' && (
-          <ul className="atlas-program-screen__list">
-            <li>
-              <button type="button" onClick={() => setView('history')}>
-                History
-              </button>
-            </li>
-            {canGroupWithNext && onGroupWithNext && (
+          <>
+            <h3>{formatExerciseName(exercise.name)}</h3>
+            <ul className="atlas-program-screen__list">
               <li>
-                <button type="button" onClick={onGroupWithNext}>
-                  Create Superset with Next
+                <button type="button" onClick={() => setView('history')}>
+                  History
                 </button>
               </li>
-            )}
-            {equipmentUnavailable && (
-              <li>
-                <button type="button" onClick={() => setView('alternatives')}>
-                  Equipment unavailable — see alternatives
-                </button>
-              </li>
-            )}
-            {isWeighted && (
-              <li>
-                <button type="button" onClick={() => setView('plates')}>
-                  Plate Calculator
-                </button>
-              </li>
-            )}
-            {decision && (
-              <li>
-                <button type="button" onClick={() => setView('why')}>
-                  Why this target?
-                </button>
-              </li>
-            )}
-          </ul>
+              {canGroupWithNext && onGroupWithNext && (
+                <li>
+                  <button type="button" onClick={onGroupWithNext}>
+                    Create Superset with Next
+                  </button>
+                </li>
+              )}
+              {unavailable && (
+                <li>
+                  <button type="button" onClick={() => setView('alternatives')}>
+                    Equipment unavailable — see alternatives
+                  </button>
+                </li>
+              )}
+              {isWeighted && (
+                <li>
+                  <button type="button" onClick={() => setView('plates')}>
+                    Plate Calculator
+                  </button>
+                </li>
+              )}
+              {decision && (
+                <li>
+                  <button type="button" onClick={() => setView('why')}>
+                    Why this target?
+                  </button>
+                </li>
+              )}
+            </ul>
+          </>
         )}
 
         {view === 'history' && (
@@ -160,19 +164,15 @@ export function ExerciseContextSheet({
             {recentHistory(allSessions, exercise.id).length === 0 && <p>No prior sessions yet.</p>}
             {recentHistory(allSessions, exercise.id).map(({ session, sets }) => (
               <div key={session.id} className="atlas-context-sheet__history-row">
-                <span className="atlas-library__item-meta">
-                  {new Date(session.completed_at ?? session.started_at).toLocaleDateString(
-                    undefined,
-                    {
-                      month: 'short',
-                      day: 'numeric',
-                    },
-                  )}
-                </span>
+                <span className="atlas-library__item-meta">{formatSessionDate(session)}</span>
                 <span>{sets.map(formatSetLine).join(', ')}</span>
               </div>
             ))}
-            <button type="button" onClick={() => setView('menu')}>
+            <button
+              type="button"
+              className="atlas-btn atlas-btn--secondary"
+              onClick={() => setView('menu')}
+            >
               Back
             </button>
           </div>
@@ -181,7 +181,7 @@ export function ExerciseContextSheet({
         {view === 'plates' && (
           <div>
             <h3>Plate Calculator</h3>
-            <label>
+            <label className="atlas-context-sheet__field">
               Total weight
               <input
                 type="number"
@@ -190,7 +190,7 @@ export function ExerciseContextSheet({
                 onChange={(e) => setPlateTarget(e.target.value)}
               />
             </label>
-            <label>
+            <label className="atlas-context-sheet__field">
               Bar weight
               <input
                 type="number"
@@ -204,7 +204,11 @@ export function ExerciseContextSheet({
               Total: {breakdown.actualTotal} lb
               {!breakdown.exact && ` (closest to ${breakdown.requestedTotal} with your plates)`}
             </p>
-            <button type="button" onClick={() => setView('menu')}>
+            <button
+              type="button"
+              className="atlas-btn atlas-btn--secondary"
+              onClick={() => setView('menu')}
+            >
               Back
             </button>
           </div>
@@ -254,18 +258,22 @@ export function ExerciseContextSheet({
             )}
             <p>Policy: {decision.policy.replace('_', ' ')}</p>
             <p>{decision.decision_summary}</p>
-            <button type="button" onClick={() => setView('menu')}>
+            <button
+              type="button"
+              className="atlas-btn atlas-btn--secondary"
+              onClick={() => setView('menu')}
+            >
               Back
             </button>
           </div>
         )}
 
-        {view === 'alternatives' && activeLocation && (
+        {view === 'alternatives' && equipmentInventory && (
           <div>
-            <h3>Alternatives -- {activeLocation.name}</h3>
+            <h3>Alternatives{locationName ? ` -- ${locationName}` : ''}</h3>
             <p>
-              {formatExerciseName(exercise.name)} needs {exercise.equipment.join(', ')}, not in your
-              active equipment profile.
+              {formatExerciseName(exercise.name)} needs {exercise.equipment.join(', ')}, which
+              isn&rsquo;t among the equipment you&rsquo;ve set up here.
             </p>
             {alternatives.length === 0 ? (
               <p>No alternative found with your available equipment.</p>
@@ -287,7 +295,11 @@ export function ExerciseContextSheet({
               Suggestions only -- switching exercises here doesn't change the plan; use Replace from
               the exercise menu if you want to swap it in.
             </p>
-            <button type="button" onClick={() => setView('menu')}>
+            <button
+              type="button"
+              className="atlas-btn atlas-btn--secondary"
+              onClick={() => setView('menu')}
+            >
               Back
             </button>
           </div>

@@ -91,8 +91,22 @@ function strongerState(
   return (b.intensity ?? 0) > (a.intensity ?? 0) ? merge(b, a) : merge(a, b);
 }
 
+/**
+ * Which side to open on: the one with more lit regions, so an exercise worked from behind (a row, a leg curl, a hip
+ * abduction) or a back day's summary does not open on an empty front figure. A tie, or nothing lit, opens on the front.
+ */
+function sideToOpenOn(states: BodyMapMuscleState[]): BodyView {
+  const lit = new Set<string>();
+  for (const s of states) {
+    const muscle = getMuscle(s.muscleId);
+    if (muscle && (s.state !== 'idle' || s.selected)) lit.add(muscle.svg_id);
+  }
+  const shown = (view: BodyView) => VIEW_LAYOUTS[view].groups.filter((g) => g.svgIds.some((id) => lit.has(id))).length;
+  return shown('back') > shown('front') ? 'back' : 'front';
+}
+
 export function BodyMap({ states, onSelectRegion, view: fixedView, ariaLabel, className }: BodyMapProps) {
-  const [chosenView, setChosenView] = useState<BodyView>('front');
+  const [chosenView, setChosenView] = useState<BodyView>(() => sideToOpenOn(states));
   const view = fixedView ?? chosenView;
   // Per-instance pattern id: two figures on one page must not depend on each other's <defs>.
   const hatchId = `atlas-hatch-${useId().replace(/:/g, '')}`;

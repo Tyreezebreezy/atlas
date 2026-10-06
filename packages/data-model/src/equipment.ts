@@ -24,7 +24,7 @@ export type LoadUnit = 'lb' | 'kg';
  * instances of the "same" equipment at different locations (or two
  * different machines at the same location) are different rows with
  * independent constraints and are never assumed equivalent — see
- * `docs/DATA_MODEL.md` "Equipment instances" (to be added) and the vNext
+ * `docs/DATA_MODEL.md` "Equipment instances" and the vNext
  * research pack §3.2.
  */
 export interface GymEquipmentInstance extends SyncMeta {
@@ -48,6 +48,18 @@ export interface GymEquipmentInstance extends SyncMeta {
   increment: number | null;
   unit: LoadUnit;
   notes: string | null;
+  /** vNext Handoff 04B. Archived equipment is hidden from every equipment
+   * choice but kept, so past sessions that used it keep resolving its label.
+   * Absent = in use. */
+  archived_at?: string | null;
+  /** vNext Handoff 04B. Set once the owner has answered "is N the maximum on
+   * this machine?" with "no / not sure", so ATLAS never asks about this
+   * instance again. A "yes" is recorded as `max_load` instead. */
+  max_prompt_dismissed_at?: string | null;
+  /** vNext Handoff 04B. The legacy `TrainingLocation.equipment` string this
+   * instance was configured from, so that string is not offered for
+   * configuration a second time. Null/absent for equipment added directly. */
+  legacy_equipment?: string | null;
 }
 
 /**

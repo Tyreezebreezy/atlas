@@ -134,6 +134,9 @@ export function TrendChart({
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(indexById.get(p.sessionId) as number)} ${yFor(p.value)}`)
     .join(' ');
 
+  // A 24px touch target, shrunk only as far as neighbouring points need (never below the dot itself).
+  const hitRadius = Math.max(5.5, Math.min(12, plotWidth / (points.length - 1) / 2));
+
   const first = points[0];
   const last = points[points.length - 1];
   const active = activeIndex != null ? points[activeIndex] : undefined;
@@ -181,6 +184,14 @@ export function TrendChart({
               cy={yFor(p.value)}
               r={activeIndex === i ? 5.5 : 3.5}
               className="atlas-trend-chart__point"
+              aria-hidden="true"
+            />
+            {/* The dot is 7px; the thing a finger or a keyboard lands on is this larger invisible circle. */}
+            <circle
+              cx={xFor(i)}
+              cy={yFor(p.value)}
+              r={hitRadius}
+              className="atlas-trend-chart__hit"
               tabIndex={0}
               aria-label={`${formatDateShort(p.date)}: ${format(p.value)}${records.has(i) ? ', new best' : ''}`}
               onClick={() => setActiveIndex((prev) => (prev === i ? null : i))}

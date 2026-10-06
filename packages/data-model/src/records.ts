@@ -36,6 +36,12 @@ export interface PersonalRecord extends SyncMeta {
    * by it so a harder machine at one gym never overwrites an easier
    * machine's max at another. See docs/PRS.md "Equipment-scoped series." */
   training_location_id?: string | null;
+  /** vNext Handoff 04B. Which `GymEquipmentInstance` the source session ran
+   * this exercise on, when it recorded one -- null/absent for every record
+   * computed before that was captured and for any exercise done on unspecified
+   * equipment. With `training_location_id` this is the record's context: two
+   * machines at one gym keep separate current bests. */
+  gym_equipment_id?: string | null;
   /** vNext Handoff 02. Set only for `kind === 'estimated_1rm'` -- which
    * `E1RMEstimator` produced `value`, so a future default-formula change is
    * a recorded fact rather than a silent rewrite of history. Null for every
@@ -60,6 +66,10 @@ export interface PersonalRecord extends SyncMeta {
  * "PRs this week" counts every performance that earned a new best.
  *
  * - A first-ever performance in a context is a baseline: it makes no event.
+ * - A context is the training location plus, since Handoff 04B, the actual
+ *   equipment instance the exercise was done on. Events written before that
+ *   have no `gym_equipment_id`; they stay valid as the "location, equipment
+ *   unspecified" context and are never reassigned.
  * - The id is derived from session + exercise + context
  *   (`personalRecordEventId`), so there can be at most one event for that
  *   combination and re-deriving it is an upsert, never a duplicate.
@@ -75,6 +85,8 @@ export interface PersonalRecordEvent extends SyncMeta {
   exercise_id: string;
   /** The equipment context the session ran in; null when none was recorded (all legacy history). */
   training_location_id: string | null;
+  /** vNext Handoff 04B. The actual machine/implement, when the session recorded one. Absent/null = equipment unspecified. */
+  gym_equipment_id?: string | null;
   /** The earliest `achieved_at` among the records the performance set. */
   achieved_at: string;
   pr_kinds: PrKind[];

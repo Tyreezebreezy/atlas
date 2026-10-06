@@ -1,20 +1,23 @@
+import { addDaysToIso, localDateOfInstant, sessionLocalDate } from '@atlas/core';
 import { exposureSessions, prEventsInPeriod, type ExposureSessions } from '@atlas/pr-engine';
 import type { BodyMeasurement, Milestone, PersonalRecordEvent, WorkoutSession } from '@atlas/data-model';
 import type { StagnationSignal } from './detectStagnation';
 
-function toUtcDate(dateStr: string): Date {
-  return new Date(`${dateStr.slice(0, 10)}T00:00:00.000Z`);
+/** `day` is a `YYYY-MM-DD` calendar date -- a session's local day, or a body measurement's own date. */
+function inPeriod(day: string, start: string, end: string): boolean {
+  return day >= start && day <= end;
 }
 
-function addDaysIso(dateStr: string, days: number): string {
-  const d = toUtcDate(dateStr);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function inPeriod(dateStr: string, start: string, end: string): boolean {
-  const d = dateStr.slice(0, 10);
-  return d >= start && d <= end;
+/**
+ * vNext Handoff 04B. Every "which day does this belong to" question in a weekly
+ * review goes through the SESSION's local calendar day (`sessionLocalDate`):
+ * the day the workout was performed on the device's clock, recorded when it
+ * started -- or, for a session recorded before that existed, the viewer-local
+ * day of its completion. Never the UTC date: slicing an ISO timestamp put a
+ * 9 pm Sunday workout in the US into Monday's week.
+ */
+function sessionDay(session: WorkoutSession): string {
+  return sessionLocalDate(session);
 }
 
 /** True when the exercise was trained in the period in a session that was NOT its first in that equipment context -- i.e. there is an earlier performance to compare it with. */
@@ -25,7 +28,7 @@ function hasComparisonInPeriod(
   periodEnd: string,
 ): boolean {
   for (const history of exposures.get(exerciseId)?.values() ?? []) {
-    if (history.slice(1).some((s) => inPeriod(s.completed_at ?? s.started_at, periodStart, periodEnd))) return true;
+    if (history.slice(1).some((s) => inPeriod(sessionDay(s), periodStart, periodEnd))) return true;
   }
   return false;
 }
@@ -83,16 +86,26 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
   const plannedSessions = input.plannedSessions ?? null;
 
   const completedInPeriod = sessions.filter(
-    (s) => s.status === 'completed' && inPeriod(s.completed_at ?? s.started_at, periodStart, periodEnd),
+    (s) => s.status === 'completed' && inPeriod(sessionDay(s), periodStart, periodEnd),
   );
-  const hasPriorHistory = sessions.some(
-    (s) => s.status === 'completed' && (s.completed_at ?? s.started_at).slice(0, 10) < periodStart,
-  );
+  const hasPriorHistory = sessions.some((s) => s.status === 'completed' && sessionDay(s) < periodStart);
 
   const exposures = exposureSessions(sessions);
-  const headlinePRs = prEventsInPeriod(prEvents, periodStart, periodEnd);
+  // A PR belongs to the day of the workout that earned it -- the very day that
+  // workout is counted under in `completed_sessions` -- so the session count and
+  // the PR count of one week can never bucket differently.
+  const dayBySessionId = new Map(sessions.map((s) => [s.id, sessionDay(s)]));
+  const headlinePRs = prEventsInPeriod(
+    prEvents,
+    periodStart,
+    periodEnd,
+    (event) => dayBySessionId.get(event.session_id) ?? localDateOfInstant(event.achieved_at),
+  );
+  // A milestone belongs to the day of the workout that reached it when that is known.
+  const milestoneDay = (m: Milestone): string =>
+    (m.origin_session_id ? dayBySessionId.get(m.origin_session_id) : undefined) ?? localDateOfInstant(m.achieved_at ?? '');
   const milestonesInPeriod = milestones.filter(
-    (m) => m.achieved_at != null && inPeriod(m.achieved_at, periodStart, periodEnd),
+    (m) => m.achieved_at != null && inPeriod(milestoneDay(m), periodStart, periodEnd),
   );
 
   const trainedExerciseIds = new Set<string>();
@@ -111,10 +124,11 @@ export function buildWeeklyReview(input: WeeklyReviewInput): WeeklyReview {
     else if (hasComparisonInPeriod(exposures, exerciseId, periodStart, periodEnd)) exercisesMaintained += 1;
   }
 
+  // Both are calendar dates (`YYYY-MM-DD`), so UTC midnights an exact number of days apart count the days.
   const periodLengthDays =
-    Math.round((toUtcDate(periodEnd).getTime() - toUtcDate(periodStart).getTime()) / 86_400_000) + 1;
-  const priorPeriodEnd = addDaysIso(periodStart, -1);
-  const priorPeriodStart = addDaysIso(priorPeriodEnd, -(periodLengthDays - 1));
+    Math.round((Date.parse(`${periodEnd}T00:00:00Z`) - Date.parse(`${periodStart}T00:00:00Z`)) / 86_400_000) + 1;
+  const priorPeriodEnd = addDaysToIso(periodStart, -1);
+  const priorPeriodStart = addDaysToIso(priorPeriodEnd, -(periodLengthDays - 1));
 
   const bodyWeightAverage = average(
     bodyMeasurements

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { newId } from '@atlas/core';
 import {
   buildGymSlots,
   createPlannedExercise,
   createWorkoutTemplate,
   duplicateWorkoutTemplate,
+  PLAN_LIMITS,
   reorder,
+  repeatedExerciseIds,
   withSequentialOrder,
 } from '@atlas/workout-engine';
 import { plannedMuscleCoverage } from '@atlas/progress-engine';
@@ -47,13 +49,20 @@ export function TemplateEditor({
   const [picking, setPicking] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupingDraft, setGroupingDraft] = useState<GroupingDraft | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  // The confirmation replaces the action row at the bottom of a long page: bring all of it into view.
+  useEffect(() => {
+    if (confirmingDelete) confirmRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [confirmingDelete]);
 
   useEffect(() => {
     void (async () => {
       const existing = templateId ? await storage.workoutTemplates.get(templateId) : undefined;
       setTemplate(existing ?? createWorkoutTemplate('', isQuickWorkoutDefault));
       const allExercises = await storage.exercises.getAll();
-      setExerciseNames(new Map(allExercises.map((e) => [e.id, e.name])));
+      setExerciseNames(new Map(allExercises.map((e) => [e.id, formatExerciseName(e.name)])));
       setExercisesById(new Map(allExercises.map((e) => [e.id, e])));
     })();
   }, [storage, templateId, isQuickWorkoutDefault]);
@@ -179,6 +188,19 @@ export function TemplateEditor({
 
   async function handleSave() {
     if (!template) return;
+    const backwards = template.exercises.filter(
+      (e) =>
+        e.target_reps_min != null &&
+        e.target_reps_max != null &&
+        e.target_reps_min > e.target_reps_max,
+    );
+    if (backwards.length > 0) {
+      setSaveError(
+        `${backwards.map((e) => exerciseNames.get(e.exercise_id) ?? 'An exercise').join(', ')}: reps min is above reps max. Fix the range, then save.`,
+      );
+      return;
+    }
+    setSaveError(null);
     const now = new Date().toISOString();
     await storage.workoutTemplates.put({
       ...template,
@@ -207,6 +229,7 @@ export function TemplateEditor({
         storage={storage}
         onPick={handleExercisePicked}
         onCancel={() => setPicking(false)}
+        unavailableIds={new Set(template.exercises.map((e) => e.exercise_id))}
       />
     );
   }
@@ -230,7 +253,7 @@ export function TemplateEditor({
             <button
               type="button"
               aria-label="Move up"
-              disabled={index === 0 || (inGroup && prevEx?.group_id !== exercise.group_id)}
+              disabled={index === 0 || (prevEx?.group_id ?? null) !== (exercise.group_id ?? null)}
               onClick={() => moveExercise(index, -1)}
             >
               &uarr;
@@ -240,7 +263,7 @@ export function TemplateEditor({
               aria-label="Move down"
               disabled={
                 index === template!.exercises.length - 1 ||
-                (inGroup && other?.group_id !== exercise.group_id)
+                (other?.group_id ?? null) !== (exercise.group_id ?? null)
               }
               onClick={() => moveExercise(index, 1)}
             >
@@ -248,7 +271,7 @@ export function TemplateEditor({
             </button>
             <button
               type="button"
-              aria-label="Remove exercise"
+              aria-label={`Remove ${exerciseNames.get(exercise.exercise_id) ?? 'exercise'}`}
               onClick={() => removeExercise(exercise.id)}
             >
               &times;
@@ -259,37 +282,42 @@ export function TemplateEditor({
           <NumberField
             label="Sets"
             min={0}
+            max={PLAN_LIMITS.sets}
             value={exercise.target_sets}
             onChange={(v) => updateExercise(exercise.id, { target_sets: v })}
           />
           <NumberField
             label="Reps min"
             min={0}
+            max={PLAN_LIMITS.reps}
             value={exercise.target_reps_min}
             onChange={(v) => updateExercise(exercise.id, { target_reps_min: v })}
           />
           <NumberField
             label="Reps max"
             min={0}
+            max={PLAN_LIMITS.reps}
             value={exercise.target_reps_max}
             onChange={(v) => updateExercise(exercise.id, { target_reps_max: v })}
           />
           <NumberField
             label="Weight"
             min={0}
+            max={PLAN_LIMITS.load}
             value={exercise.target_weight}
             onChange={(v) => updateExercise(exercise.id, { target_weight: v })}
           />
           <NumberField
             label="RPE"
             min={0}
-            max={10}
+            max={PLAN_LIMITS.effort}
             value={exercise.target_rpe}
             onChange={(v) => updateExercise(exercise.id, { target_rpe: v })}
           />
           <NumberField
             label="RIR"
             min={0}
+            max={PLAN_LIMITS.effort}
             value={exercise.target_rir}
             onChange={(v) => updateExercise(exercise.id, { target_rir: v })}
           />
@@ -297,6 +325,7 @@ export function TemplateEditor({
             <NumberField
               label="Rest (sec)"
               min={0}
+              max={PLAN_LIMITS.seconds}
               value={exercise.rest_seconds}
               onChange={(v) => updateExercise(exercise.id, { rest_seconds: v })}
             />
@@ -304,12 +333,14 @@ export function TemplateEditor({
           <NumberField
             label="Duration (sec)"
             min={0}
+            max={PLAN_LIMITS.seconds}
             value={exercise.target_duration_seconds}
             onChange={(v) => updateExercise(exercise.id, { target_duration_seconds: v })}
           />
           <NumberField
             label="Distance (m)"
             min={0}
+            max={PLAN_LIMITS.meters}
             value={exercise.target_distance_meters}
             onChange={(v) => updateExercise(exercise.id, { target_distance_meters: v })}
           />
@@ -324,6 +355,8 @@ export function TemplateEditor({
   }
 
   const slots = buildGymSlots(template.exercises, template.groups);
+  // A template saved before a workout was limited to one entry per exercise may still repeat one.
+  const repeated = repeatedExerciseIds(template.exercises);
   const coverage = plannedMuscleCoverage(template.exercises, exercisesById);
   const coverageStates = coverage.byMuscle.map((m) => ({
     muscleId: m.muscleId,
@@ -353,6 +386,15 @@ export function TemplateEditor({
         Show in Quick Workouts
       </label>
 
+      {repeated.length > 0 && (
+        <p className="atlas-template-editor__repeat-warning" role="alert">
+          {repeated.map((id) => exerciseNames.get(id) ?? 'An exercise').join(', ')}{' '}
+          {repeated.length === 1 ? 'appears' : 'appear'} more than once. A workout keeps one entry
+          per exercise, so a repeat is merged into the first when the workout starts, adding up the
+          sets. Remove the repeat to keep its own reps and load.
+        </p>
+      )}
+
       {coverage.byGroup.length > 0 && (
         <section className="atlas-template-editor__coverage">
           <h2>Planned Muscle Coverage</h2>
@@ -363,7 +405,8 @@ export function TemplateEditor({
           >
             {coverage.byGroup.map((entry) => (
               <li key={entry.label}>
-                {entry.label} <strong>{entry.workingSets}</strong>
+                {entry.label} <strong>{entry.workingSets}</strong>{' '}
+                {entry.workingSets === 1 ? 'set' : 'sets'}
               </li>
             ))}
           </ul>
@@ -404,6 +447,7 @@ export function TemplateEditor({
         {selected.size >= 2 && !groupingDraft && (
           <button
             type="button"
+            className="atlas-btn atlas-btn--secondary"
             onClick={() => setGroupingDraft({ type: 'superset', rounds: 3, restSeconds: 90 })}
           >
             Group Selected ({selected.size})
@@ -428,45 +472,93 @@ export function TemplateEditor({
           <NumberField
             label="Rounds"
             min={1}
+            max={PLAN_LIMITS.sets}
             value={groupingDraft.rounds}
             onChange={(v) => setGroupingDraft({ ...groupingDraft, rounds: v ?? 1 })}
           />
           <NumberField
             label="Rest after (sec)"
             min={0}
+            max={PLAN_LIMITS.seconds}
             value={groupingDraft.restSeconds}
             onChange={(v) => setGroupingDraft({ ...groupingDraft, restSeconds: v })}
           />
           <div className="atlas-template-editor__group-draft-actions">
-            <button type="button" onClick={() => setGroupingDraft(null)}>
+            <button
+              type="button"
+              className="atlas-btn atlas-btn--secondary"
+              onClick={() => setGroupingDraft(null)}
+            >
               Cancel
             </button>
-            <button type="button" onClick={confirmGrouping}>
+            <button
+              type="button"
+              className="atlas-btn atlas-btn--primary"
+              onClick={confirmGrouping}
+            >
               Confirm Group
             </button>
           </div>
         </div>
       )}
 
-      <div className="atlas-template-editor__actions">
-        {templateId && (
-          <>
-            <button type="button" onClick={() => void handleDuplicate()}>
-              Duplicate
-            </button>
-            <button type="button" onClick={() => void handleDelete()}>
-              Delete
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="atlas-template-editor__save"
-          onClick={() => void handleSave()}
+      {saveError && (
+        <p className="atlas-template-editor__repeat-warning" role="alert">
+          {saveError}
+        </p>
+      )}
+
+      {confirmingDelete ? (
+        <div
+          ref={confirmRef}
+          className="atlas-inline-confirm"
+          role="group"
+          aria-label={`Delete ${template.name.trim() || 'this workout'}?`}
         >
-          Save
-        </button>
-      </div>
+          <p>
+            Delete {template.name.trim() || 'this workout'}? Past workouts stay in your history; a
+            program day that uses it will have no workout. This can&rsquo;t be undone.
+          </p>
+          <button
+            type="button"
+            className="atlas-btn atlas-btn--secondary"
+            onClick={() => setConfirmingDelete(false)}
+          >
+            Keep it
+          </button>
+          <button
+            type="button"
+            className="atlas-btn atlas-btn--primary"
+            onClick={() => void handleDelete()}
+          >
+            Delete {template.name.trim() || 'workout'}
+          </button>
+        </div>
+      ) : (
+        <div className="atlas-template-editor__actions">
+          {templateId && (
+            <>
+              <button type="button" onClick={() => void handleDuplicate()}>
+                Duplicate
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                aria-expanded={confirmingDelete}
+              >
+                Delete…
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="atlas-template-editor__save"
+            onClick={() => void handleSave()}
+          >
+            Save
+          </button>
+        </div>
+      )}
     </div>
   );
 }

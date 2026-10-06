@@ -81,3 +81,21 @@ path" for the full writeup and docs/DATA_MODEL.md for the corrected exercise lis
 `measurement_type_override`, applied at the same first-seed injection point as the rest of curated
 enrichment — deliberately reusing that one mechanism (and its "matched by name, not a re-import-
 fragile id" reasoning) rather than adding a second, separate override table.
+
+## Corrected names (acceptance pass, 2026-10-05)
+
+The source stores the degree sign of four "sled 45° …" names as `45в°` (UTF-8 bytes read as
+Windows-1251, then lowercased like every name here): `sled 45° calf press`, `sled 45° leg press`,
+`sled 45° leg press (back pov)` and `sled 45° leg wide press`. Those four `name` values are now spelled
+correctly in `atlas-exercises.json` — nothing else about the rows changed, and their ids are the same, so
+every workout, template and record that points at them still does. The import script applies the same
+one-line fix, so a re-run reproduces the catalog (the field-for-field check above holds again).
+
+- **Already-seeded devices:** `ensureExercisesSeeded` repairs the stored name of a library row (never a
+  custom exercise) the next time it runs, in place by id, bumping `version` once. Nothing is re-seeded.
+- **Older backups:** restoring one brings the garbled stored name back (restore merges by id);
+  `repairExerciseName` keeps the display and search right until the next `ensureExercisesSeeded` run
+  repairs the stored name again.
+- **Guard:** `catalogIntegrity.test.ts` fails on any Cyrillic letter, replacement character or
+  UTF-8-as-Latin-1 sequence in any field of any row, pins the five "sled 45°" ids to their spelling, and
+  pins the row count at 1,324 (the six duplicate-named rows wait for Import / Alias Integration).

@@ -1,3 +1,4 @@
+import { localDateOfInstant } from '@atlas/core';
 import type { Program, ProgramDay, WorkoutOccurrence, WorkoutTemplate } from '@atlas/data-model';
 import {
   findOccurrence,
@@ -193,6 +194,12 @@ export interface MissedEntry {
  * cadence to be "missed" against -- its only notion of "next" is
  * `currentSequentialDay`, which doesn't advance until explicitly completed
  * or skipped, so nothing is ever silently missed there.
+ *
+ * Nothing before the program was in effect is ever missed: a day scheduled
+ * before the program was created, or before it was last switched to
+ * (`Program.activated_at`, else `created_at`), was not this program's to miss.
+ * Without that bound a brand-new program opened with a week of phantom
+ * "missed" workouts.
  */
 export function resolveMissedWorkouts(
   program: Program,
@@ -203,11 +210,15 @@ export function resolveMissedWorkouts(
 ): MissedEntry[] {
   if (programProgressionMode(program) !== 'fixed') return [];
   const start = new Date(`${todayIso}T00:00:00`);
+  const inEffectFrom = [program.created_at, program.activated_at]
+    .map((at) => (at ? localDateOfInstant(at) : ''))
+    .reduce((latest, day) => (day > latest ? day : latest), '');
   const results: MissedEntry[] = [];
   for (let offset = 1; offset <= lookbackDays; offset++) {
     const candidate = new Date(start);
     candidate.setDate(candidate.getDate() - offset);
     const iso = toIsoDate(candidate);
+    if (iso < inEffectFrom) break; // earlier days only get older
     const entry = resolveWeeklySchedule(program, templates, occurrences, iso);
     if (entry.kind === 'workout') {
       // v0.2.5. A dismissed occurrence still resolves to 'workout' (its

@@ -9,6 +9,7 @@ export * from './applyImport';
 export * from './importFingerprint';
 export * from './exportWorkout';
 export * from './exportProgram';
+export * from './backupStores';
 export * from './exportBackup';
 export * from './restoreBackup';
 export * from './ownerStarterData';

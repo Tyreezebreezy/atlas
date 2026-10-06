@@ -1,6 +1,7 @@
-import { getOrCreateDeviceId } from '@atlas/core';
+import { getOrCreateDeviceId, localDateOfInstant } from '@atlas/core';
 import type { Exercise, PersonalRecord, PersonalRecordEvent, PrKind, WorkoutSession } from '@atlas/data-model';
 import { calculatePRs } from './calculatePRs';
+import { performanceContextKey, performanceContextOf } from './context';
 import { DEFAULT_E1RM_ESTIMATOR } from './e1rmEstimators';
 import { exposureSessions, type ExposureSessions } from './exposure';
 
@@ -10,8 +11,15 @@ import { exposureSessions, type ExposureSessions } from './exposure';
  * string, so events written under the old one are recognizably older and are
  * never rewritten or deleted by the change (see `planPREventReconciliation`).
  * Bump the leading number when the derivation below changes meaning.
+ *
+ * - `pr-events-1` (04A.1): the comparable context is the training location.
+ * - `pr-events-2` (04B): the context is the location plus the actual equipment
+ *   instance. Nothing about a legacy event changes meaning -- a session with no
+ *   recorded equipment derives exactly the event, id and content it did under
+ *   version 1 -- so version-1 events stay as written (frozen, per the planner)
+ *   and only events derived for new data carry version 2.
  */
-export const PR_EVENT_EVALUATOR_VERSION = `pr-events-1/${DEFAULT_E1RM_ESTIMATOR.id}-${DEFAULT_E1RM_ESTIMATOR.version}`;
+export const PR_EVENT_EVALUATOR_VERSION = `pr-events-2/${DEFAULT_E1RM_ESTIMATOR.id}-${DEFAULT_E1RM_ESTIMATOR.version}`;
 
 /**
  * Which detailed record labels an event when it holds several -- `pr_kinds` is
@@ -43,14 +51,17 @@ function kindRank(kind: PrKind): number {
 /**
  * The stable identity of an event: one per session + exercise + equipment
  * context. Writing it twice is an upsert, so re-processing a session can
- * never duplicate an event.
+ * never duplicate an event. Without an equipment instance the id is exactly
+ * what it was before Handoff 04B, so every existing event keeps its id.
  */
 export function personalRecordEventId(
   sessionId: string,
   exerciseId: string,
   trainingLocationId: string | null | undefined,
+  gymEquipmentId?: string | null,
 ): string {
-  return `pr-event:${sessionId}:${exerciseId}:${trainingLocationId ?? 'none'}`;
+  const base = `pr-event:${sessionId}:${exerciseId}:${trainingLocationId ?? 'none'}`;
+  return gymEquipmentId ? `${base}:${gymEquipmentId}` : base;
 }
 
 /**
@@ -70,6 +81,7 @@ export interface DerivedPREvent {
   session_id: string;
   exercise_id: string;
   training_location_id: string | null;
+  gym_equipment_id: string | null;
   achieved_at: string;
   pr_kinds: PrKind[];
   estimator_id: string | null;
@@ -94,9 +106,11 @@ export interface DerivedPREvent {
  * `pr_kinds` lists the kinds it beat.
  *
  * An event depends only on the sessions up to it, so a later, better session
- * never changes an earlier event. Contexts (`training_location_id`, null for
- * all unlocated legacy history) are replayed independently, exactly as
- * `calculatePRs` scopes its series.
+ * never changes an earlier event. Contexts -- the training location plus the
+ * actual equipment instance (Handoff 04B), null for all legacy history that
+ * recorded neither -- are replayed independently, exactly as `calculatePRs`
+ * scopes its series: Chest Press #1 never competes with Chest Press #2, and
+ * a machine at one gym never competes with the same make at another.
  *
  * Cost is quadratic in one exercise's session count (each replay step
  * recomputes its records); a lift done 500 times replays in well under a
@@ -111,7 +125,11 @@ export function derivePREventsForExercise(
   if (!contexts) return [];
 
   const events: DerivedPREvent[] = [];
-  for (const [location, history] of contexts) {
+  for (const history of contexts.values()) {
+    const first = history[0];
+    if (!first) continue;
+    // Every session in a group shares its context, so the first one names it.
+    const context = performanceContextOf(first, exercise.id);
     // Only this exercise's sets matter to its own records; dropping the rest keeps every replay step cheap.
     const own = history.map((s) => ({
       ...s,
@@ -129,7 +147,8 @@ export function derivePREventsForExercise(
       events.push({
         session_id: session.id,
         exercise_id: exercise.id,
-        training_location_id: location,
+        training_location_id: context.training_location_id,
+        gym_equipment_id: context.gym_equipment_id,
         achieved_at: held.reduce((first, r) => (r.achieved_at < first ? r.achieved_at : first), held[0]?.achieved_at ?? ''),
         pr_kinds: [...new Set(held.map((r) => r.kind))].sort((a, b) => kindRank(a) - kindRank(b)),
         estimator_id: e1rm?.estimator_id ?? null,
@@ -183,7 +202,10 @@ export function planPREventReconciliation(
   exposures: ExposureSessions,
 ): PREventReconciliation {
   const derivedById = new Map(
-    derived.map((d) => [personalRecordEventId(d.session_id, d.exercise_id, d.training_location_id), d]),
+    derived.map((d) => [
+      personalRecordEventId(d.session_id, d.exercise_id, d.training_location_id, d.gym_equipment_id),
+      d,
+    ]),
   );
   const storedById = new Map(stored.map((e) => [e.id, e]));
   const upsert: PersonalRecordEvent[] = [];
@@ -203,6 +225,7 @@ export function planPREventReconciliation(
         session_id: d.session_id,
         exercise_id: d.exercise_id,
         training_location_id: d.training_location_id,
+        gym_equipment_id: d.gym_equipment_id,
         achieved_at: d.achieved_at,
         pr_kinds: d.pr_kinds,
         evaluator_version: PR_EVENT_EVALUATOR_VERSION,
@@ -226,7 +249,7 @@ export function planPREventReconciliation(
     if (derivedById.has(existing.id)) continue;
     const sourceStillExists = exposures
       .get(existing.exercise_id)
-      ?.get(existing.training_location_id ?? null)
+      ?.get(performanceContextKey(existing))
       ?.some((s) => s.id === existing.session_id);
     if (existing.evaluator_version === PR_EVENT_EVALUATOR_VERSION || !sourceStillExists) remove.push(existing.id);
   }
@@ -234,14 +257,24 @@ export function planPREventReconciliation(
   return { upsert, remove };
 }
 
-/** The events whose day falls in the inclusive `YYYY-MM-DD` range -- "PRs this week" is this list's length. */
+/**
+ * The events whose day falls in the inclusive `YYYY-MM-DD` range -- "PRs this
+ * week" is this list's length.
+ *
+ * `dayOf` says which calendar day an event belongs to. Callers that hold the
+ * sessions pass the event's SESSION day (`sessionLocalDate`), so the PR count
+ * and the session count of one week always bucket by the same day (Handoff
+ * 04B). The default -- the viewer-local day of `achieved_at`, never the UTC
+ * date -- is the fallback for a caller with no sessions to hand.
+ */
 export function prEventsInPeriod<T extends { achieved_at: string }>(
   events: T[],
   periodStart: string,
   periodEnd: string,
+  dayOf: (event: T) => string = (event) => localDateOfInstant(event.achieved_at),
 ): T[] {
   return events.filter((event) => {
-    const day = event.achieved_at.slice(0, 10);
+    const day = dayOf(event);
     return day >= periodStart && day <= periodEnd;
   });
 }

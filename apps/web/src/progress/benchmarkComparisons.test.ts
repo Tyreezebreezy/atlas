@@ -220,6 +220,15 @@ describe('benchmark comparisons run through the strict evaluator', () => {
     expect(twice).toHaveLength(1);
   });
 
+  it('compares the highest of several records (one per place or machine), not whichever comes first', () => {
+    const lower = { ...pr('bench', 'estimated_1rm', 30), id: 'hotel', training_location_id: 'hotel' };
+    const higher = { ...pr('bench', 'estimated_1rm', 45), id: 'main', training_location_id: 'main' };
+    for (const records of [[lower, higher], [higher, lower]]) {
+      const [comparison] = benchmarkComparisons([strictBench()], records, EXERCISES, [PROTOCOL]);
+      expect(comparison?.evaluation).toMatchObject({ status: 'MATCHED', percentile: 70, threshold: 41 });
+    }
+  });
+
   it('leaves the stored benchmark rows exactly as they were', () => {
     const rows = [seededRow('pushups', 'pushup'), strictBench()];
     const snapshot = structuredClone(rows);

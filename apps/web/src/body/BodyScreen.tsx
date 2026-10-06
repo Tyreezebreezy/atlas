@@ -83,7 +83,11 @@ export function BodySummary({
       <section className="atlas-panel atlas-body__summary" aria-labelledby="body-weight-title">
         <div className="atlas-body__summary-head">
           <h2 id="body-weight-title">Weight</h2>
-          <button type="button" className="atlas-btn atlas-btn--secondary atlas-body__log" onClick={onLog}>
+          <button
+            type="button"
+            className="atlas-btn atlas-btn--secondary atlas-body__log"
+            onClick={onLog}
+          >
             + Log
           </button>
         </div>
@@ -102,7 +106,9 @@ export function BodySummary({
           points={weightPoints}
           unit=" lb"
           title="Body weight"
-          secondary={averagePoints.length > 0 ? { points: averagePoints, label: '7-day average' } : undefined}
+          secondary={
+            averagePoints.length > 0 ? { points: averagePoints, label: '7-day average' } : undefined
+          }
           xScale="date"
           showLastValue={false}
           minSpan={4}
@@ -125,7 +131,13 @@ export function BodySummary({
           {bodyFatPoints.length > 0 && (
             <>
               <h3>Body fat</h3>
-              <TrendChart points={bodyFatPoints} unit="%" title="Body fat" xScale="date" minSpan={2} />
+              <TrendChart
+                points={bodyFatPoints}
+                unit="%"
+                title="Body fat"
+                xScale="date"
+                minSpan={2}
+              />
             </>
           )}
           {latestComposition && (
@@ -262,10 +274,18 @@ export function BodyScreen({ onBack, embedded = false }: BodyScreenProps) {
                     </div>
                   ) : (
                     <div className="atlas-body__history-actions">
-                      <button type="button" onClick={() => setEditingId(m.id)}>
+                      <button
+                        type="button"
+                        aria-label={`Edit the ${formatDate(m.date)} measurement`}
+                        onClick={() => setEditingId(m.id)}
+                      >
                         Edit
                       </button>
-                      <button type="button" onClick={() => setConfirmDeleteId(m.id)}>
+                      <button
+                        type="button"
+                        aria-label={`Delete the ${formatDate(m.date)} measurement`}
+                        onClick={() => setConfirmDeleteId(m.id)}
+                      >
                         Delete
                       </button>
                     </div>

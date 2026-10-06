@@ -1,9 +1,7 @@
 import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, WorkoutSession } from '@atlas/data-model';
 
-export function formatSessionDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
+import { formatSessionDate } from './formatSessionDate';
 
 interface SessionDetailProps {
   session: WorkoutSession;
@@ -32,7 +30,7 @@ export function SessionDetail({ session, exercises, onBack, onOpenExercise }: Se
       </button>
       <h1>{session.name}</h1>
       <p className="atlas-history-detail__meta">
-        {formatSessionDate(session.started_at)}
+        {formatSessionDate(session)}
         {session.session_note ? ` · ${session.session_note}` : ''}
       </p>
       {[...byExercise.entries()].map(([exerciseId, sets]) => (

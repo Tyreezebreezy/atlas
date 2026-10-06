@@ -1,4 +1,4 @@
-import { availableLoads, hasEquipmentData, nextAvailableLoad } from '@atlas/equipment-engine';
+import { availableLoads, hasEquipmentData, hasLoadList, maximumLoad, nextAvailableLoad } from '@atlas/equipment-engine';
 import type {
   Exercise,
   GymEquipmentInstance,
@@ -10,7 +10,7 @@ import type {
   ProgressionTargetSnapshot,
   WorkoutSession,
 } from '@atlas/data-model';
-import { computeProgressionDecision, loadValue, progressableLoadField } from './progressionDecision';
+import { computeProgressionDecision, loadValue, progressableLoadField, withLoad } from './progressionDecision';
 
 export interface ProgressionContext {
   exercise: Exercise;
@@ -100,6 +100,30 @@ function ceilingRepFallback(
 }
 
 /**
+ * The load an "increase" should actually land on, or null when this equipment
+ * has no heavier load to give.
+ *
+ * - With a load list (exact, or a full range): the desired load if the machine
+ *   has it, else the next real one up -- never an arithmetic value it can't
+ *   produce.
+ * - With only a maximum (vNext Handoff 04B): nothing below the maximum is
+ *   known, so none is invented. The desired load stands if it fits under the
+ *   maximum; if it would overshoot, the maximum itself is the next real load;
+ *   and at the maximum there is nothing further. A recommendation never
+ *   exceeds a maximum the owner has confirmed, whether or not ATLAS knows the
+ *   steps beneath it.
+ */
+function nextRealLoad(equipment: GymEquipmentInstance, currentLoad: number, desired: number | null): number | null {
+  const loads = availableLoads(equipment);
+  if (loads.length > 0) {
+    return desired != null && loads.includes(desired) ? desired : nextAvailableLoad(equipment, currentLoad);
+  }
+  const max = equipment.max_load;
+  if (max == null || currentLoad >= max) return null;
+  return desired != null && desired <= max ? desired : max;
+}
+
+/**
  * The equipment-aware wrapper around `computeProgressionDecision` (vNext
  * Handoff 01 §7-8). Reuses that engine's proven, deterministic decision
  * entirely -- this only ever narrows or redirects an "increase load"
@@ -117,6 +141,36 @@ export function recommendProgression(context: ProgressionContext): ProgressionRe
     context.currentTarget,
     context.previousSession,
   );
+  return recommendFromDecision(decision, context);
+}
+
+function recommendFromDecision(decision: ProgressionDecision, context: ProgressionContext): ProgressionRecommendation {
+  return cappedAtMaximum(recommendFromLoads(decision, context), context.equipment);
+}
+
+/**
+ * The one rule no path may break (vNext Handoff 04B): a recommendation never
+ * exceeds the heaviest load the equipment has, wherever the number came from.
+ * The next-load logic below already keeps to it when it raises a load; this
+ * catches a load carried over unchanged from heavier equipment elsewhere -- 170
+ * on the Main Gym's machine, a 120 lb machine today -- which a hold would
+ * otherwise hand straight on. Equipment with no known maximum caps nothing.
+ */
+function cappedAtMaximum(
+  recommendation: ProgressionRecommendation,
+  equipment: GymEquipmentInstance | null,
+): ProgressionRecommendation {
+  const max = equipment && hasEquipmentData(equipment) ? maximumLoad(equipment) : null;
+  if (max == null || recommendation.target_load == null || recommendation.target_load <= max) return recommendation;
+  const note = `Capped at this equipment's maximum (${max}).`;
+  return {
+    ...recommendation,
+    target_load: max,
+    constraint_applied: recommendation.constraint_applied ? `${recommendation.constraint_applied} ${note}` : note,
+  };
+}
+
+function recommendFromLoads(decision: ProgressionDecision, context: ProgressionContext): ProgressionRecommendation {
   const base = baseTranslation(decision);
 
   const loadField = progressableLoadField(context.exercise);
@@ -142,8 +196,7 @@ export function recommendProgression(context: ProgressionContext): ProgressionRe
   // one instead of an arithmetic value the machine can't produce.
   if (base.action === 'increase_load' && currentLoad != null) {
     const desired = loadValue(decision.resulting_target, loadField);
-    const loads = availableLoads(equipment);
-    const real = loads.includes(desired) ? desired : nextAvailableLoad(equipment, currentLoad);
+    const real = nextRealLoad(equipment, currentLoad, desired);
 
     if (real == null) return ceilingRepFallback(decision, context.policy, currentLoad, 'EQUIPMENT_MAX_REACHED');
 
@@ -160,6 +213,11 @@ export function recommendProgression(context: ProgressionContext): ProgressionRe
   // The base engine hit the rep ceiling but had no configured increment to
   // advance with (`suggest_advance`) -- equipment can supply one instead.
   if (decision.previous_result === 'suggest_advance' && currentLoad != null) {
+    // With only a maximum there is no known next step to offer, so ATLAS
+    // keeps its own rep suggestion until the maximum is reached.
+    if (!hasLoadList(equipment) && equipment.max_load != null && currentLoad < equipment.max_load) {
+      return recommendationFrom(decision, base);
+    }
     const real = nextAvailableLoad(equipment, currentLoad);
     if (real == null) return ceilingRepFallback(decision, context.policy, currentLoad, 'EQUIPMENT_MAX_REACHED');
 
@@ -173,4 +231,54 @@ export function recommendProgression(context: ProgressionContext): ProgressionRe
   }
 
   return recommendationFrom(decision, base);
+}
+
+/**
+ * The decision a session is stamped with when it starts, held to what the
+ * equipment can really load (vNext Handoff 04B).
+ *
+ * `recommendProgression` already narrows the live "Today" line to the machine in
+ * front of the owner. This applies that same narrowing -- through the same code,
+ * not a second copy of its rules -- to the target written into the session
+ * snapshot, so the TARGET on the card never asks for 85 lb on an 80 lb rack or
+ * 180 lb on a 170 lb stack.
+ *
+ * Two things change the stamped target, and nothing else does: an advance is
+ * landed on a load the equipment really has (or held where it has none higher),
+ * and any target above the equipment's maximum is brought down to it. A hold, a
+ * first exposure and a "consider adding load" suggestion otherwise come back as
+ * computed -- the equipment does not get to start raising loads the policy never
+ * asked to raise. With no equipment, or none with data, the result is exactly
+ * `computeProgressionDecision`'s. When the equipment does change the outcome the
+ * decision says so -- `previous_result` becomes `held` if an advance did not
+ * happen, and the explanation gains the constraint -- so "Why this target?" stays true.
+ */
+export function decideWithinEquipment(context: ProgressionContext): ProgressionDecision {
+  const decision = computeProgressionDecision(
+    context.policy,
+    context.exercise,
+    context.currentTarget,
+    context.previousSession,
+  );
+  const loadField = progressableLoadField(context.exercise);
+  if (!loadField || !context.equipment) return decision;
+
+  const recommendation = recommendFromDecision(decision, context);
+  if (recommendation.constraint_applied == null || recommendation.target_load == null) return decision;
+  const lowered = recommendation.target_load < loadValue(decision.resulting_target, loadField);
+  if (decision.previous_result !== 'advanced' && !lowered) return decision;
+
+  const withRealLoad = withLoad(decision.resulting_target, loadField, recommendation.target_load);
+  return {
+    ...decision,
+    previous_result:
+      decision.previous_result === 'advanced' && recommendation.action !== 'increase_load'
+        ? 'held'
+        : decision.previous_result,
+    decision_summary: `${decision.decision_summary} ${recommendation.constraint_applied}`,
+    resulting_target:
+      recommendation.action === 'increase_reps' && recommendation.target_reps != null
+        ? { ...withRealLoad, target_reps_max: recommendation.target_reps }
+        : withRealLoad,
+  };
 }

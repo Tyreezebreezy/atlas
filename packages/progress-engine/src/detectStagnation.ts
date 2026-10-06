@@ -1,4 +1,11 @@
-import { eligibleSets, eligibleSetsForExercise, type EligibleSet } from '@atlas/pr-engine';
+import {
+  eligibleSets,
+  eligibleSetsForExercise,
+  performanceContextKey,
+  performanceContextOf,
+  type EligibleSet,
+  type PerformanceContext,
+} from '@atlas/pr-engine';
 import type { Exercise, PersonalRecord, WorkoutSession } from '@atlas/data-model';
 
 /**
@@ -13,6 +20,8 @@ export interface StagnationSignal {
   exercise_id: string;
   /** Null groups every session with no recorded location -- the legacy/unscoped series, same convention as PersonalRecord.training_location_id. */
   training_location_id: string | null;
+  /** vNext Handoff 04B. The machine this series is on; null for sessions that recorded none. A stall is judged on one machine's own history, never across two. */
+  gym_equipment_id: string | null;
   comparable_exposures: number;
   first_exposure_date: string;
   last_exposure_date: string;
@@ -45,18 +54,22 @@ export function detectStagnation(
   const eligible = eligibleSetsForExercise(sessions, exercise.id);
   if (eligible.length === 0) return [];
 
-  const byLocation = new Map<string | null, EligibleSet[]>();
+  // One series per comparable context -- the location and, since Handoff 04B,
+  // the actual machine -- so the standing records read below are the same ones
+  // `calculatePRs` computed for that exact series.
+  const byContext = new Map<string, { context: PerformanceContext; sets: EligibleSet[] }>();
   for (const e of eligible) {
-    const key = e.session.training_location_id ?? null;
-    const list = byLocation.get(key);
-    if (list) list.push(e);
-    else byLocation.set(key, [e]);
+    const context = performanceContextOf(e.session, e.set.exercise_id);
+    const key = performanceContextKey(context);
+    const group = byContext.get(key);
+    if (group) group.sets.push(e);
+    else byContext.set(key, { context, sets: [e] });
   }
 
   const signals: StagnationSignal[] = [];
-  for (const [locationId, group] of byLocation) {
+  for (const [contextKey, { context, sets }] of byContext) {
     const sessionsById = new Map<string, WorkoutSession>();
-    for (const e of group) sessionsById.set(e.session.id, e.session);
+    for (const e of sets) sessionsById.set(e.session.id, e.session);
     const exposures = [...sessionsById.values()].sort((a, b) =>
       (a.completed_at ?? a.started_at).localeCompare(b.completed_at ?? b.started_at),
     );
@@ -67,7 +80,7 @@ export function detectStagnation(
     const improvedRecently = personalRecords.some(
       (pr) =>
         pr.exercise_id === exercise.id &&
-        (pr.training_location_id ?? null) === locationId &&
+        performanceContextKey(pr) === contextKey &&
         recentSessionIds.has(pr.source_session_id),
     );
     if (improvedRecently) continue;
@@ -76,7 +89,8 @@ export function detectStagnation(
     const last = recent[recent.length - 1] as WorkoutSession;
     signals.push({
       exercise_id: exercise.id,
-      training_location_id: locationId,
+      training_location_id: context.training_location_id,
+      gym_equipment_id: context.gym_equipment_id,
       comparable_exposures: recent.length,
       first_exposure_date: first.completed_at ?? first.started_at,
       last_exposure_date: last.completed_at ?? last.started_at,

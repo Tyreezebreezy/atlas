@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_E1RM_ESTIMATOR } from '@atlas/pr-engine';
-import { buildStrengthView, recordIndices, trainedExercises } from './strengthView';
+import { DEFAULT_E1RM_ESTIMATOR, performanceContextKey } from '@atlas/pr-engine';
+import { buildStrengthView, recordIndices, sessionsInContext, strengthContexts, trainedExercises } from './strengthView';
 import { daysBefore, makeExercise, makeSession } from './testFixtures';
 
 const NOW = new Date('2026-09-24T12:00:00.000Z');
@@ -139,29 +139,91 @@ describe('buildStrengthView — reps at load (equipment ceiling)', () => {
 });
 
 describe('buildStrengthView — equipment contexts', () => {
+  const onMachine = (location: string | null, machine: string | null) => ({
+    training_location_id: location,
+    ...(machine ? { exercise_equipment: [{ exercise_id: 'machine-press', gym_equipment_id: machine }] } : {}),
+  });
+  const key = (location: string | null, machine: string | null) =>
+    performanceContextKey({ training_location_id: location, gym_equipment_id: machine });
+
   const gymA = history('machine-press', [
     { weight: 170, reps: 12 },
     { weight: 170, reps: 14 },
-  ], { training_location_id: 'gym-a' });
+  ], onMachine('gym-a', 'press-1'));
   const gymB = history('machine-press', [
     { weight: 170, reps: 20 },
     { weight: 170, reps: 22 },
-  ], { training_location_id: 'gym-b' });
+  ], onMachine('gym-b', 'press-9'));
   const legacy = history('machine-press', [{ weight: 170, reps: 8 }]);
 
-  it('reports which contexts the exercise has been done in', () => {
+  it('reports the contexts the exercise has actually been done in -- location AND machine', () => {
     const view = buildStrengthView([...gymA, ...gymB, ...legacy], PRESS);
-    expect(new Set(view.contexts)).toEqual(new Set(['gym-a', 'gym-b', null]));
+    expect(new Set(view.contexts.map((c) => c.key))).toEqual(
+      new Set([key('gym-a', 'press-1'), key('gym-b', 'press-9'), key(null, null)]),
+    );
+    const a = view.contexts.find((c) => c.key === key('gym-a', 'press-1'));
+    expect(a).toMatchObject({ training_location_id: 'gym-a', gym_equipment_id: 'press-1', session_count: 2 });
   });
 
-  it('builds a scoped series without mixing another gym\'s machine into it', () => {
+  it('lists the most recently used context first, so a view opens where the owner last trained', () => {
+    const set = [{ exerciseId: 'machine-press', weight: 170, reps: 12 }];
+    const oldest = makeSession(set, daysBefore(NOW, 40));
+    const middle = makeSession(set, daysBefore(NOW, 20), onMachine('gym-a', 'press-1'));
+    const newest = makeSession(set, daysBefore(NOW, 2), onMachine('gym-b', 'press-9'));
+    const view = buildStrengthView([middle, oldest, newest], PRESS);
+    expect(view.contexts.map((c) => c.key)).toEqual([key('gym-b', 'press-9'), key('gym-a', 'press-1'), key(null, null)]);
+  });
+
+  it('builds a scoped series without mixing in the machine at another gym', () => {
     const all = [...gymA, ...gymB, ...legacy];
-    const a = buildStrengthView(all, PRESS, { trainingLocationId: 'gym-a' });
+    const a = buildStrengthView(all, PRESS, { contextKey: key('gym-a', 'press-1') });
     expect(values(a.metrics[0]?.series ?? [])).toEqual([12, 14]);
-    const b = buildStrengthView(all, PRESS, { trainingLocationId: 'gym-b' });
+    const b = buildStrengthView(all, PRESS, { contextKey: key('gym-b', 'press-9') });
     expect(values(b.metrics[0]?.series ?? [])).toEqual([20, 22]);
-    const unscoped = buildStrengthView(all, PRESS, { trainingLocationId: null });
+    const unscoped = buildStrengthView(all, PRESS, { contextKey: key(null, null) });
     expect(unscoped.load_options).toEqual([]); // one legacy session: nothing to trend yet
+  });
+
+  it('two machines at the SAME gym are two contexts with separate series', () => {
+    const one = history('machine-press', [{ weight: 170, reps: 12 }, { weight: 170, reps: 14 }], onMachine('gym-a', 'press-1'));
+    const two = history('machine-press', [{ weight: 120, reps: 10 }, { weight: 130, reps: 10 }], onMachine('gym-a', 'press-2'));
+    const all = [...one, ...two];
+    const view = buildStrengthView(all, PRESS);
+    expect(view.contexts).toHaveLength(2);
+    expect(new Set(view.contexts.map((c) => c.training_location_id))).toEqual(new Set(['gym-a']));
+    const first = buildStrengthView(all, PRESS, { contextKey: key('gym-a', 'press-1') });
+    const second = buildStrengthView(all, PRESS, { contextKey: key('gym-a', 'press-2') });
+    expect(values(first.metrics.find((m) => m.key === 'max_load')?.series ?? [])).toEqual([170, 170]);
+    expect(values(second.metrics.find((m) => m.key === 'max_load')?.series ?? [])).toEqual([120, 130]);
+  });
+
+  it('the same gym with no machine recorded is its own context beside the same gym on a recorded machine', () => {
+    const bare = history('machine-press', [{ weight: 100, reps: 10 }], onMachine('gym-a', null));
+    const known = history('machine-press', [{ weight: 140, reps: 10 }], onMachine('gym-a', 'press-1'));
+    const view = buildStrengthView([...bare, ...known], PRESS);
+    expect(view.contexts.map((c) => c.gym_equipment_id).sort()).toEqual([null, 'press-1']);
+  });
+
+  it('a single context means there is nothing to pick between', () => {
+    expect(buildStrengthView(gymA, PRESS).contexts).toHaveLength(1);
+    expect(buildStrengthView(legacy, PRESS).contexts).toHaveLength(1);
+    expect(buildStrengthView([], PRESS).contexts).toEqual([]);
+  });
+
+  it('strengthContexts and sessionsInContext agree on what belongs to a context', () => {
+    const all = [...gymA, ...gymB, ...legacy];
+    for (const context of strengthContexts(all, PRESS)) {
+      expect(sessionsInContext(all, PRESS.id, context.key)).toHaveLength(context.session_count);
+    }
+    expect(sessionsInContext(all, PRESS.id, undefined)).toBe(all);
+  });
+
+  it('a machine used by a different exercise in the same workout does not change this exercise context', () => {
+    const [session] = history('machine-press', [{ weight: 100, reps: 10 }], {
+      training_location_id: 'gym-a',
+      exercise_equipment: [{ exercise_id: 'some-other-lift', gym_equipment_id: 'cable-1' }],
+    });
+    expect(buildStrengthView([session!], PRESS).contexts[0]).toMatchObject({ gym_equipment_id: null });
   });
 });
 

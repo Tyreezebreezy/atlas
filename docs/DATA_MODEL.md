@@ -18,19 +18,23 @@ interface SyncMeta {
 
 ## Entities
 
-| Entity                                       | File          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Exercise`                                   | `exercise.ts` | canonical + aliases, category, target/secondary muscle, equipment, movement pattern, measurement type, enrichment fields (movement family, push/pull/squat/hinge/carry/rotation flags, difficulty, known substitutes) — schema since v0.0.1, curated data for ~33 common exercises since v0.0.5; push-up/pull-up/chin-up/chest dip/triceps dip/inverted row corrected from `reps_weight` to `reps_bodyweight` in v0.0.6, see docs/PRS.md "Bodyweight exercise path"; optional `media` (image/gif/video/frame-sequence abstraction) added in v0.1.2, populated for 64 of 1,324 exercises in v0.1.3 via a Workout Guide (CC BY-SA 4.0) import, see docs/EXERCISE_MEDIA.md and THIRD_PARTY_MEDIA.md |
-| `Program`, `ProgramWeek`, `ProgramDay`       | `program.ts`  | long-running plan, multiple saved programs, active/inactive                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `QuickWorkout`                               | `program.ts`  | independent of the active program; running one never advances it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `WorkoutTemplate`, `PlannedExercise`         | `workout.ts`  | the **planned** side — target sets/reps/weight/RPE/RIR/rest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `WorkoutSession`, `PerformedSet`             | `workout.ts`  | the **performed** side — see Architecture doc's "Planned vs performed"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `ExerciseNote`, `ProgramNote`, `SessionNote` | `notes.ts`    | three distinct scopes, not one generic notes table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `PersonalRecord`                             | `records.ts`  | discriminated by kind: max load, rep, rep-range, estimated 1RM, volume, timed, distance, bodyweight — schema since v0.0.1, populated by `packages/pr-engine` since v0.0.6, see docs/PRS.md                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `PersonalRecordEvent`                        | `records.ts`  | vNext 04A.1. The history next to `PersonalRecord`'s current bests: one headline PR (a session/exercise/context that beat an earlier record). Stable id, `pr_kinds`, evaluator + estimator provenance. See PRS.md "Headline PR events"                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `Milestone`                                  | `records.ts`  | built-in and custom; dimension is data (exercise/weight/reps/volume/duration/distance/bodyweight-multiplier/custom), not code — new milestones never require a code change; extended in v0.0.7 (`reference_value`/`multiplier`/`active`/`origin_session_id`/`origin_set_id`); no new fields in v0.0.8, but `target_weight` for `bodyweight_multiplier` changed from a creation-time snapshot to a value resolved against `BodyMeasurement` history and frozen only at achievement, see docs/MILESTONES.md and docs/BODY_COMPOSITION.md                                                                                                                                                           |
-| `Benchmark`                                  | `records.ts`  | separate from PRs/milestones; carries `evidence_grade` (A–D) internally, never shown in the primary UI; extended in v0.0.7 (`age_min`/`age_max`/`source_url`/`sample_description`/`notes`/`dataset_version`), see docs/BENCHMARKS.md                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `BodyMeasurement`                            | `body.ts`     | weight, body fat %, fat/lean/muscle mass, water, visceral fat, bone mass, BMR — all nullable, `source` field; extended in v0.0.8 (`notes`), see docs/BODY_COMPOSITION.md                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Entity                                       | File           | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Exercise`                                   | `exercise.ts`  | canonical + aliases, category, target/secondary muscle, equipment, movement pattern, measurement type, enrichment fields (movement family, push/pull/squat/hinge/carry/rotation flags, difficulty, known substitutes) — schema since v0.0.1, curated data for ~33 common exercises since v0.0.5; push-up/pull-up/chin-up/chest dip/triceps dip/inverted row corrected from `reps_weight` to `reps_bodyweight` in v0.0.6, see docs/PRS.md "Bodyweight exercise path"; optional `media` (image/gif/video/frame-sequence abstraction) added in v0.1.2, populated for 64 of 1,324 exercises in v0.1.3 via a Workout Guide (CC BY-SA 4.0) import, see docs/EXERCISE_MEDIA.md and THIRD_PARTY_MEDIA.md |
+| `Program`, `ProgramWeek`, `ProgramDay`       | `program.ts`   | long-running plan, multiple saved programs, active/inactive                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `QuickWorkout`                               | `program.ts`   | independent of the active program; running one never advances it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `WorkoutTemplate`, `PlannedExercise`         | `workout.ts`   | the **planned** side — target sets/reps/weight/RPE/RIR/rest                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `WorkoutSession`, `PerformedSet`             | `workout.ts`   | the **performed** side — see Architecture doc's "Planned vs performed"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `ExerciseNote`, `ProgramNote`, `SessionNote` | `notes.ts`     | three distinct scopes, not one generic notes table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `PersonalRecord`                             | `records.ts`   | discriminated by kind: max load, rep, rep-range, estimated 1RM, volume, timed, distance, bodyweight — schema since v0.0.1, populated by `packages/pr-engine` since v0.0.6, see docs/PRS.md                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `PersonalRecordEvent`                        | `records.ts`   | vNext 04A.1. The history next to `PersonalRecord`'s current bests: one headline PR (a session/exercise/context that beat an earlier record). Stable id, `pr_kinds`, evaluator + estimator provenance. See PRS.md "Headline PR events"                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `TrainingLocation`                           | `location.ts`  | vNext 04B. The one place identity. A name is enough; nothing is seeded. `is_default` (at most one), `archived_at`, and the legacy `equipment: string[]` kept readable. A session's `training_location_id` and every equipment instance point here. See "Equipment instances, places, and session context"                                                                                                                                                                                                                                                                                                                                                                                        |
+| `EquipmentDefinition`                        | `equipment.ts` | a named kind of equipment ("Dumbbell", "Leverage machine"): `type` + `name`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `GymEquipmentInstance`                       | `equipment.ts` | one physical machine or rack at one place: exact loads, a range, a maximum only, or unknown; `archived_at`, `max_prompt_dismissed_at`, `legacy_equipment`. Two instances are never assumed equivalent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `ExerciseEquipmentContext`                   | `equipment.ts` | remembers which instance an exercise uses at a place (`is_default`, one per exercise per place)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `Milestone`                                  | `records.ts`   | built-in and custom; dimension is data (exercise/weight/reps/volume/duration/distance/bodyweight-multiplier/custom), not code — new milestones never require a code change; extended in v0.0.7 (`reference_value`/`multiplier`/`active`/`origin_session_id`/`origin_set_id`); no new fields in v0.0.8, but `target_weight` for `bodyweight_multiplier` changed from a creation-time snapshot to a value resolved against `BodyMeasurement` history and frozen only at achievement, see docs/MILESTONES.md and docs/BODY_COMPOSITION.md                                                                                                                                                           |
+| `Benchmark`                                  | `records.ts`   | separate from PRs/milestones; carries `evidence_grade` (A–D) internally, never shown in the primary UI; extended in v0.0.7 (`age_min`/`age_max`/`source_url`/`sample_description`/`notes`/`dataset_version`), see docs/BENCHMARKS.md                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `BodyMeasurement`                            | `body.ts`      | weight, body fat %, fat/lean/muscle mass, water, visceral fat, bone mass, BMR — all nullable, `source` field; extended in v0.0.8 (`notes`), see docs/BODY_COMPOSITION.md                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Estimated 1RM formula
 
@@ -80,6 +84,15 @@ rewritten: Dexie v3 `trainingLocations`; v4 `exerciseAliases` / `equipmentDefini
 `personalRecordEvents`** (Handoff 04A.1; SQLite `0006_add_personal_record_events.sql`).
 New optional fields on an existing entity (for example `Benchmark.evaluation_method`,
 `Milestone.achieved_benchmark_evaluation`) need no migration at all.
+
+**Handoff 04B adds no store and no migration** (Dexie stays at v6, SQLite at
+`0006`). Everything it persists is an optional field on an entity that already
+exists — `TrainingLocation.is_default` / `archived_at`,
+`GymEquipmentInstance.archived_at` / `max_prompt_dismissed_at` /
+`legacy_equipment`, `WorkoutSession.exercise_equipment` / `performed_local_date` /
+`time_zone_id` / `utc_offset_minutes`, `PersonalRecord.gym_equipment_id`,
+`PersonalRecordEvent.gym_equipment_id` — so a database written by 04A.1 opens
+and works unchanged, and a row that lacks a field reads as "not recorded".
 
 ## Gym Mode execution semantics (v0.0.4)
 
@@ -538,3 +551,206 @@ still literally reads "weighted front plank" (the exercise's real name,
 same as everywhere else in the app) -- a known cosmetic quirk, not
 corrected here since renaming the underlying exercise would touch its
 media-matching and curated-enrichment keys for a purely cosmetic gain.
+
+## Equipment instances, places, and session context (vNext Handoff 04B)
+
+### One place identity
+
+`TrainingLocation` is the only place identity: a session's
+`training_location_id`, every `GymEquipmentInstance.training_location_id` and
+every equipment-scoped record point at it. There is no second "gym profile"
+model and no "active location" setting — the old device-local one was migrated
+into `TrainingLocation` rows once (`apps/web/src/equipment/legacyProfiles.ts`;
+the profile that was active becomes the default) and removed. Where the owner is
+_now_ is the workout's own `training_location_id`.
+`apps/web/src/equipment/singleEquipmentAuthority.test.ts` fails if either comes
+back.
+
+- **A place can be only a name.** Nothing is seeded (a fresh install has no
+  places, and a workout starts anyway with `training_location_id: null`) and
+  equipment is optional. Unknown equipment is never read as a known maximum.
+- **The default is a flag on the entity** (`is_default`), so it is part of a
+  backup. At most one place carries it: `setDefaultLocation` clears the previous
+  holder, the first place created becomes the default, and restoring a backup
+  that carries a default clears any other one already on the device.
+- **Where a new workout starts** (`preselectedLocationId`, no questions asked):
+  the only active place; else the default; else the place of the most recent
+  workout; else nowhere. A place is never guessed from list order.
+- **Archive vs delete.** `archived_at` hides a place from every "where are you
+  training" choice (and ends its time as the default) but keeps the row, so
+  sessions that happened there and equipment configured there keep resolving
+  their names. A tombstone (`deleted_at`, which `getAll()` hides) is only offered
+  for a place nothing refers to — no session, no equipment; otherwise the UI
+  offers Archive alone. Nothing cascades: archiving or deleting a place never
+  touches a session, a record, an event or an instance.
+
+### Equipment instances
+
+- `EquipmentDefinition` is a named kind (`type`, from `EQUIPMENT_TYPES` or an
+  owner-named "Other"); instances share it.
+- `GymEquipmentInstance` is one physical machine or rack at one place. Two
+  machines at one place are two rows, the same make at two places is two rows,
+  and nothing is assumed equivalent. Its loads are described in exactly one of
+  four honest shapes (`parseLoadConfig`):
+  - **exact list** (`exact_loads`) — authoritative, and may be uneven (a rack that
+    skips from 5 to 8 to 10);
+  - **range** (`min_load`, `max_load`, `increment`) — all three;
+  - **maximum only** (`max_load`) — where the stack ends, not what lies below it:
+    `availableLoads` stays empty, no intermediate load is ever synthesized, but a
+    recommendation is still never above it;
+  - **unknown** — nothing set. Progression falls back to its unconstrained
+    decision; unknown is never read as "at the maximum".
+
+  Loads are in `unit`. Logged history is in lb (`APP_LOAD_UNIT`; there is no unit
+  preference), so an instance entered in kg is kept as entered but is never
+  applied to lb history and never converted to a "free-weight equivalent".
+
+- Per-instance owner state: `archived_at` (hidden from choices, kept for
+  history); `max_prompt_dismissed_at` ("Is 170 lb the maximum on this machine?" is
+  asked at most once — "yes" writes `max_load`, "no / not sure" writes this, and
+  nothing is ever inferred); `legacy_equipment` (below).
+- `ExerciseEquipmentContext` is the memory "this exercise uses that instance at
+  that place": `is_default`, one per exercise per place (`planRememberedMapping`).
+  Choosing a machine in a workout is the confirmation that writes it; ATLAS does
+  not auto-map when several machines would do.
+- **Legacy strings.** `TrainingLocation.equipment: string[]` (from before
+  instances) stays readable and is never rewritten or deleted. Structured
+  instances are the authoritative inventory for loads and progression. A legacy
+  string appears under "Legacy equipment" with **Configure**, which creates an
+  instance (marked `legacy_equipment`, so the string is not offered twice, and
+  with no maximum guessed). For substitution the two are unioned — see
+  SUBSTITUTIONS.md.
+
+### What a workout records
+
+All optional on `WorkoutSession`, so no migration, and every older session reads
+as "not recorded":
+
+| Field                                                        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_location_id`                                       | where the workout happened; captured when it starts (planned, freestyle and quick workouts), `null` when no place exists or "No location" is chosen. Fixed once a set is logged — see "The place and each machine are fixed by the sets logged against them"                                                                                                                                                                                                                                                                                                                                |
+| `exercise_equipment`                                         | `{ exercise_id, gym_equipment_id }[]` — **the** record of which instance each exercise was performed on in this session. It lives inside the session document (the `workout_sessions` store), so it travels with the session in a backup. One entry per exercise, not per set (the unit PRs and events use). Written when the owner picks a machine, or — for a machine remembered for the exercise at this place — when the exercise's first set is logged. An exercise with no chosen or remembered machine has no entry; nothing is guessed. Fixed once a set of that exercise is logged |
+| `performed_local_date`, `time_zone_id`, `utc_offset_minutes` | see "Local time" below                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+**The place and each machine are fixed by the sets logged against them**
+(`isLocationLocked`, `isExerciseEquipmentLocked`). The rule lives inside the
+transforms `changeSessionLocation` and `setExerciseEquipment`, not only in the
+screen: a refused change returns the very same session object, untouched (not even
+its version moves). Context is a record of where and on what sets were performed,
+so it only changes while that is still true to say.
+
+- **The workout's place** is free to change until the first set is logged (a
+  warm-up counts), and is fixed from then on. Before that, changing it clears any
+  machine the owner had already picked at the old place — after a confirmation;
+  never carried across, never swapped for a look-alike ("Chest Press #1 here" says
+  nothing about any machine there) — and the targets of exercises with nothing
+  logged are re-worked for the new place. After the first set the change is
+  refused: the session keeps its place and every machine mapping exactly as they
+  were. The control is replaced by the place's name with a "Locked" badge, and the
+  screen says that a workout with logged sets stays at that place, and that
+  training somewhere else means finishing this workout and starting another.
+  Nothing is ever re-homed, so a set logged at one gym cannot end up at another.
+- **An exercise's machine** is free to change until a set of _that_ exercise is
+  logged, and is fixed from then on; sets of other exercises do not lock it. The
+  session keeps one machine per exercise — deliberately no per-set machine — so a
+  different one after set 1 would retroactively relabel set 1. A refused change
+  leaves the stored equipment identity, the logged sets and the exercise's remembered
+  default untouched. The panel shows the machine that was recorded, or "not recorded"
+  (a machine cannot be added once sets were logged without one), with a "Locked"
+  badge and the reason. The limit is real and stated: if the owner switches machines
+  in the middle of an exercise, the rest of its sets belong in a new workout.
+- A finished workout is locked entirely, so no completed workout has its place or
+  machine rewritten. Removing the logged sets lifts the lock, because nothing is left
+  to relabel.
+
+### Performance context
+
+A performance's comparable context is the pair
+`(training_location_id, gym_equipment_id)`
+(`packages/pr-engine/src/context.ts`: `performanceContextOf`,
+`performanceContextKey` — the only place a session becomes a context). Records,
+headline events, the stall check, the Strength view and the weekly review's
+per-exercise counts all group by it, so two machines at one gym are separate
+series, and so is one make at two gyms. History with neither recorded is its own
+valid context, labelled "Unspecified / Legacy"; it is never assigned a place or a
+machine afterwards. "Last time" and the progression baseline are deliberately
+looser — see PROGRESSION.md. Details: PRS.md "Equipment-scoped series".
+
+### Local time
+
+A workout belongs to the calendar day on the wall clock where it was done, not
+to the UTC date of its timestamps (`started_at` / `completed_at` stay UTC
+instants). New sessions store:
+
+- `performed_local_date` — `YYYY-MM-DD`, the day on the device's clock when the
+  workout started. A stored fact: it does not move if the viewer later changes
+  time zone.
+- `time_zone_id` — the IANA zone the device reported
+  (`Intl.DateTimeFormat().resolvedOptions().timeZone`), or `null` when the runtime
+  reports none. Provenance only: never used to re-derive the date, never inferred
+  from a place's address.
+- `utc_offset_minutes` — minutes east of UTC at that moment (UTC−4 is −240).
+  Provenance only.
+
+A live session takes all three from the device clock. A **backdated** session
+(Log Past Workout, or any explicit start time) records only
+`performed_local_date` — the day the owner picked, or the day the start instant
+falls on here — and leaves `time_zone_id` and `utc_offset_minutes` `null`: the
+zone of this device proves nothing about where an old workout was done, so none
+is invented.
+
+**Reading** is one function, `sessionLocalDate` (`@atlas/core`): the stored
+`performed_local_date` when it is a valid `YYYY-MM-DD`; otherwise — every session
+recorded before 04B — the day `completed_at ?? started_at` falls on in the
+_viewer's_ time zone. That fallback is a documented approximation, not a
+recovered fact: an old workout viewed from a different zone than it was done in
+can land a day off. Weeks are Monday-first (`startOfWeekIso`, `mondayWeekIndex`).
+The weekly review, the activity heatmap, milestone days (including the
+consistency milestones' weeks), the PR event day, History's month grouping and the Log Past
+Workout default all read it; `packages/progress-engine/src/localDayGuard.test.ts`
+fails if a day or week is taken from the first ten characters of an ISO string.
+
+### Backup
+
+A backup carries every durable store this section adds — places, equipment
+definitions, instances, exercise-equipment contexts, aliases, test protocols and
+the PR event history — and an older backup still restores. See IMPORT_FORMAT.md
+"Backup contents".
+
+## Invariants held by the full-system acceptance pass (vNext 04B)
+
+Each of these was found broken or unstated by testing the whole app, then fixed where
+it is made, with a regression test.
+
+- **One planned entry per exercise per workout** (`uniqueExercises.ts`). Everything a
+  session records about an exercise — sets, slot completion, a skip, a goal, a timer,
+  the machine — is keyed by the exercise, so two slots for it would share all of that.
+  The pickers refuse an exercise already in the workout, `addExerciseTo*` and
+  `replaceExercise` refuse it, an import folds repeats into the first entry (keeping
+  the sets), and a template saved before the rule is folded when a workout starts.
+- **Exactly one active program and one default place.** `setActiveProgram` and a
+  restore both reconcile them (IMPORT_FORMAT.md "Backup contents"). `Program.activated_at`
+  is stamped when a program becomes active and bounds the "Missed" look-back
+  (`max(created_at, activated_at)`), so a program switched to today does not list a
+  week of phantom missed workouts.
+- **A workout's day label is its stored local day** (`formatSessionDate`, preferring
+  `performed_local_date`): History, Strength / Library per-exercise history and the Gym
+  Mode "History" sheet. Still formatted from the completion _instant_ in the viewer's
+  zone, so they can differ from the counted day only after the zone changes: chart
+  x-axis labels, milestone "Achieved" dates, and Today's "Completed Monday 7:15 PM".
+- **Numbers have bounds** (`PLAN_LIMITS`, `@atlas/workout-engine`): planned sets ≤ 100,
+  reps ≤ 999, load ≤ 5,000 lb, a work/rest time ≤ one day, distance ≤ 1,000,000 m, RPE/RIR ≤ 10 —
+  the same limits bound the workout editor, set logging and an imported plan
+  (IMPORT_FORMAT.md "Numbers in an imported plan"). A body measurement (`BODY_LIMITS`,
+  `@atlas/body-composition`) must be > 0 and at most 1,500 lb (weight and the masses) /
+  100 % / 100 (visceral) / 10,000 (BMR), carry at least one number, and not be dated in the
+  future.
+- **Log Past Workout** takes a day that has happened (not in the future, a start time
+  that has not passed today is refused), a duration of 1–1,440 minutes (blank = 60), and
+  asks before adding to a day that already has a workout. **Replace Existing** discards the
+  earlier workout _and_ recomputes the personal records (and events) of every exercise it
+  contained — records are derived from completed history, so they never outlive the
+  workout that set them. It is the only way to remove a completed workout in the app;
+  a milestone the discarded workout achieved stays achieved.
+- **Exercise → muscle mapping** precedence and the owner-exercise name table are in
+  ANATOMY.md "Exercise → muscle mapping".

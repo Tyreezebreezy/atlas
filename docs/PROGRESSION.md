@@ -102,6 +102,80 @@ already made since v0.1.1 — editing the Program or its policy afterward
 can never rewrite a session that already started, the same guarantee
 `planned_snapshot` has always given the rest of the target fields.
 
+## Equipment constraints and session context (vNext Handoff 01 / 04B)
+
+A target is held to what the equipment can actually load. The same code path
+decides it in both places it is shown, and screens never decide a load themselves
+(`singleEquipmentAuthority.test.ts` fails if one imports a load primitive):
+
+- **Live "Today" line** — `recommendProgression` (`recommendProgression.ts`).
+- **The target stamped at session start** — `decideWithinEquipment`, which asks the
+  same function and adopts only what it changed.
+
+**Which equipment.** `effectiveExerciseEquipment`: the machine chosen for the
+exercise in this workout, else the one remembered for the exercise at this
+workout's place. Neither → no constraint, never "at the maximum" (the owner is
+never forced to configure a gym). An instance in kg is not applied to lb history.
+
+**What constrains** (loads as described in DATA_MODEL.md "Equipment instances"):
+
+- exact list or range — the desired load if the equipment has it, else the next
+  real load above the current one; never an arithmetic value it cannot produce;
+- maximum only — the desired load if it fits under the maximum, else the maximum
+  itself; at the maximum nothing further. No step below the maximum is invented;
+- unknown — nothing constrains.
+
+**At the ceiling**, rep progression takes over, one rep at a time toward the
+policy's `ceiling_reps_max` (`increase_reps`, reason "Max available load"); when
+load and reps are both exhausted the answer is `review` ("Load and reps at their
+limit"), never an added set. `max_acceptable_load_jump` still turns an oversized
+jump into rep progression (`NEXT_LOAD_TOO_LARGE`).
+
+**One universal cap.** Whatever path produced a load, a recommendation is never
+above the equipment's known maximum (`cappedAtMaximum`) — including a load carried
+over unchanged from heavier equipment elsewhere (170 on the Main Gym's machine, a
+120 lb machine today).
+
+From the tests: an 80 lb dumbbell rack never yields 85, from 75 or from 80; a
+170 lb machine at 170 × 15 progresses reps (170 × 16) rather than a load that does
+not exist; a second gym with 120 lb dumbbells lets the same program progress past
+80; an instance with no loads never pretends to have a maximum.
+
+**One-time maximum question.** After the same top load has been reached in at
+least `MAX_CONFIRMATION_MIN_SESSIONS` (3) completed sessions on an instance that
+has no loads and no maximum, the owner is asked once "Is 170 lb the maximum on
+this machine?". Yes records `max_load`; No / not sure records
+`max_prompt_dismissed_at` and it is never asked again for that instance. A maximum
+is never inferred.
+
+**Baseline and "Last".** `sessionsPreferringContext` (`pr-engine/context.ts`):
+progress from, and compare with, the same machine at the same place when the
+exercise has been done there; otherwise from all history, so a new machine or a
+second gym starts from the program rather than a blank page. Records, headline
+events and Strength never fall back like this.
+
+**Session start.** `applyProgressionToSession(..., contextFor)` takes, per exercise,
+the machine it will be on and the history to progress from
+(`apps/web/src/equipment/sessionStartContext.ts` builds both from the chosen
+place). When the equipment changes the outcome the stamped decision says so:
+`previous_result` becomes `held` if an advance did not happen, and
+`decision_summary` gains the constraint, so "Why this target?" stays true. Without
+a context — Log Past Workout has no place — the result is exactly the
+unconstrained decision.
+
+**When the machine or place is chosen after the workout started** (the first time
+at a gym), `restampUntouchedTargets` re-works the target of an exercise nothing is
+logged on yet, for the machine and place it is now on: only on picking a machine
+(that exercise) or changing place (all of them). Both are only possible before the
+first set of that exercise / of the workout, which is also why the re-stamp never
+rewrites a target a set was performed against (see DATA_MODEL.md "The place and each
+machine are fixed by the sets logged against them"). An exercise with a logged set keeps
+the target it was done against, and so does an entry that never had a progression
+decision (added or replaced mid-workout). The live "Today" line always recomputes,
+and a manual entry always wins. One limit: the re-stamp works from the stamped
+target as the "current target", which only matters for an exercise's first-ever
+exposure.
+
 ## Chronology safety
 
 `findPreviousNormalSession()` looks up a session's progression baseline by

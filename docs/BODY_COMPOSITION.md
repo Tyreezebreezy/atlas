@@ -23,8 +23,14 @@ minimum (weight, body fat %) — the handoff's "minimum" reads as a floor, not
 a ceiling, and leaving the rest of an already-schema-supported entity
 unreachable through the UI would repeat the exact `reps_bodyweight` gap
 found and fixed in v0.0.6 (docs/PRS.md). All fields beyond `date` are
-optional; a measurement with only a date and nothing else is valid, if
-unhelpful.
+optional, but a measurement must carry **at least one number**, and what is
+typed is bounded (`bodyMeasurementProblem`, `@atlas/body-composition`): every
+number is above 0 and at most 1,500 (weight and the lb masses), 100 (body fat %,
+water %, visceral fat) or 10,000 (BMR), and the date is a real day that has
+happened. The form states the reason inline instead of saving. (It used to save
+anything -- an empty row, -5 lb, 99,999 lb, 400 % body fat, a future date -- and one
+such row stretched the trend chart's axis until the real data was a flat line.)
+A single blank field still means "not measured".
 
 ## Selection rule (`resolveBodyweightForDate`)
 

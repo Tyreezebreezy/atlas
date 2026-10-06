@@ -89,6 +89,51 @@ describe('applyImport', () => {
     expect(saved[0]?.is_quick_workout).toBe(true);
   });
 
+  it('folds a repeated exercise into one entry, adding up the sets and keeping the first prescription', async () => {
+    const storage = await seededStorage();
+    const workout: PlanWorkout = {
+      name: 'Pull',
+      is_quick_workout: false,
+      exercises: [
+        target({
+          order: 1,
+          exercise_name: 'Cable Row',
+          target_sets: 2,
+          target_reps_min: 10,
+          target_reps_max: 12,
+        }),
+        target({
+          order: 2,
+          exercise_name: 'Bench Press',
+          target_sets: 3,
+          target_reps_min: 5,
+          target_reps_max: 5,
+        }),
+        target({
+          order: 3,
+          exercise_name: 'cable row',
+          target_sets: 4,
+          target_reps_min: 6,
+          target_reps_max: 8,
+        }),
+      ],
+    };
+    const preview = buildImportPreview(
+      { kind: 'workout', workout },
+      await storage.exercises.getAll(),
+    );
+    expect(
+      preview.kind === 'workout' &&
+        preview.workout.exercises[2]?.warnings.map((w) => w.message).join(' '),
+    ).toMatch(/merged into the first/);
+
+    const result = await applyImport(preview, {}, storage);
+
+    const saved = result.workout_template!.exercises;
+    expect(saved.map((p) => p.exercise_id)).toEqual(['ex-row', 'ex-bench']);
+    expect(saved[0]).toMatchObject({ target_sets: 6, target_reps_min: 10, target_reps_max: 12 });
+  });
+
   it('drops a skipped unresolved exercise rather than blocking the whole import', async () => {
     const storage = await seededStorage();
     const workout: PlanWorkout = {

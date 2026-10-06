@@ -66,9 +66,18 @@ uncurated exercise.
   "swap" to something you're already doing that day).
 - `availableEquipment` — if provided, a candidate is excluded when it needs
   equipment outside that list; a bodyweight exercise (`equipment: []`)
-  always passes regardless. If omitted (the only mode the UI currently
-  uses — there's no equipment-inventory Settings yet), no equipment
-  filtering happens at all.
+  always passes regardless. If omitted, no equipment filtering happens at all.
+  Since vNext Handoff 04B the exercise options sheet ("Alternatives") passes the
+  workout place's inventory, `availableEquipmentForLocation`: the place's legacy
+  free-text equipment **unioned** with the kinds of the structured equipment
+  configured there (archived equipment does not count), so adding structured
+  equipment never makes the check forget what the legacy list said, and vice versa.
+  A place about which nothing is known — a name only, or no place at all — gives
+  `null`, which means _unknown_, not _empty_: no filtering, and no exercise is
+  flagged as unavailable until the owner has said what is there.
+  `equipmentUnavailable` (the "isn't among the equipment you've set up here" notice)
+  never fires for a bodyweight exercise, whatever the inventory. The Replace
+  Exercise panel's Suggested list does not pass an inventory and is unfiltered.
 
 ## Ordering
 
@@ -104,9 +113,10 @@ dropped, one just arrives by a different reasoned path.
 
 ## Not implemented
 
-- **User-declared equipment inventory.** `availableEquipment` is a real,
-  tested parameter, but no Settings UI collects it yet — building an
-  equipment-inventory feature wasn't in scope for v0.0.5.
+- **Equipment-aware ranking.** The inventory only _filters_ candidates (and drives
+  the "isn't available here" notice); it does not change scores, and the Replace
+  Exercise panel does not use it yet. The inventory itself is owner-declared now
+  (Gyms & Equipment, vNext Handoff 04B).
 - **`enrichment.avoid_if` filtering.** The field exists (informational
   hints like `'knee_pain'`, never a diagnosis) but nothing in the app
   collects user conditions to filter against, so it's not wired into

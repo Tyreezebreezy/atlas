@@ -376,8 +376,9 @@ describe('Milestones — categories, hidden program completion, distinct benchma
 
   it('never draws the same goal twice', () => {
     const html = view([bench, streak, mine]);
+    // Count the card's title element: a goal's Remove button has an aria-label that names it too ("Remove 185 lb Bench Press").
     for (const title of ['185 lb Bench Press', '50 Sessions', 'Machine Press 20 reps']) {
-      expect(html.split(title).length - 1).toBe(1);
+      expect(html.split(`atlas-milestone-card__title">${title}<`).length - 1).toBe(1);
     }
   });
 

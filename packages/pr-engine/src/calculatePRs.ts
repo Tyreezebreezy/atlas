@@ -3,6 +3,7 @@ import type { Exercise, PersonalRecord, PrKind } from '@atlas/data-model';
 import type { WorkoutSession } from '@atlas/data-model';
 import { eligibleSetsForExercise, type EligibleSet } from './eligibility';
 import { DEFAULT_E1RM_ESTIMATOR } from './e1rmEstimators';
+import { performanceContextKey, performanceContextOf, type PerformanceContext } from './context';
 
 /** Highest keyFn value wins; on a tie, the FIRST item in array order wins -- pass items pre-sorted ascending by achieved_at so ties resolve to "first achieved." Items where keyFn returns null are skipped. */
 function pickBest<T>(
@@ -24,7 +25,7 @@ function makePR(
   value: number,
   reps: number | null,
   source: EligibleSet,
-  trainingLocationId: string | null,
+  context: PerformanceContext,
   extra?: { estimator_id?: string; estimator_version?: string; load?: number },
 ): PersonalRecord {
   const now = new Date().toISOString();
@@ -42,7 +43,8 @@ function makePR(
     achieved_at: source.set.completed_at,
     source_session_id: source.session.id,
     source_set_id: source.set.id,
-    training_location_id: trainingLocationId,
+    training_location_id: context.training_location_id,
+    gym_equipment_id: context.gym_equipment_id,
     estimator_id: extra?.estimator_id ?? null,
     estimator_version: extra?.estimator_version ?? null,
     load: extra?.load ?? null,
@@ -50,35 +52,40 @@ function makePR(
 }
 
 /**
- * vNext Handoff 02. Groups already-eligible sets by their session's
- * `training_location_id` -- absent/null (every session before that field
- * existed, and any session the owner never tagged) is its own group, so
- * legacy history always resolves to exactly one group and this grouping is
- * a complete no-op for it. Only once real sessions start recording a
- * location do weight-bearing series actually split -- "170 lb at Gym A"
- * never silently merges with or overwrites "170 lb at Gym B." See
- * docs/PRS.md "Equipment-scoped series."
+ * Groups already-eligible sets by the comparable context of their session and
+ * exercise -- the training location (vNext Handoff 02) and, since Handoff 04B,
+ * the actual equipment instance the exercise was done on. Absent/null for
+ * both (every session before either was recorded) is its own group, so legacy
+ * history always resolves to exactly one group and this grouping is a
+ * complete no-op for it. Only once real sessions record a location and a
+ * machine do weight-bearing series split -- "170 lb on Chest Press #1" never
+ * silently merges with or overwrites "170 lb on Chest Press #2", and neither
+ * touches the same machine at another gym. See docs/PRS.md "Equipment-scoped
+ * series".
  */
-function groupByLocation(sorted: EligibleSet[]): Map<string | null, EligibleSet[]> {
-  const groups = new Map<string | null, EligibleSet[]>();
+function groupByContext(
+  sorted: EligibleSet[],
+): Map<string, { context: PerformanceContext; sets: EligibleSet[] }> {
+  const groups = new Map<string, { context: PerformanceContext; sets: EligibleSet[] }>();
   for (const e of sorted) {
-    const key = e.session.training_location_id ?? null;
-    const list = groups.get(key);
-    if (list) list.push(e);
-    else groups.set(key, [e]);
+    const context = performanceContextOf(e.session, e.set.exercise_id);
+    const key = performanceContextKey(context);
+    const group = groups.get(key);
+    if (group) group.sets.push(e);
+    else groups.set(key, { context, sets: [e] });
   }
   return groups;
 }
 
 /** The exact v0.0.6-v1.0.0 per-exercise PR computation, now run once per
- * location group instead of once over the whole history -- see
- * `groupByLocation`. Identical output to before this handoff for any
- * exercise whose sessions carry no `training_location_id` (today, all of
- * them), since that's a single group containing every eligible set. */
+ * context group instead of once over the whole history -- see
+ * `groupByContext`. Identical output to before for any exercise whose sessions
+ * carry no location and no equipment, since that's a single group containing
+ * every eligible set. */
 function calculatePRsForGroup(
   sorted: EligibleSet[],
   exercise: Exercise,
-  trainingLocationId: string | null,
+  context: PerformanceContext,
 ): PersonalRecord[] {
   const records: PersonalRecord[] = [];
 
@@ -100,13 +107,13 @@ function calculatePRsForGroup(
           maxLoad.value,
           maxLoad.item.set.reps,
           maxLoad.item,
-          trainingLocationId,
+          context,
         ),
       );
 
     const bestRep = pickBest(sorted, (e) => e.set.reps);
     if (bestRep)
-      records.push(makePR(exercise.id, 'rep', bestRep.value, null, bestRep.item, trainingLocationId));
+      records.push(makePR(exercise.id, 'rep', bestRep.value, null, bestRep.item, context));
 
     // rep_range: best weight per exact observed rep count -- generic over
     // whatever rep counts actually appear, not a hardcoded list of Ns.
@@ -118,7 +125,7 @@ function calculatePRsForGroup(
     }
     for (const [reps, e] of byReps) {
       records.push(
-        makePR(exercise.id, 'rep_range', e.set.weight ?? 0, reps, e, trainingLocationId),
+        makePR(exercise.id, 'rep_range', e.set.weight ?? 0, reps, e, context),
       );
     }
 
@@ -135,7 +142,7 @@ function calculatePRsForGroup(
     }
     for (const [load, e] of byLoad) {
       records.push(
-        makePR(exercise.id, 'rep_at_load', e.set.reps ?? 0, null, e, trainingLocationId, { load }),
+        makePR(exercise.id, 'rep_at_load', e.set.reps ?? 0, null, e, context, { load }),
       );
     }
 
@@ -155,7 +162,7 @@ function calculatePRsForGroup(
           bestE1rm.value,
           bestE1rm.item.set.reps,
           bestE1rm.item,
-          trainingLocationId,
+          context,
           { estimator_id: estimator.id, estimator_version: estimator.version },
         ),
       );
@@ -184,7 +191,7 @@ function calculatePRsForGroup(
     }
     if (bestVolume)
       records.push(
-        makePR(exercise.id, 'volume', bestVolume.value, null, bestVolume.last, trainingLocationId),
+        makePR(exercise.id, 'volume', bestVolume.value, null, bestVolume.last, context),
       );
   }
 
@@ -192,7 +199,7 @@ function calculatePRsForGroup(
     const bestBw = pickBest(sorted, (e) => e.set.reps);
     if (bestBw)
       records.push(
-        makePR(exercise.id, 'bodyweight', bestBw.value, null, bestBw.item, trainingLocationId),
+        makePR(exercise.id, 'bodyweight', bestBw.value, null, bestBw.item, context),
       );
 
     // v0.2.0. Only ever computed when at least one eligible set actually
@@ -209,7 +216,7 @@ function calculatePRsForGroup(
           bestWeighted.value,
           bestWeighted.item.set.reps,
           bestWeighted.item,
-          trainingLocationId,
+          context,
         ),
       );
   }
@@ -218,7 +225,7 @@ function calculatePRsForGroup(
     const bestTimed = pickBest(sorted, (e) => e.set.duration_seconds);
     if (bestTimed)
       records.push(
-        makePR(exercise.id, 'timed', bestTimed.value, null, bestTimed.item, trainingLocationId),
+        makePR(exercise.id, 'timed', bestTimed.value, null, bestTimed.item, context),
       );
   }
 
@@ -232,7 +239,7 @@ function calculatePRsForGroup(
           bestDistance.value,
           null,
           bestDistance.item,
-          trainingLocationId,
+          context,
         ),
       );
   }
@@ -252,21 +259,21 @@ function calculatePRsForGroup(
  * a tie, so two equal performances credit whichever happened earlier.
  *
  * Which kinds get computed is gated by `measurement_type` -- see
- * docs/PRS.md for the full table. vNext Handoff 02: sets are additionally
- * grouped by the source session's `training_location_id` before any kind
- * is computed (see `groupByLocation`) -- a no-op for any exercise whose
- * history has no recorded location.
+ * docs/PRS.md for the full table. Sets are additionally grouped by their
+ * comparable context -- location (Handoff 02) and equipment instance (Handoff
+ * 04B) -- before any kind is computed (see `groupByContext`); a no-op for any
+ * exercise whose history has neither.
  */
 export function calculatePRs(sessions: WorkoutSession[], exercise: Exercise): PersonalRecord[] {
   const eligible = eligibleSetsForExercise(sessions, exercise.id);
   if (eligible.length === 0) return [];
 
   const sorted = [...eligible].sort((a, b) => a.set.completed_at.localeCompare(b.set.completed_at));
-  const groups = groupByLocation(sorted);
+  const groups = groupByContext(sorted);
 
   const records: PersonalRecord[] = [];
-  for (const [trainingLocationId, group] of groups) {
-    records.push(...calculatePRsForGroup(group, exercise, trainingLocationId));
+  for (const { context, sets } of groups.values()) {
+    records.push(...calculatePRsForGroup(sets, exercise, context));
   }
   return records;
 }

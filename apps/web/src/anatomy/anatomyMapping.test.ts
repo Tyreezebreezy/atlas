@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MUSCLES } from '@atlas/anatomy';
+import { MUSCLES, muscleName } from '@atlas/anatomy';
 import {
   ATLAS_REGION_LABEL,
   DECORATIVE_UPSTREAM,
@@ -114,6 +114,37 @@ describe('anatomy mapping audit: the intentional shared/fallback allowlist', () 
     expect(svgIdsForShape('traps-upper-left')).toEqual(['traps']);
     expect(muscleIdsForShape('traps-upper-left')).not.toContain('back.rhomboids');
     expect(svgIdsForShape('gluteus-maximus-left')).toEqual(['glutes']);
+  });
+});
+
+describe('Hip Abductors (owner decision 2026-10-05: accept the art, fix the label)', () => {
+  it('is named for what the art draws, with its canonical identity unchanged', () => {
+    expect(muscleName('hamstrings.abductors')).toBe('Hip Abductors');
+    expect(ATLAS_REGION_LABEL['abductors']).toBe('Hip Abductors');
+    expect(MUSCLES.find((m) => m.id === 'hamstrings.abductors')).toMatchObject({
+      group_id: 'hamstrings',
+      region: 'back',
+      svg_id: 'abductors',
+    });
+    // the back-view tab stop that holds the gluteus-medius pads announces it under the new name
+    expect(VIEW_LAYOUTS.back.groups.find((g) => g.key === 'glutes+abductors')?.label).toBe(
+      'Glutes / Hip Abductors',
+    );
+  });
+
+  it('promises no outer thigh anywhere a person can read a muscle or region name', () => {
+    const readable = [
+      ...MUSCLES.map((m) => m.name),
+      ...Object.values(ATLAS_REGION_LABEL),
+      ...[...VIEW_LAYOUTS.front.groups, ...VIEW_LAYOUTS.back.groups].map((g) => g.label),
+    ];
+    expect(readable.filter((label) => /outer thigh/i.test(label))).toEqual([]);
+  });
+
+  it('is an accepted fallback, with the custom lateral-thigh art recorded as deferred', () => {
+    const entry = SHARED_REGION_ALLOWLIST.find((e) => e.atlasSvgId === 'abductors');
+    expect(entry?.visualStatus).toBe('accepted');
+    expect(entry?.followUp).toMatch(/deferred/i);
   });
 });
 

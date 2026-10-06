@@ -29,7 +29,7 @@ export function loadValue(target: ProgressionTargetSnapshot, field: 'weight' | '
   return (field === 'weight' ? target.target_weight : target.target_external_load) ?? 0;
 }
 
-function withLoad(
+export function withLoad(
   target: ProgressionTargetSnapshot,
   field: 'weight' | 'external_load',
   value: number,

@@ -28,7 +28,9 @@ const exercises = raw.map((record) => ({
   version: 1,
   device_id: 'seed',
   deleted_at: null,
-  name: record.name,
+  // The source stores the degree sign of four "sled 45° ..." names as "45в°" (UTF-8 read as Windows-1251);
+  // put it back so a re-run reproduces the corrected catalog (catalogIntegrity.test.ts guards the result).
+  name: record.name.replace(/[вВ]°/g, '°'),
   aliases: [],
   category: record.body_part,
   equipment: [record.equipment],

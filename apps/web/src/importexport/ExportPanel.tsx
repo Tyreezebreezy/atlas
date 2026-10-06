@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { localIsoDate } from '@atlas/core';
 import type { Program, WorkoutTemplate } from '@atlas/data-model';
 import {
   exportBackup,
@@ -10,6 +11,7 @@ import {
 } from '@atlas/import-export';
 import { ensurePREventsUpToDate } from '../progress/prEvents';
 import { useStorage } from '../storage/StorageContext';
+import { FilePicker } from './FilePicker';
 
 const MAX_RESTORE_FILE_BYTES = 20 * 1024 * 1024; // a full history backup can be larger than a single plan
 
@@ -144,11 +146,20 @@ type RestoreState =
 export function BackupPanel({ onBack }: BackupPanelProps) {
   const storage = useStorage();
   const [restoreState, setRestoreState] = useState<RestoreState>({ step: 'idle' });
+  const [exportNote, setExportNote] = useState<string | null>(null);
 
   async function handleExportBackup() {
     if (!storage) return;
     const doc = await exportBackup(storage);
-    downloadJson(`atlas-backup-${new Date().toISOString().slice(0, 10)}.json`, doc);
+    // The device's own day, not the UTC date (which is already tomorrow on a US evening).
+    const filename = `atlas-backup-${localIsoDate()}.json`;
+    downloadJson(filename, doc);
+    // The file is saved the way the browser or device saves any download -- in the desktop app that is silently, into the
+    // Downloads folder, with " (1)" added if the name is taken -- so say it was made, and where such files go.
+    const records = Object.values(doc.entities).reduce((sum, rows) => sum + rows.length, 0);
+    setExportNote(
+      `Backup file created: ${filename} (${records} record${records === 1 ? '' : 's'}). It is saved with your other downloads (on a computer, usually the Downloads folder). Keep a copy somewhere safe.`,
+    );
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -178,10 +189,18 @@ export function BackupPanel({ onBack }: BackupPanelProps) {
   async function handleConfirmRestore() {
     if (!storage || restoreState.step !== 'confirm') return;
     setRestoreState({ step: 'restoring' });
+    // The built-in catalog is seeded only into an EMPTY exercise store. A backup brings the owner's custom exercises,
+    // so restoring first on a device that has not seeded yet would make the store non-empty and the catalog would never
+    // be seeded: make sure it exists before anything is written. (Dynamic, like everywhere else: it carries the dataset.)
+    const { ensureExercisesSeeded } = await import('@atlas/exercise-library');
+    await ensureExercisesSeeded(storage);
     const result = await restoreBackup(restoreState.document, storage);
     // A restore replaces history wholesale, and an older backup carries no PR event history: rebuild it from the restored sessions.
     await ensurePREventsUpToDate(storage, { force: true }).catch((error: unknown) => {
-      console.error('ATLAS: the PR event history could not be rebuilt after the restore; it is rebuilt at next launch.', error);
+      console.error(
+        'ATLAS: the PR event history could not be rebuilt after the restore; it is rebuilt at next launch.',
+        error,
+      );
     });
     const total = Object.values(result.restored_counts).reduce((sum, count) => sum + count, 0);
     setRestoreState({
@@ -201,7 +220,7 @@ export function BackupPanel({ onBack }: BackupPanelProps) {
         <h2>Export</h2>
         <p className="atlas-importexport__hint">
           Everything needed to restore ATLAS on another device: Programs, Workouts, History, PRs,
-          Milestones, Body Measurements, and custom exercises.
+          Milestones, Body Measurements, custom exercises, and your Gyms &amp; Equipment.
         </p>
         <button
           type="button"
@@ -210,25 +229,35 @@ export function BackupPanel({ onBack }: BackupPanelProps) {
         >
           Export Full Backup
         </button>
+        {exportNote && (
+          <p className="atlas-importexport__hint" role="status">
+            {exportNote}
+          </p>
+        )}
       </section>
 
       <section>
         <h2>Restore</h2>
         {restoreState.step === 'idle' && (
-          <input
-            type="file"
-            accept=".json,application/json"
-            onChange={handleFileChange}
-            aria-label="Choose a backup file"
-          />
+          <>
+            <p className="atlas-importexport__hint">
+              Choose a backup you exported from ATLAS. Nothing changes until you confirm.
+            </p>
+            <FilePicker
+              label="Choose backup file"
+              accept=".json,application/json"
+              onChange={handleFileChange}
+            />
+          </>
         )}
         {restoreState.step === 'confirm' && (
           <div>
             <p>
               This will add{' '}
               {Object.values(restoreState.document.entities).reduce((s, a) => s + a.length, 0)}{' '}
-              record(s) to this ATLAS installation. Existing records with matching IDs will be
-              overwritten with the backup&rsquo;s version. This can&rsquo;t be undone.
+              record(s) to this ATLAS installation and keep everything already here. A record with
+              the same ID is replaced by the backup&rsquo;s version, and the backup&rsquo;s active
+              program and default gym take over. This can&rsquo;t be undone.
             </p>
             <div className="atlas-importexport__actions">
               <button type="button" onClick={() => setRestoreState({ step: 'idle' })}>
@@ -245,9 +274,19 @@ export function BackupPanel({ onBack }: BackupPanelProps) {
           </div>
         )}
         {restoreState.step === 'restoring' && <p>Restoring…</p>}
-        {restoreState.step === 'done' && <p>{restoreState.message}</p>}
+        {restoreState.step === 'done' && <p role="status">{restoreState.message}</p>}
         {restoreState.step === 'error' && (
-          <p className="atlas-importexport__row-warning">{restoreState.message}</p>
+          <>
+            <p className="atlas-importexport__row-warning" role="alert">
+              {restoreState.message}
+            </p>
+            {/* An unusable file must not strand the screen: choose another straight away. */}
+            <FilePicker
+              label="Choose another file"
+              accept=".json,application/json"
+              onChange={handleFileChange}
+            />
+          </>
         )}
       </section>
     </div>

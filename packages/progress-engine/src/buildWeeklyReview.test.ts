@@ -38,7 +38,8 @@ function completedSession(sets: ReturnType<typeof set>[], completedAt: string): 
   let session = startWorkoutSession({ name: 'Session', templateId: null, programId: null, programDayId: null, plannedSnapshot: [] });
   for (const s of sets) session = addPerformedSet(session, { ...s, completed_at: completedAt });
   session = completeWorkoutSession(session);
-  return { ...session, completed_at: completedAt };
+  // The day the workout was performed on, as the device's clock saw it: the date part of the fixture's timestamp.
+  return { ...session, completed_at: completedAt, performed_local_date: completedAt.slice(0, 10) };
 }
 
 const lift = (exerciseId: string, weight: number, reps: number) => set({ exerciseId, weight, reps });
@@ -68,6 +69,7 @@ function baseInput(overrides: Partial<WeeklyReviewInput> = {}): WeeklyReviewInpu
 const stall = (exerciseId: string): StagnationSignal => ({
   exercise_id: exerciseId,
   training_location_id: null,
+  gym_equipment_id: null,
   comparable_exposures: 3,
   first_exposure_date: '2026-07-01T00:00:00.000Z',
   last_exposure_date: '2026-08-05T00:00:00.000Z',
@@ -235,5 +237,103 @@ describe('buildWeeklyReview', () => {
     const review = buildWeeklyReview(baseInput());
     expect(review.planned_sessions).toBeNull();
     expect(review.adherence_ratio).toBeNull();
+  });
+});
+
+describe('vNext Handoff 04B: weekly buckets follow the workout\'s local calendar day, never the UTC date', () => {
+  const THIS_WEEK = { periodStart: '2026-08-03', periodEnd: '2026-08-09' }; // Mon-Sun
+  const NEXT_WEEK = { periodStart: '2026-08-10', periodEnd: '2026-08-16' };
+
+  /**
+   * Sunday Aug 9, 9:30 pm in New York (EDT, UTC-4): the instant is 01:30 UTC on MONDAY Aug 10, so
+   * a UTC-date bucket would move this workout into next week. The device recorded the local day.
+   */
+  const lateSundayInstant = '2026-08-10T01:30:00.000Z';
+  const prior = () => completedSession([lift('bench', 95, 8)], '2026-07-20T10:00:00.000Z');
+  const lateSunday = (sets = [lift('bench', 100, 8)]) => ({
+    ...completedSession(sets, lateSundayInstant),
+    performed_local_date: '2026-08-09',
+  });
+
+  it('a late-evening workout stays on the local day it was done', () => {
+    const sessions = [prior(), lateSunday()];
+    expect(buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions })).completed_sessions).toBe(1);
+    expect(buildWeeklyReview(baseInput({ ...NEXT_WEEK, sessions })).completed_sessions).toBe(0);
+  });
+
+  it('a Sunday late-evening workout remains in the correct local week, and Monday morning starts the next', () => {
+    const mondayMorning = { ...completedSession([lift('bench', 105, 8)], '2026-08-10T12:00:00.000Z'), performed_local_date: '2026-08-10' };
+    const sessions = [prior(), lateSunday(), mondayMorning];
+    expect(buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions })).completed_sessions).toBe(1);
+    expect(buildWeeklyReview(baseInput({ ...NEXT_WEEK, sessions })).completed_sessions).toBe(1);
+  });
+
+  it('the session count and the PR count of a week bucket by the same local day', () => {
+    const sessions = [prior(), lateSunday([lift('bench', 110, 8)])];
+    const prEvents = ledger(sessions, 'bench');
+    expect(prEvents).toHaveLength(1);
+    // The event's own timestamp is on the UTC Monday; the workout that earned it is a Sunday workout.
+    expect(prEvents[0]?.achieved_at.slice(0, 10)).toBe('2026-08-10');
+
+    const thisWeek = buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions, prEvents }));
+    const nextWeek = buildWeeklyReview(baseInput({ ...NEXT_WEEK, sessions, prEvents }));
+    expect([thisWeek.completed_sessions, thisWeek.pr_count]).toEqual([1, 1]);
+    expect([nextWeek.completed_sessions, nextWeek.pr_count]).toEqual([0, 0]);
+  });
+
+  it('the stored local day decides, whatever time zone the viewer is in now', () => {
+    // Recorded as Aug 9, but the end instant is three days later: no viewer zone maps that instant
+    // back to Aug 9, so only the stored day can put it in this week.
+    const session = { ...completedSession([lift('bench', 100, 8)], '2026-08-12T12:00:00.000Z'), performed_local_date: '2026-08-09' };
+    expect(buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions: [session] })).completed_sessions).toBe(1);
+    expect(buildWeeklyReview(baseInput({ ...NEXT_WEEK, sessions: [session] })).completed_sessions).toBe(0);
+  });
+
+  it('a session recorded before local days were stored uses the documented fallback: the viewer-local day of its completion', () => {
+    // 10:30 pm Sunday on THIS machine's clock, whatever its zone -- never bumped to Monday by the UTC date.
+    const sundayNight = new Date(2026, 7, 9, 22, 30);
+    const legacy: WorkoutSession = {
+      ...completedSession([lift('bench', 100, 8)], sundayNight.toISOString()),
+      performed_local_date: undefined,
+    };
+    const review = buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions: [legacy] }));
+    expect(review.completed_sessions).toBe(1);
+  });
+
+  it('a milestone is dated by the workout that reached it', () => {
+    const session = lateSunday();
+    const milestone: Milestone = {
+      id: 'm-late',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: lateSundayInstant,
+      version: 2,
+      device_id: 'seed',
+      deleted_at: null,
+      title: 'X',
+      exercise_id: 'bench',
+      dimension: 'weight',
+      target_weight: 100,
+      target_reps: null,
+      target_volume: null,
+      target_duration_seconds: null,
+      target_distance_meters: null,
+      target_bodyweight_multiplier: null,
+      reference_value: null,
+      multiplier: null,
+      is_builtin: false,
+      active: true,
+      achieved_at: lateSundayInstant,
+      origin_session_id: session.id,
+      origin_set_id: null,
+    };
+    expect(buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions: [prior(), session], milestones: [milestone] })).milestone_count).toBe(1);
+    expect(buildWeeklyReview(baseInput({ ...NEXT_WEEK, sessions: [prior(), session], milestones: [milestone] })).milestone_count).toBe(0);
+  });
+
+  it('exercises are classified progressed from the same local-day PR bucket', () => {
+    const sessions = [prior(), lateSunday([lift('bench', 110, 8)])];
+    const prEvents = ledger(sessions, 'bench');
+    const review = buildWeeklyReview(baseInput({ ...THIS_WEEK, sessions, prEvents }));
+    expect(review.exercises_progressed).toBe(1);
   });
 });

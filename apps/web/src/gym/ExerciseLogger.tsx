@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import {
   type LogSetInput,
   remainingSeconds,
@@ -22,7 +22,12 @@ import { describePR } from '../progress/formatPR';
 import { loadSettings } from '../settings/settings';
 import { ExerciseMedia } from '../library/ExerciseMedia';
 import { ExerciseContextSheet } from './ExerciseContextSheet';
-import { initialDraftValues, type DraftSetKind, type DraftValues } from './draftValues';
+import {
+  initialDraftValues,
+  setEntryProblem,
+  type DraftSetKind,
+  type DraftValues,
+} from './draftValues';
 import { formatRecommendation, REASON_TEXT } from './formatRecommendation';
 
 /** One user-facing choice per row, covering both the phase (warmup/work)
@@ -177,6 +182,11 @@ interface ExerciseLoggerProps {
    * (research pack v3 §10). Null when the exercise has no loadable
    * dimension the strategy layer understands yet. */
   liveRecommendation?: ProgressionRecommendation | null;
+  /** vNext Handoff 04B. Which machine this exercise is on -- rendered under the exercise name, before the numbers. */
+  equipmentPanel?: ReactNode;
+  /** vNext Handoff 04B. The kinds of equipment known to be at the workout's place (null = nothing known about it yet), for the "equipment unavailable" check. */
+  equipmentInventory?: string[] | null;
+  locationName?: string | null;
 }
 
 function formatSet(set: PerformedSet): string {
@@ -231,6 +241,9 @@ export function ExerciseLogger({
   onRemoveCompletedSet,
   onStartExerciseTimer,
   onStopExerciseTimer,
+  equipmentPanel,
+  equipmentInventory,
+  locationName,
 }: ExerciseLoggerProps) {
   const plannedRowCount = planned.target_sets ?? Math.max(performedSets.length, 1);
   const [extraRows, setExtraRows] = useState(0);
@@ -243,6 +256,8 @@ export function ExerciseLogger({
 
   const [drafts, setDrafts] = useState<Record<number, DraftValues>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  /** Why the row that was just tapped "complete" was not logged (see handleComplete). */
+  const [rowProblem, setRowProblem] = useState<{ index: number; message: string } | null>(null);
   /** v1.0.0 (H1). Which draft row's optional details (RPE / RIR / notes) are
    * expanded, if any -- kept collapsed by default so the primary
    * weight/reps logging path stays fast on a phone. */
@@ -295,6 +310,7 @@ export function ExerciseLogger({
   }
 
   function updateDraft(index: number, patch: Partial<DraftValues>) {
+    setRowProblem((current) => (current?.index === index ? null : current));
     setDrafts((prev) => ({ ...prev, [index]: { ...draftFor(index), ...patch } }));
   }
 
@@ -314,6 +330,21 @@ export function ExerciseLogger({
       ? runningTimer.duration_seconds - remainingSeconds(runningTimer)
       : null;
     const durationValue = draft.duration !== '' ? Number(draft.duration) : durationFromTimer;
+    // A set must be a possible set: say what is wrong and keep the row, rather than logging nonsense (see setEntryProblem).
+    const problem = setEntryProblem(exercise.measurement_type, {
+      weight: draft.weight,
+      externalLoad: draft.externalLoad,
+      reps: draft.reps,
+      duration: durationValue != null ? String(durationValue) : '',
+      distance: draft.distance,
+      rpe: draft.rpe,
+      rir: draft.rir,
+    });
+    if (problem) {
+      setRowProblem({ index, message: problem });
+      return;
+    }
+    setRowProblem(null);
     const { phase, setType } = phaseAndTypeForKind(draft.kind);
 
     onCompleteSet({
@@ -372,12 +403,15 @@ export function ExerciseLogger({
           )}
         </div>
       )}
+      {equipmentPanel}
       {showContextSheet && (
         <ExerciseContextSheet
           exercise={exercise}
           planned={planned}
           allSessions={allSessions}
           library={library}
+          equipmentInventory={equipmentInventory ?? null}
+          locationName={locationName ?? null}
           canGroupWithNext={canGroupWithNext}
           onGroupWithNext={
             onGroupWithNext
@@ -442,7 +476,7 @@ export function ExerciseLogger({
         <div className="atlas-gym-goal">
           <div className="atlas-gym-goal__line">
             <span className="atlas-gym-goal__sets">
-              {planned.target_sets ?? 1} working set{planned.target_sets === 1 ? '' : 's'}
+              {planned.target_sets ?? 1} working set{(planned.target_sets ?? 1) === 1 ? '' : 's'}
             </span>
             <span className="atlas-gym-goal__program">Program: {programRange(planned)}</span>
           </div>
@@ -700,6 +734,15 @@ export function ExerciseLogger({
                     )}
                   </td>
                 </tr>
+                {rowProblem?.index === index && (
+                  <tr>
+                    <td colSpan={8}>
+                      <p className="atlas-gym-exercise__row-error" role="alert">
+                        {rowProblem.message}
+                      </p>
+                    </td>
+                  </tr>
+                )}
                 {detailIndex === index && (
                   <tr className="atlas-gym-exercise__details">
                     <td colSpan={8}>

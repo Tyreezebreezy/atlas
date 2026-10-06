@@ -100,6 +100,63 @@ describe('ensureExercisesSeeded', () => {
     expect(byId(after)).toEqual(byId(before));
   });
 
+  describe('the "sled 45° leg press" row that once shipped as "45в°"', () => {
+    const LEG_PRESS_ID = 'edf4d45f-163a-43f5-9d5b-5f427d5fe6c5';
+    const libraryRow = () => {
+      const row = seedExercises.find((e) => e.id === LEG_PRESS_ID);
+      if (!row) throw new Error('expected the sled 45° leg press row in the seed data');
+      return row;
+    };
+
+    it('seeds a fresh device with the degree sign', async () => {
+      const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+      await ensureExercisesSeeded(storage);
+      const all = await storage.exercises.getAll();
+      expect(all.find((e) => e.id === LEG_PRESS_ID)?.name).toBe('sled 45° leg press');
+    });
+
+    it('repairs the stored name on a device that seeded the garbled one -- same id, nothing else lost', async () => {
+      const garbled: Exercise = {
+        ...libraryRow(),
+        name: 'sled 45в° leg press',
+        media: null,
+        user_notes: 'seat 4, feet high',
+        is_favorite: true,
+      };
+      const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+      await storage.exercises.put(garbled);
+
+      await ensureExercisesSeeded(storage);
+
+      const [repaired] = await storage.exercises.getAll();
+      expect(repaired).toMatchObject({
+        id: LEG_PRESS_ID,
+        name: 'sled 45° leg press',
+        user_notes: 'seat 4, feet high',
+        is_favorite: true,
+        media: null,
+        version: garbled.version + 1,
+      });
+    });
+
+    it("does not rewrite a custom exercise's own name", async () => {
+      const custom: Exercise = {
+        ...libraryRow(),
+        id: 'custom-45',
+        name: 'my 45в° thing',
+        is_custom: true,
+        media: null,
+      };
+      const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
+      await storage.exercises.put(custom);
+
+      await ensureExercisesSeeded(storage);
+
+      const [result] = await storage.exercises.getAll();
+      expect(result).toMatchObject({ name: 'my 45в° thing', version: custom.version });
+    });
+  });
+
   it('applies curated enrichment to seeded exercises that have it', async () => {
     const storage = new IndexedDbAdapter(`atlas-test-${crypto.randomUUID()}`);
     await ensureExercisesSeeded(storage);

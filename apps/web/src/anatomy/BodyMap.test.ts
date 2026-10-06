@@ -41,6 +41,29 @@ describe('BodyMap — front / back', () => {
   });
 });
 
+describe('BodyMap — which side it opens on', () => {
+  const FRONT = 'viewBox="0 0 35 93"';
+  const BACK = 'viewBox="37 0 35 93"';
+
+  it('opens on the back when what is lit is behind (a row, a leg curl, a hip abduction)', () => {
+    expect(render({ states: [{ muscleId: 'back.lats', state: 'primary' }, { muscleId: 'hamstrings.hamstrings', state: 'secondary' }] })).toContain(BACK);
+    // Abductors are drawn on the back; the hip-abduction page used to open on an empty front figure.
+    expect(render({ states: [{ muscleId: 'hamstrings.abductors', state: 'primary' }] })).toContain(BACK);
+  });
+
+  it('opens on the front when more is lit in front, on a tie, and when nothing is lit', () => {
+    expect(render({ states: [{ muscleId: 'chest.mid', state: 'primary' }, { muscleId: 'arms.triceps', state: 'secondary' }] })).toContain(FRONT);
+    // The deltoid region is on both sides: a tie.
+    expect(render({ states: [{ muscleId: 'shoulders.lateral', state: 'primary' }] })).toContain(FRONT);
+    expect(render({ states: [] })).toContain(FRONT);
+  });
+
+  it('only opens that way: the viewer still toggles, and a fixed figure stays where it was fixed', () => {
+    expect(render({ states: [{ muscleId: 'back.lats', state: 'primary' }] })).toContain('>Front<');
+    expect(render({ states: [{ muscleId: 'back.lats', state: 'primary' }], view: 'front' })).toContain(FRONT);
+  });
+});
+
 describe('BodyMap — accessible names and interaction', () => {
   it('is a plain image (no tab stops) until it is given a selection handler', () => {
     const html = render({ states: [] });

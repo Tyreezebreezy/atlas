@@ -63,6 +63,7 @@ export function ProgramScreen() {
         storage={storage}
         programId={view.programId}
         templates={templates}
+        onTemplatesChanged={() => void reload()}
         onDone={() => {
           setView({ kind: 'list' });
           void reload();

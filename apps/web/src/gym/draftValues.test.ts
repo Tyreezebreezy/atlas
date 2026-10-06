@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise, PerformedSet, PlannedExercise } from '@atlas/data-model';
 import { createPlannedExercise } from '@atlas/workout-engine';
-import { initialDraftValues } from './draftValues';
+import {
+  initialDraftValues,
+  MAX_SET_LOAD,
+  MAX_SET_REPS,
+  setEntryProblem,
+  type SetEntry,
+} from './draftValues';
 
 function exercise(overrides: Partial<Exercise> = {}): Exercise {
   return {
@@ -105,5 +111,93 @@ describe('initialDraftValues (cross-exercise carryover regression)', () => {
     const draft = initialDraftValues(pullUp, p, [], []);
     expect(draft.weight).toBe('');
     expect(draft.externalLoad).toBe('');
+  });
+});
+
+const entry = (patch: Partial<SetEntry>): SetEntry => ({
+  weight: '',
+  reps: '',
+  duration: '',
+  distance: '',
+  rpe: '',
+  rir: '',
+  ...patch,
+});
+
+describe('setEntryProblem: a logged set must be a possible set', () => {
+  it('accepts an ordinary working set, and a bodyweight one with no load typed', () => {
+    expect(setEntryProblem('reps_weight', entry({ weight: '135', reps: '8' }))).toBeNull();
+    expect(setEntryProblem('reps_weight', entry({ weight: '', reps: '12' }))).toBeNull();
+    expect(
+      setEntryProblem('reps_weight', entry({ weight: '47.5', reps: '10', rpe: '8.5', rir: '1' })),
+    ).toBeNull();
+    expect(setEntryProblem('reps_bodyweight', entry({ reps: '15' }))).toBeNull();
+  });
+
+  it('refuses a set with no reps -- a "completed" set with nothing in it', () => {
+    expect(setEntryProblem('reps_weight', entry({ weight: '135', reps: '' }))).toMatch(/reps/i);
+    expect(setEntryProblem('reps_weight', entry({ weight: '135', reps: '0' }))).toMatch(
+      /whole number/,
+    );
+    expect(setEntryProblem('reps', entry({ reps: '   ' }))).toMatch(/reps/i);
+  });
+
+  it('refuses fractional, negative and absurd reps and loads', () => {
+    expect(setEntryProblem('reps_weight', entry({ weight: '100', reps: '8.5' }))).toMatch(
+      /whole number/,
+    );
+    expect(setEntryProblem('reps_weight', entry({ weight: '100', reps: '-3' }))).toMatch(
+      /whole number/,
+    );
+    expect(
+      setEntryProblem('reps_weight', entry({ weight: '100', reps: String(MAX_SET_REPS + 1) })),
+    ).toMatch(/whole number/);
+    expect(setEntryProblem('reps_weight', entry({ weight: '-5', reps: '8' }))).toMatch(/negative/);
+    expect(
+      setEntryProblem('reps_weight', entry({ weight: String(MAX_SET_LOAD + 1), reps: '8' })),
+    ).toMatch(/between 0 and/);
+    expect(
+      setEntryProblem('reps_weight', entry({ weight: '999999', reps: '9999' })),
+    ).not.toBeNull();
+    expect(setEntryProblem('reps_bodyweight', entry({ externalLoad: '-10', reps: '8' }))).toMatch(
+      /negative/,
+    );
+  });
+
+  it('the limits themselves are allowed', () => {
+    expect(
+      setEntryProblem(
+        'reps_weight',
+        entry({ weight: String(MAX_SET_LOAD), reps: String(MAX_SET_REPS) }),
+      ),
+    ).toBeNull();
+    expect(setEntryProblem('reps_weight', entry({ weight: '0', reps: '1' }))).toBeNull();
+  });
+
+  it('a timed exercise needs a time, a distance exercise a distance, either is enough for time+distance', () => {
+    expect(setEntryProblem('time', entry({}))).toMatch(/time/i);
+    expect(setEntryProblem('time', entry({ duration: '45' }))).toBeNull();
+    expect(setEntryProblem('time', entry({ duration: '-5' }))).toMatch(/between 1/);
+    expect(setEntryProblem('distance', entry({}))).toMatch(/distance/i);
+    expect(setEntryProblem('distance', entry({ distance: '400' }))).toBeNull();
+    expect(setEntryProblem('distance', entry({ distance: '0' }))).toMatch(/above 0/);
+    expect(setEntryProblem('distance_time', entry({}))).toMatch(/time or a distance/);
+    expect(setEntryProblem('distance_time', entry({ distance: '5000' }))).toBeNull();
+    expect(setEntryProblem('distance_time', entry({ duration: '1500' }))).toBeNull();
+  });
+
+  it('RPE is 1-10 and RIR is 0-10 when given, and optional when not', () => {
+    expect(setEntryProblem('reps_weight', entry({ weight: '100', reps: '8', rpe: '11' }))).toMatch(
+      /RPE/,
+    );
+    expect(setEntryProblem('reps_weight', entry({ weight: '100', reps: '8', rpe: '0' }))).toMatch(
+      /RPE/,
+    );
+    expect(setEntryProblem('reps_weight', entry({ weight: '100', reps: '8', rir: '-1' }))).toMatch(
+      /RIR/,
+    );
+    expect(
+      setEntryProblem('reps_weight', entry({ weight: '100', reps: '8', rir: '0' })),
+    ).toBeNull();
   });
 });

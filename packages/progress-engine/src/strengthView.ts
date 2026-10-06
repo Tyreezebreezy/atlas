@@ -1,4 +1,11 @@
-import { DEFAULT_E1RM_ESTIMATOR, eligibleSets, eligibleSetsForExercise } from '@atlas/pr-engine';
+import {
+  DEFAULT_E1RM_ESTIMATOR,
+  eligibleSets,
+  eligibleSetsForExercise,
+  performanceContextKey,
+  performanceContextOf,
+  sessionContextKey,
+} from '@atlas/pr-engine';
 import type { Exercise, WorkoutSession } from '@atlas/data-model';
 import {
   bestWeightSeries,
@@ -51,26 +58,74 @@ export interface StrengthMetric {
   note?: string;
 }
 
+/**
+ * vNext Handoff 04B. One comparable context an exercise has been done in: a
+ * training location plus the actual machine (`gym_equipment_id`), either of
+ * which may be null for history that never recorded it. The Strength picker is
+ * built from these, so it shows exactly the contexts the data holds -- no more.
+ */
+export interface StrengthContext {
+  /** `performanceContextKey` -- hand it back as `StrengthViewOptions.contextKey` to scope a view to this context. */
+  key: string;
+  training_location_id: string | null;
+  gym_equipment_id: string | null;
+  session_count: number;
+  last_performed_at: string;
+}
+
 export interface StrengthView {
   metrics: StrengthMetric[];
   default_key: string;
   /** Loads used in at least two sessions, most recently used first (ties: heavier first). */
   load_options: number[];
   selected_load: number | null;
-  /** Distinct equipment contexts (`training_location_id`, null = none recorded) in this exercise's history. */
-  contexts: (string | null)[];
+  /**
+   * Distinct comparable contexts in this exercise's history (every session, not
+   * only the scoped ones), most recently used first. One entry means there is
+   * nothing to pick between; with several, the first is where a view should
+   * open -- weight-bearing history in one context is never blended with
+   * another's.
+   */
+  contexts: StrengthContext[];
 }
 
 export interface StrengthViewOptions {
   /** Which load the reps-at-load metric shows. Falls back to the most recently used recurring load. */
   load?: number | null;
   /**
-   * Equipment context. `undefined` = every session; `null` = sessions with no
-   * recorded location; a string = that `TrainingLocation`. A weight-bearing
-   * history at one gym must not be blended with another's -- 170 lb on one
-   * machine is not 170 lb on another (see PRs "Equipment-scoped series").
+   * Comparable context (`StrengthContext.key`). `undefined` = every session.
+   * A weight-bearing history in one context must not be blended with another's:
+   * 170 lb on one machine is not 170 lb on another, even at the same gym (see
+   * PRs "Equipment-scoped series").
    */
-  trainingLocationId?: string | null;
+  contextKey?: string;
+}
+
+/** Every comparable context an exercise has completed work in, most recently used first. */
+export function strengthContexts(sessions: WorkoutSession[], exercise: Exercise): StrengthContext[] {
+  const byKey = new Map<string, { context: StrengthContext; ids: Set<string> }>();
+  for (const { session } of eligibleSetsForExercise(sessions, exercise.id)) {
+    const parts = performanceContextOf(session, exercise.id);
+    const key = performanceContextKey(parts);
+    const at = session.completed_at ?? session.started_at;
+    const entry = byKey.get(key) ?? { context: { key, ...parts, session_count: 0, last_performed_at: '' }, ids: new Set<string>() };
+    entry.ids.add(session.id);
+    if (at > entry.context.last_performed_at) entry.context.last_performed_at = at;
+    byKey.set(key, entry);
+  }
+  return [...byKey.values()]
+    .map(({ context, ids }) => ({ ...context, session_count: ids.size }))
+    .sort((a, b) => b.last_performed_at.localeCompare(a.last_performed_at) || a.key.localeCompare(b.key));
+}
+
+/** The sessions in which `exerciseId` ran in one context, or every session when `contextKey` is undefined. */
+export function sessionsInContext(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+  contextKey: string | undefined,
+): WorkoutSession[] {
+  if (contextKey === undefined) return sessions;
+  return sessions.filter((s) => sessionContextKey(s, exerciseId) === contextKey);
 }
 
 /** Indices where a series reaches a strictly new best. The first point is the baseline, not a record. */
@@ -126,14 +181,8 @@ export function buildStrengthView(
   exercise: Exercise,
   options: StrengthViewOptions = {},
 ): StrengthView {
-  const exerciseSessions = allSessions.filter((s) =>
-    eligibleSetsForExercise([s], exercise.id).length > 0,
-  );
-  const contexts = [...new Set(exerciseSessions.map((s) => s.training_location_id ?? null))];
-  const sessions =
-    options.trainingLocationId === undefined
-      ? allSessions
-      : allSessions.filter((s) => (s.training_location_id ?? null) === options.trainingLocationId);
+  const contexts = strengthContexts(allSessions, exercise);
+  const sessions = sessionsInContext(allSessions, exercise.id, options.contextKey);
 
   const metrics: StrengthMetric[] = [];
   let loadOptions: number[] = [];

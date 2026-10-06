@@ -88,7 +88,14 @@ export function makeSession(
     session = addPerformedSet(session, { ...performed, completed_at: completedAt });
   });
   session = completeWorkoutSession(session);
-  return { ...session, completed_at: completedAt, ...overrides };
+  // `startWorkoutSession` records the real clock's day; a fixture that backdates the
+  // workout must say which day it was performed on, as a backdated entry does.
+  return {
+    ...session,
+    completed_at: completedAt,
+    performed_local_date: completedAt.slice(0, 10),
+    ...overrides,
+  };
 }
 
 export function makePR(

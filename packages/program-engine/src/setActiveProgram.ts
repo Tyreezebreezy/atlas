@@ -11,6 +11,8 @@ export async function setActiveProgram(storage: AtlasStorage, programId: string)
       await storage.programs.put({
         ...program,
         is_active: shouldBeActive,
+        // Becoming the active program starts its schedule now (see `Program.activated_at`).
+        ...(shouldBeActive ? { activated_at: now } : {}),
         updated_at: now,
         version: program.version + 1,
       });

@@ -1,9 +1,13 @@
 /**
- * Device-local settings (localStorage). The one "active training location"
- * selection stays here because "which gym am I at right now" is transient
- * context, not shared history; the reusable locations themselves are now
- * first-class `TrainingLocation` entities (see packages/data-model and the
- * Equipment/Places screen).
+ * Device-local settings (localStorage): timer preferences only.
+ *
+ * vNext Handoff 04B: this used to hold an "active training location". That
+ * setting is gone. Where a workout happens is the workout's own
+ * `training_location_id` (chosen when it starts), the place a new workout
+ * starts at is the default flag on the `TrainingLocation` entity (so it is
+ * part of a backup, which device-local settings never are) or the place of the
+ * last workout, and the old field never persisted anyway -- `loadSettings`
+ * overwrote it with a legacy key on every read.
  */
 export interface AtlasSettings {
   preCountdownEnabled: boolean;
@@ -12,9 +16,6 @@ export interface AtlasSettings {
   timerSoundEnabled: boolean;
   timerVibrationEnabled: boolean;
   timerFlashEnabled: boolean;
-  /** v1.0.0. Id of the active `TrainingLocation` (used for equipment-aware
-   * substitution and exercise discovery). Null = none active. */
-  activeTrainingLocationId: string | null;
 }
 
 export const DEFAULT_SETTINGS: AtlasSettings = {
@@ -23,11 +24,11 @@ export const DEFAULT_SETTINGS: AtlasSettings = {
   timerSoundEnabled: true,
   timerVibrationEnabled: true,
   timerFlashEnabled: true,
-  activeTrainingLocationId: null,
 };
 
 /** v1.0.0. The pre-entity equipment-profile shape, kept only to migrate
- * existing device-local profiles into `TrainingLocation` entities. */
+ * existing device-local profiles into `TrainingLocation` entities (see
+ * `equipment/legacyProfiles.ts`). */
 export interface LegacyEquipmentProfile {
   id: string;
   name: string;
@@ -41,25 +42,26 @@ interface LegacySettingsShape {
 
 const STORAGE_KEY = 'atlas-settings';
 
+/**
+ * Reads the stored settings over the defaults. Unknown stored fields pass
+ * through untouched, on purpose: a later `saveSettings` writes them back, so
+ * saving a timer preference never drops legacy equipment profiles that have not
+ * been migrated into `TrainingLocation` rows yet.
+ */
 export function loadSettings(): AtlasSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<AtlasSettings> & LegacySettingsShape;
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      activeTrainingLocationId: parsed.activeEquipmentProfileId ?? null,
-    };
+    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<AtlasSettings>) };
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
 /**
- * v1.0.0. Reads any legacy equipment profiles out of raw localStorage so the
- * Equipment/Places screen can migrate them into `TrainingLocation` entities.
- * Returns the legacy profiles (and active id) without mutating storage.
+ * v1.0.0. Reads any legacy equipment profiles out of raw localStorage so Gyms &
+ * Equipment can migrate them into `TrainingLocation` entities. Returns the
+ * legacy profiles (and active id) without mutating storage.
  */
 export function readLegacyEquipmentProfiles(): {
   profiles: LegacyEquipmentProfile[];

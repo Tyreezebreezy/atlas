@@ -1,4 +1,5 @@
 import type { ExerciseReplacement, WorkoutSession, WorkoutTemplate } from '@atlas/data-model';
+import { hasExercise } from './uniqueExercises';
 
 function touch(session: WorkoutSession): Pick<WorkoutSession, 'updated_at' | 'version'> {
   return { updated_at: new Date().toISOString(), version: session.version + 1 };
@@ -18,6 +19,12 @@ export function replaceExercise(
   reason: string | null,
   scope: ExerciseReplacement['scope'],
 ): WorkoutSession {
+  // Swapping in an exercise the workout already has would leave two entries for it (see uniqueExercises.ts).
+  if (
+    replacementExerciseId !== originalExerciseId &&
+    hasExercise(session.planned_snapshot, replacementExerciseId)
+  )
+    return session;
   const entry: ExerciseReplacement = {
     original_exercise_id: originalExerciseId,
     replacement_exercise_id: replacementExerciseId,
@@ -43,6 +50,11 @@ export function applyExerciseReplacementToTemplate(
   originalExerciseId: string,
   replacementExerciseId: string,
 ): WorkoutTemplate {
+  if (
+    replacementExerciseId !== originalExerciseId &&
+    hasExercise(template.exercises, replacementExerciseId)
+  )
+    return template;
   return {
     ...template,
     exercises: template.exercises.map((planned) =>

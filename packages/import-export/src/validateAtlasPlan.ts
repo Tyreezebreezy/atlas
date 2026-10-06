@@ -1,3 +1,4 @@
+import { OPTIONAL_BACKUP_STORES, type OptionalBackupKey } from './backupStores';
 import {
   ATLAS_PLAN_FORMAT,
   type AtlasBackupDocument,
@@ -257,40 +258,24 @@ function validateBackup(
   }
   if (!ok) return null;
 
-  // v0.2.0. Optional, unlike every key above: absent entirely on a backup
-  // exported before this field existed, which must still validate and
-  // restore cleanly (see restoreBackup.ts's own `?? []`) -- never rejected
-  // just for missing a key that didn't exist yet.
-  let workoutOccurrences: unknown[] = [];
-  if (value.entities.workout_occurrences !== undefined) {
-    const validated = validateEntityArray(
-      value.entities.workout_occurrences,
-      `${path}.entities.workout_occurrences`,
-      issues,
-    );
+  // Optional, unlike every key above (`OPTIONAL_BACKUP_STORES`): absent
+  // entirely on a backup exported before that store was part of backups (v0.2.0
+  // occurrences, 04A.1 PR events, 04B locations/equipment/aliases/protocols),
+  // which must still validate and restore cleanly (see restoreBackup.ts's own
+  // `?? []`) -- never rejected just for missing a key that didn't exist yet.
+  // When a key IS present it is validated like any other entity array.
+  const optional: Partial<Record<OptionalBackupKey, unknown[]>> = {};
+  for (const key of Object.keys(OPTIONAL_BACKUP_STORES) as OptionalBackupKey[]) {
+    optional[key] = [];
+    if (value.entities[key] === undefined) continue;
+    const validated = validateEntityArray(value.entities[key], `${path}.entities.${key}`, issues);
     if (validated === null) return null;
-    workoutOccurrences = validated;
-  }
-
-  // vNext Handoff 04A.1. Optional for the same reason as workout_occurrences.
-  let personalRecordEvents: unknown[] = [];
-  if (value.entities.personal_record_events !== undefined) {
-    const validated = validateEntityArray(
-      value.entities.personal_record_events,
-      `${path}.entities.personal_record_events`,
-      issues,
-    );
-    if (validated === null) return null;
-    personalRecordEvents = validated;
+    optional[key] = validated;
   }
 
   return {
     device_id: value.device_id,
-    entities: {
-      ...entities,
-      workout_occurrences: workoutOccurrences,
-      personal_record_events: personalRecordEvents,
-    } as AtlasBackupDocument['entities'],
+    entities: { ...entities, ...optional } as AtlasBackupDocument['entities'],
   };
 }
 

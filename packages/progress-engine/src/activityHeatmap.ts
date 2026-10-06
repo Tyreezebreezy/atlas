@@ -1,3 +1,4 @@
+import { localIsoDate, sessionLocalDate } from '@atlas/core';
 import { summarizeSession } from '@atlas/workout-engine';
 import type { WorkoutSession } from '@atlas/data-model';
 
@@ -9,15 +10,12 @@ export interface ActivityDay {
   value: number;
 }
 
-function localDateKey(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 /**
  * One value per calendar day over the trailing `days` window, keyed by the
- * owner's local calendar date (not UTC -- a workout finished at 11pm must
- * land on the day it was actually done). Every day in the window is
+ * calendar day each workout was performed on (`sessionLocalDate`: recorded on
+ * the device when it started, else the viewer-local day of its completion --
+ * never UTC, so a workout finished at 11pm lands on the day it was actually
+ * done). Every day in the window is
  * present, including zero-activity days, so a calendar-grid UI never has
  * to backfill gaps itself. Metric is a simple tally of what was actually
  * logged (workout count, total minutes, or total sets) -- no derived
@@ -33,7 +31,7 @@ export function computeActivityHeatmap(
   const byDate = new Map<string, number>();
 
   for (const session of completed) {
-    const date = localDateKey(session.completed_at ?? session.started_at);
+    const date = sessionLocalDate(session);
     const value =
       metric === 'workouts'
         ? 1
@@ -47,7 +45,7 @@ export function computeActivityHeatmap(
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const key = localIsoDate(d);
     result.push({ date: key, value: byDate.get(key) ?? 0 });
   }
   return result;

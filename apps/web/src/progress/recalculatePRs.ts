@@ -1,4 +1,4 @@
-import { calculatePRs } from '@atlas/pr-engine';
+import { calculatePRs, performanceContextKey } from '@atlas/pr-engine';
 import type { Exercise, PersonalRecord } from '@atlas/data-model';
 import type { AtlasStorage } from '@atlas/storage';
 import { reconcilePREventsForExercise } from './prEvents';
@@ -8,15 +8,21 @@ import { reconcilePREventsForExercise } from './prEvents';
  * key didn't need to distinguish. `rep_at_load`'s stable identity is its
  * `load`, not `reps` (which is the improving metric for that kind, the
  * inverse of every other kind) -- see calculatePRs.ts's doc comment on
- * `PersonalRecord.load`. `training_location_id` is folded in so two real
- * gyms' series never collide once sessions start recording one; every
- * pre-Handoff-02 row has `training_location_id: null`, so this is a no-op
- * for existing history.
+ * `PersonalRecord.load`.
+ *
+ * The context -- the training location and, since vNext Handoff 04B, the actual
+ * machine -- is folded in through the one shared `performanceContextKey`, so two
+ * machines at the same gym (or the same make at two gyms) never collide and one
+ * can never overwrite the other's row. A pre-Handoff-04B row has no machine, so
+ * its context is exactly the location it always had; nothing about existing
+ * history changes.
  */
-function prKey(record: Pick<PersonalRecord, 'kind' | 'reps' | 'load' | 'training_location_id'>): string {
+function prKey(
+  record: Pick<PersonalRecord, 'kind' | 'reps' | 'load' | 'training_location_id' | 'gym_equipment_id'>,
+): string {
   const dimension =
     record.kind === 'rep_at_load' ? `L${record.load ?? 'null'}` : `R${record.reps ?? 'null'}`;
-  return `${record.kind}:${dimension}:${record.training_location_id ?? 'none'}`;
+  return `${record.kind}:${dimension}:${performanceContextKey(record)}`;
 }
 
 /**

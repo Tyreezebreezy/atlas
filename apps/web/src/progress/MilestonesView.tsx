@@ -21,7 +21,11 @@ interface MilestonesViewProps {
 type Pane = 'progress' | 'achieved' | 'benchmarks';
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 /**
@@ -31,11 +35,20 @@ function formatDate(iso: string): string {
  * benchmark cards live on their own pane so their language never mixes with
  * PR and milestone language.
  */
-export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal }: MilestonesViewProps) {
+export function MilestonesView({
+  data,
+  onAdd,
+  onEdit,
+  onRemove,
+  onChooseNextGoal,
+}: MilestonesViewProps) {
   const { milestones, exercises, prs, benchmarks, testProtocols } = data;
 
   const visible = useMemo(() => milestones.filter((m) => isMilestoneVisible(m)), [milestones]);
-  const inProgress = useMemo(() => visible.filter((m) => m.active && m.achieved_at == null), [visible]);
+  const inProgress = useMemo(
+    () => visible.filter((m) => m.active && m.achieved_at == null),
+    [visible],
+  );
   const achieved = useMemo(() => visible.filter((m) => m.achieved_at != null), [visible]);
   const comparisons = useMemo(
     () => benchmarkComparisons(benchmarks, prs, exercises, testProtocols),
@@ -44,7 +57,10 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
   const hasVerifiedComparison = comparisons.some((c) => c.evaluation.status === 'MATCHED');
 
   const [chosen, setChosen] = useState<Pane | null>(null);
-  const pane: Pane = chosen ?? (inProgress.length > 0 || achieved.length === 0 ? 'progress' : 'achieved');
+  /** The goal whose "Remove" was just tapped -- asked before it goes, like every other delete in the app. */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const pane: Pane =
+    chosen ?? (inProgress.length > 0 || achieved.length === 0 ? 'progress' : 'achieved');
 
   const panes: { key: Pane; label: string }[] = [
     { key: 'progress', label: `In progress (${inProgress.length})` },
@@ -71,7 +87,11 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
             </button>
           ))}
         </div>
-        <button type="button" className="atlas-btn atlas-btn--secondary atlas-milestones__add" onClick={onAdd}>
+        <button
+          type="button"
+          className="atlas-btn atlas-btn--secondary atlas-milestones__add"
+          onClick={onAdd}
+        >
           + Add milestone
         </button>
       </div>
@@ -79,7 +99,8 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
       {pane === 'benchmarks' ? (
         <section aria-label="Benchmarks">
           <p className="atlas-milestones__note">
-            How your best compares with a reference group. These are comparisons, not goals or records.
+            How your best compares with a reference group. These are comparisons, not goals or
+            records.
             {!hasVerifiedComparison && ' None can be verified yet.'}
           </p>
           <BenchmarkList comparisons={comparisons} />
@@ -102,7 +123,10 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
               <span className="atlas-milestone-category__count">{group.count}</span>
             </h2>
             {group.sections.map((section) => (
-              <div key={section.exerciseId ?? section.milestones[0]?.id} className="atlas-milestone-ladder">
+              <div
+                key={section.exerciseId ?? section.milestones[0]?.id}
+                className="atlas-milestone-ladder"
+              >
                 {section.heading && <h3>{formatExerciseName(section.heading)}</h3>}
                 <ul className="atlas-milestone-list">
                   {section.milestones.map((m) => {
@@ -114,7 +138,9 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
                         ? progress.current + progress.remaining
                         : null;
                     const fraction =
-                      total && total > 0 && progress.current != null ? Math.min(1, progress.current / total) : null;
+                      total && total > 0 && progress.current != null
+                        ? Math.min(1, progress.current / total)
+                        : null;
                     const meta = isAchieved
                       ? `Achieved ${formatDate(m.achieved_at as string)}`
                       : progress.remaining != null
@@ -149,12 +175,46 @@ export function MilestonesView({ data, onAdd, onEdit, onRemove, onChooseNextGoal
                               <button type="button" onClick={() => onEdit(m)}>
                                 Edit
                               </button>
-                              <button type="button" onClick={() => onRemove(m)}>
+                              <button
+                                type="button"
+                                aria-label={`Remove ${m.title}`}
+                                onClick={() => setConfirmingId(m.id)}
+                              >
                                 Remove
                               </button>
                             </>
                           )}
                         </div>
+                        {confirmingId === m.id && (
+                          <div
+                            className="atlas-milestone-card__confirm"
+                            role="group"
+                            aria-label={`Remove ${m.title}?`}
+                          >
+                            <p>
+                              {m.is_builtin
+                                ? 'Remove this goal? You can add it back from the catalog.'
+                                : "Remove this goal? This can't be undone."}
+                            </p>
+                            <button
+                              type="button"
+                              className="atlas-btn atlas-btn--secondary"
+                              onClick={() => setConfirmingId(null)}
+                            >
+                              Keep it
+                            </button>
+                            <button
+                              type="button"
+                              className="atlas-btn atlas-btn--primary"
+                              onClick={() => {
+                                setConfirmingId(null);
+                                onRemove(m);
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </li>
                     );
                   })}

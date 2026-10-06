@@ -1,5 +1,6 @@
 import type { WorkoutSession, WorkoutTemplate } from '@atlas/data-model';
 import { createPlannedExercise } from './createPlannedExercise';
+import { hasExercise } from './uniqueExercises';
 
 function touch(session: WorkoutSession): Pick<WorkoutSession, 'updated_at' | 'version'> {
   return { updated_at: new Date().toISOString(), version: session.version + 1 };
@@ -11,6 +12,7 @@ function touch(session: WorkoutSession): Pick<WorkoutSession, 'updated_at' | 've
  * touched separately, for 'program' scope. Inserting anywhere but the end
  * isn't supported yet ("do not overcomplicate reorder UX initially"). */
 export function addExerciseToSession(session: WorkoutSession, exerciseId: string): WorkoutSession {
+  if (hasExercise(session.planned_snapshot, exerciseId)) return session; // one entry per exercise (see uniqueExercises.ts)
   const planned = createPlannedExercise(exerciseId, session.planned_snapshot.length);
   return {
     ...session,
@@ -26,6 +28,7 @@ export function addExerciseToTemplate(
   template: WorkoutTemplate,
   exerciseId: string,
 ): WorkoutTemplate {
+  if (hasExercise(template.exercises, exerciseId)) return template; // one entry per exercise (see uniqueExercises.ts)
   const planned = createPlannedExercise(exerciseId, template.exercises.length);
   return {
     ...template,

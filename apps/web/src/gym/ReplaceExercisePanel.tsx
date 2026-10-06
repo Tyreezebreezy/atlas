@@ -8,6 +8,8 @@ interface ReplaceExercisePanelProps {
   allExercises: Exercise[];
   /** Other exercises already planned in this workout -- never suggest replacing one exercise with another already in the same session. */
   excludeExerciseIds: string[];
+  /** Whether the workout comes from a saved workout that "Update program too" could change. A freestyle workout has none. */
+  canChangeProgram: boolean;
   onCancel: () => void;
   onConfirm: (
     replacementExerciseId: string,
@@ -20,6 +22,7 @@ export function ReplaceExercisePanel({
   currentExercise,
   allExercises,
   excludeExerciseIds,
+  canChangeProgram,
   onCancel,
   onConfirm,
 }: ReplaceExercisePanelProps) {
@@ -44,27 +47,29 @@ export function ReplaceExercisePanel({
   if (selected) {
     return (
       <div className="atlas-replace-panel">
-        <h3>Replace with {selected.name}?</h3>
-        <div className="atlas-replace-panel__scope">
-          <label>
-            <input
-              type="radio"
-              name="replace-scope"
-              checked={scope === 'today'}
-              onChange={() => setScope('today')}
-            />
-            Just today
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="replace-scope"
-              checked={scope === 'program'}
-              onChange={() => setScope('program')}
-            />
-            Update program too
-          </label>
-        </div>
+        <h3>Replace with {formatExerciseName(selected.name)}?</h3>
+        {canChangeProgram && (
+          <div className="atlas-replace-panel__scope">
+            <label>
+              <input
+                type="radio"
+                name="replace-scope"
+                checked={scope === 'today'}
+                onChange={() => setScope('today')}
+              />
+              Just today
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="replace-scope"
+                checked={scope === 'program'}
+                onChange={() => setScope('program')}
+              />
+              Update program too
+            </label>
+          </div>
+        )}
         <label htmlFor="replace-reason">Reason (optional)</label>
         <textarea
           id="replace-reason"
@@ -91,7 +96,7 @@ export function ReplaceExercisePanel({
   return (
     <div className="atlas-replace-panel">
       <div className="atlas-replace-panel__header">
-        <h3>Replace {currentExercise.name}</h3>
+        <h3>Replace {formatExerciseName(currentExercise.name)}</h3>
         <button type="button" onClick={onCancel}>
           Cancel
         </button>

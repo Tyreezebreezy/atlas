@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { currentGroupRound, isGroupComplete, type LogSetInput } from '@atlas/workout-engine';
 import { formatExerciseName } from '@atlas/exercise-library';
 import type { Exercise, ExerciseGroup, PerformedSet, PlannedExercise } from '@atlas/data-model';
+import { setEntryProblem } from './draftValues';
 
 interface MemberDraft {
   weight: string;
@@ -34,6 +35,8 @@ interface SupersetRoundProps {
   exercises: Map<string, Exercise>;
   performedSets: PerformedSet[];
   onCompleteRound: (sets: LogSetInput[]) => void;
+  /** vNext Handoff 04B. Extra content under one member's fields -- the equipment panel, so each member of a superset or circuit can be placed on its own machine. */
+  memberExtras?: (member: PlannedExercise, exercise: Exercise | undefined) => ReactNode;
 }
 
 /** One round of a superset/circuit at a time -- A1's next set, A2's next
@@ -48,8 +51,11 @@ export function SupersetRound({
   exercises,
   performedSets,
   onCompleteRound,
+  memberExtras,
 }: SupersetRoundProps) {
   const [drafts, setDrafts] = useState<Record<string, MemberDraft>>({});
+  /** Why "Complete Round" did not log (cleared as soon as anything is edited). */
+  const [roundProblem, setRoundProblem] = useState<string | null>(null);
   const round = currentGroupRound(group, members, performedSets);
   const complete = isGroupComplete(group, members, performedSets);
 
@@ -71,6 +77,7 @@ export function SupersetRound({
   }
 
   function updateDraft(memberId: string, patch: Partial<MemberDraft>) {
+    setRoundProblem(null);
     setDrafts((prev) => ({
       ...prev,
       [memberId]: { ...draftFor(members.find((m) => m.id === memberId)!), ...patch },
@@ -78,6 +85,25 @@ export function SupersetRound({
   }
 
   function handleCompleteRound() {
+    // Every member's set must be a possible set (see setEntryProblem); nothing is logged until all of them are.
+    for (const member of members) {
+      const exercise = exercises.get(member.exercise_id);
+      if (!exercise) continue;
+      const draft = draftFor(member);
+      const problem = setEntryProblem(exercise.measurement_type, {
+        weight: draft.weight,
+        reps: draft.reps,
+        duration: draft.duration,
+        distance: draft.distance,
+        rpe: draft.rpe,
+        rir: draft.rir,
+      });
+      if (problem) {
+        setRoundProblem(`${formatExerciseName(exercise.name)}: ${problem}`);
+        return;
+      }
+    }
+    setRoundProblem(null);
     const sets: LogSetInput[] = members.map((member) => {
       const exercise = exercises.get(member.exercise_id);
       const draft = draftFor(member);
@@ -226,10 +252,16 @@ export function SupersetRound({
                   onChange={(e) => updateDraft(member.id, { notes: e.target.value })}
                 />
               </div>
+              {memberExtras?.(member, exercise)}
             </li>
           );
         })}
       </ul>
+      {roundProblem && (
+        <p className="atlas-superset__error" role="alert">
+          {roundProblem}
+        </p>
+      )}
       <button type="button" className="atlas-superset__complete" onClick={handleCompleteRound}>
         Complete Round {round + 1}
       </button>

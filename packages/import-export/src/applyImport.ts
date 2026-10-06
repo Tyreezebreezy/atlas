@@ -9,7 +9,11 @@ import { newId } from '@atlas/core';
 import { createCustomExercise } from '@atlas/exercise-library';
 import { createProgram, createProgramDay, createProgramWeek } from '@atlas/program-engine';
 import type { AtlasStorage } from '@atlas/storage';
-import { createPlannedExercise, createWorkoutTemplate } from '@atlas/workout-engine';
+import {
+  createPlannedExercise,
+  createWorkoutTemplate,
+  mergeRepeatedExercises,
+} from '@atlas/workout-engine';
 import type {
   ImportPreviewExercise,
   ImportPreviewWorkout,
@@ -130,7 +134,10 @@ function buildTemplate(
     if (ex.group_id && !groupIds.has(ex.group_id)) ex.group_id = null;
   }
 
-  return { ...template, exercises, groups };
+  // A workout holds one entry per exercise (see `mergeRepeatedExercises`): a repeat -- by name, or two names that
+  // resolve to the same library exercise -- is folded into the first, keeping the volume.
+  const unique = mergeRepeatedExercises(exercises, groups);
+  return { ...template, exercises: unique.planned, groups: unique.groups };
 }
 
 /** Writes an approved (and possibly resolution-edited) preview to storage.

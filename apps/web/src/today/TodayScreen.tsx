@@ -28,16 +28,21 @@ import {
   type TodayScheduleEntry,
 } from '@atlas/program-engine';
 import { buildWeeklyReview } from '@atlas/progress-engine';
+import { activeLocations, preselectedLocationId } from '@atlas/equipment-engine';
 import { loadPREvents } from '../progress/prEvents';
 import type {
   Exercise,
   Milestone,
   PersonalRecordEvent,
   Program,
+  TrainingLocation,
   WorkoutOccurrence,
   WorkoutSession,
   WorkoutTemplate,
 } from '@atlas/data-model';
+import { loadGymsData, type GymsData } from '../equipment/equipmentActions';
+import { startContextFor } from '../equipment/sessionStartContext';
+import { TrainingLocationPicker } from '../equipment/TrainingLocationPicker';
 import { useGymMode } from '../gym/GymModeContext';
 import { useStorage } from '../storage/StorageContext';
 import { SessionDetail } from '../history/SessionDetail';
@@ -184,7 +189,12 @@ function TodayOverflowMenu({
   );
 }
 
-export function TodayScreen() {
+interface TodayScreenProps {
+  /** vNext Handoff 04B. Opens Gyms & Equipment -- offered, quietly, only while no places exist. */
+  onOpenGyms?: () => void;
+}
+
+export function TodayScreen({ onOpenGyms }: TodayScreenProps = {}) {
   const storage = useStorage();
   const { enterGymMode } = useGymMode();
   const [loading, setLoading] = useState(true);
@@ -198,6 +208,14 @@ export function TodayScreen() {
   const [occurrences, setOccurrences] = useState<WorkoutOccurrence[]>([]);
   const [prEvents, setPrEvents] = useState<PersonalRecordEvent[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [locations, setLocations] = useState<TrainingLocation[]>([]);
+  // The machines and the exercise -> machine memory: what a workout started here is held to.
+  const [equipment, setEquipment] = useState<Pick<GymsData, 'instances' | 'contexts'>>({
+    instances: [],
+    contexts: [],
+  });
+  // vNext Handoff 04B. `undefined` follows the preselected place; a pick (including "No location") overrides it for this visit.
+  const [chosenLocationId, setChosenLocationId] = useState<string | null | undefined>(undefined);
 
   // v0.2.4 browsing state. `selectedDate`/`selectedSequenceIndex` of `null`
   // both mean "follow the live current day/position" -- "Return to Today"
@@ -210,6 +228,8 @@ export function TodayScreen() {
   const [selectedSequenceIndex, setSelectedSequenceIndex] = useState<number | null>(null);
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [showAllMissed, setShowAllMissed] = useState(false);
+  /** Why "Do Again" did nothing (its workout was deleted since) -- it used to be a silent no-op. */
+  const [doAgainNote, setDoAgainNote] = useState<string | null>(null);
 
   async function reload() {
     if (!storage) return;
@@ -238,16 +258,25 @@ export function TodayScreen() {
     // invariant this preserves.
     const { ensureExercisesSeeded } = await import('@atlas/exercise-library');
     await ensureExercisesSeeded(storage);
-    const [sessions, programs, allTemplates, exercises, allOccurrences, allPREvents, allMilestones] =
-      await Promise.all([
-        storage.workoutSessions.getAll(),
-        storage.programs.getAll(),
-        storage.workoutTemplates.getAll(),
-        storage.exercises.getAll(),
-        storage.workoutOccurrences.getAll(),
-        loadPREvents(storage),
-        storage.milestones.getAll(),
-      ]);
+    const [
+      sessions,
+      programs,
+      allTemplates,
+      exercises,
+      allOccurrences,
+      allPREvents,
+      allMilestones,
+      gymsData,
+    ] = await Promise.all([
+      storage.workoutSessions.getAll(),
+      storage.programs.getAll(),
+      storage.workoutTemplates.getAll(),
+      storage.exercises.getAll(),
+      storage.workoutOccurrences.getAll(),
+      loadPREvents(storage),
+      storage.milestones.getAll(),
+      loadGymsData(storage),
+    ]);
     setActiveSession(sessions.find((s) => s.status === 'in_progress') ?? null);
     setActiveProgram(programs.find((p) => p.is_active) ?? null);
     setTemplates(new Map(allTemplates.map((t) => [t.id, t])));
@@ -256,6 +285,8 @@ export function TodayScreen() {
     setOccurrences(allOccurrences);
     setPrEvents(allPREvents);
     setMilestones(allMilestones);
+    setLocations(gymsData.locations);
+    setEquipment({ instances: gymsData.instances, contexts: gymsData.contexts });
     setLoading(false);
   }
 
@@ -263,6 +294,12 @@ export function TodayScreen() {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storage]);
+
+  // vNext Handoff 04B. Where a workout started from here happens: what the owner picked, else the one place
+  // that is the obvious choice (the only place, the default, the place of the last workout), else nowhere.
+  // Never blocks starting, and never guesses between several places.
+  const preselectedId = preselectedLocationId(locations, allSessions);
+  const startLocationId = chosenLocationId !== undefined ? chosenLocationId : preselectedId;
 
   async function startFromTemplate(
     template: WorkoutTemplate,
@@ -272,16 +309,26 @@ export function TodayScreen() {
     isDeload = false,
   ) {
     if (!storage) return;
+    const trainingLocationId = startLocationId;
     // Deload sessions are fully logged like any other -- they only need to
     // be excluded from future progression baselines (see
     // findPreviousNormalSession), never from progression itself: a deload
     // day's own target still resolves from the last *normal* session, same
     // as any other day.
+    // vNext Handoff 04B. Each exercise's target is worked out for the machine remembered for it at the place
+    // this workout is starting, from the history on that machine when there is some -- so the TARGET on the
+    // card never asks for a load that machine cannot give. No remembered machine: the plan, as it always was.
     const plannedSnapshot = applyProgressionToSession(
       template.exercises,
       activeProgram,
       exercisesById,
       allSessions,
+      undefined,
+      startContextFor(
+        { training_location_id: trainingLocationId, exercise_equipment: [] },
+        equipment,
+        allSessions,
+      ),
     );
     const session = startWorkoutSession({
       name: template.name,
@@ -291,6 +338,7 @@ export function TodayScreen() {
       plannedSnapshot,
       groups: template.groups,
       scheduledDate,
+      trainingLocationId,
     });
     await storage.workoutSessions.put(isDeload ? { ...session, is_deload: true } : session);
     enterGymMode(session.id);
@@ -307,6 +355,7 @@ export function TodayScreen() {
       programId: null,
       programDayId: null,
       plannedSnapshot: [],
+      trainingLocationId: startLocationId,
     });
     await storage.workoutSessions.put(session);
     enterGymMode(session.id);
@@ -320,7 +369,13 @@ export function TodayScreen() {
     const original = allSessions.find((s) => s.id === occurrence.session_id);
     const templateId = original?.template_id ?? null;
     const template = templateId ? (templates.get(templateId) ?? null) : null;
-    if (!template) return;
+    if (!template) {
+      setDoAgainNote(
+        "That workout has since been deleted, so it can't be repeated. Start a Freestyle Workout instead.",
+      );
+      return;
+    }
+    setDoAgainNote(null);
     await startFromTemplate(template, occurrence.program_id, occurrence.program_day_id, null);
   }
 
@@ -678,6 +733,14 @@ export function TodayScreen() {
         />
       )}
 
+      {activeLocations(locations).length > 0 && (
+        <TrainingLocationPicker
+          locations={locations}
+          value={startLocationId}
+          onChange={setChosenLocationId}
+        />
+      )}
+
       {activeProgram && scheduleEntry && (
         <section className="atlas-today__primary">
           {scheduleEntry.kind === 'workout' && (
@@ -820,6 +883,11 @@ export function TodayScreen() {
                   Do Again
                 </button>
               </div>
+              {doAgainNote && (
+                <p className="atlas-today__workout-meta" role="status">
+                  {doAgainNote}
+                </p>
+              )}
             </div>
           )}
 
@@ -831,33 +899,39 @@ export function TodayScreen() {
                   : 'Nothing scheduled'}
               </h2>
               {scheduleEntry.kind === 'moved_away' && (
-                <p className="atlas-today__workout-meta">Moved to {scheduleEntry.movedToDate}</p>
+                <p className="atlas-today__workout-meta">
+                  Moved to {longWeekday(scheduleEntry.movedToDate)},{' '}
+                  {shortMonthDay(scheduleEntry.movedToDate)}
+                </p>
               )}
             </div>
           )}
         </section>
       )}
 
-      {isViewingToday && weeklyReview.completed_sessions + weeklyReview.pr_count + weeklyReview.milestone_count > 0 && (
-        <section className="atlas-today__week-snapshot" aria-label="This week">
-          <h2>This Week</h2>
-          <p className="atlas-today__week-snapshot-line">
-            {weeklyReview.planned_sessions != null
-              ? `${weeklyReview.completed_sessions} / ${weeklyReview.planned_sessions} sessions`
-              : `${weeklyReview.completed_sessions} session${weeklyReview.completed_sessions === 1 ? '' : 's'}`}
-          </p>
-          {weeklyReview.pr_count > 0 && (
+      {isViewingToday &&
+        weeklyReview.completed_sessions + weeklyReview.pr_count + weeklyReview.milestone_count >
+          0 && (
+          <section className="atlas-today__week-snapshot" aria-label="This week">
+            <h2>This Week</h2>
             <p className="atlas-today__week-snapshot-line">
-              {weeklyReview.pr_count} PR{weeklyReview.pr_count === 1 ? '' : 's'}
+              {weeklyReview.planned_sessions != null
+                ? `${weeklyReview.completed_sessions} / ${weeklyReview.planned_sessions} sessions`
+                : `${weeklyReview.completed_sessions} session${weeklyReview.completed_sessions === 1 ? '' : 's'}`}
             </p>
-          )}
-          {weeklyReview.milestone_count > 0 && (
-            <p className="atlas-today__week-snapshot-line">
-              {weeklyReview.milestone_count} milestone{weeklyReview.milestone_count === 1 ? '' : 's'}
-            </p>
-          )}
-        </section>
-      )}
+            {weeklyReview.pr_count > 0 && (
+              <p className="atlas-today__week-snapshot-line">
+                {weeklyReview.pr_count} PR{weeklyReview.pr_count === 1 ? '' : 's'}
+              </p>
+            )}
+            {weeklyReview.milestone_count > 0 && (
+              <p className="atlas-today__week-snapshot-line">
+                {weeklyReview.milestone_count} milestone
+                {weeklyReview.milestone_count === 1 ? '' : 's'}
+              </p>
+            )}
+          </section>
+        )}
 
       <button
         type="button"
@@ -947,6 +1021,16 @@ export function TodayScreen() {
         <p className="atlas-program-screen__empty">
           Create a workout on the Program tab to get started.
         </p>
+      )}
+
+      {onOpenGyms && activeLocations(locations).length === 0 && (
+        <button
+          type="button"
+          className="atlas-btn atlas-btn--tertiary atlas-today__setup-link"
+          onClick={onOpenGyms}
+        >
+          Set up gyms &amp; equipment
+        </button>
       )}
     </div>
   );

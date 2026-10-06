@@ -1,4 +1,10 @@
-import { getOrCreateDeviceId, newId } from '@atlas/core';
+import {
+  captureLocalTimeContext,
+  getOrCreateDeviceId,
+  localDateOfInstant,
+  newId,
+} from '@atlas/core';
+import { mergeRepeatedExercises } from './uniqueExercises';
 import type {
   ExerciseGroup,
   PerformedSet,
@@ -31,6 +37,45 @@ export interface StartSessionInput {
    * Freestyle/Quick Workouts and for a "Do Again" rerun -- see
    * `WorkoutSession.scheduled_date`'s doc comment. */
   scheduledDate?: string | null;
+  /** vNext Handoff 04B. The `TrainingLocation` the workout is happening at.
+   * Omitted/null = no location recorded (the owner has none set up, or chose
+   * not to say) -- never guessed, and never blocks starting. */
+  trainingLocationId?: string | null;
+  /** vNext Handoff 04B. The calendar day (YYYY-MM-DD) a historical entry
+   * counts toward -- for "Log Past Workout" the date the owner picked IS the
+   * day. Omit for a live session, which records the device's own date. */
+  performedLocalDate?: string | null;
+}
+
+/**
+ * What a new session records about when it happened. A live session takes the
+ * device's clock: its calendar day, its IANA zone and its UTC offset, so the
+ * day it counts toward never moves when the viewer later travels. A backdated
+ * session (`startedAt` given) was not performed "now", so the zone of this
+ * device proves nothing about where it was done: only the calendar day is
+ * recorded -- the one the owner picked, or the day `startedAt` falls on here --
+ * and the zone fields stay unset rather than invented.
+ */
+function localTimeFor(input: StartSessionInput): {
+  performed_local_date: string;
+  time_zone_id: string | null;
+  utc_offset_minutes: number | null;
+} {
+  if (input.performedLocalDate) {
+    return {
+      performed_local_date: input.performedLocalDate,
+      time_zone_id: null,
+      utc_offset_minutes: null,
+    };
+  }
+  if (input.startedAt) {
+    return {
+      performed_local_date: localDateOfInstant(input.startedAt),
+      time_zone_id: null,
+      utc_offset_minutes: null,
+    };
+  }
+  return captureLocalTimeContext();
 }
 
 /**
@@ -39,6 +84,8 @@ export interface StartSessionInput {
  */
 export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
   const now = new Date().toISOString();
+  // A workout holds one entry per exercise: a template saved with a repeat is folded here (see uniqueExercises.ts).
+  const unique = mergeRepeatedExercises(input.plannedSnapshot, input.groups ?? []);
   return {
     id: newId(),
     created_at: now,
@@ -55,14 +102,16 @@ export function startWorkoutSession(input: StartSessionInput): WorkoutSession {
     program_day_id: input.programDayId,
     template_id: input.templateId,
     scheduled_date: input.scheduledDate ?? null,
-    planned_snapshot: input.plannedSnapshot.map((exercise) => ({ ...exercise })),
-    groups: (input.groups ?? []).map((group) => ({ ...group })),
+    planned_snapshot: unique.planned.map((exercise) => ({ ...exercise })),
+    groups: unique.groups.map((group) => ({ ...group })),
     performed_sets: [],
     session_note: null,
     active_timer: null,
     skipped_exercises: [],
     skip_reason: null,
     replacements: [],
+    training_location_id: input.trainingLocationId ?? null,
+    ...localTimeFor(input),
   };
 }
 

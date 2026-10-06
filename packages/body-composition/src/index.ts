@@ -7,3 +7,4 @@ export {
 } from './bodyMeasurementSeries';
 export { createBodyMeasurement } from './createBodyMeasurement';
 export type { CreateBodyMeasurementInput } from './createBodyMeasurement';
+export { bodyMeasurementProblem, BODY_LIMITS } from './bodyMeasurementProblem';
