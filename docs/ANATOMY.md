@@ -64,10 +64,10 @@ Chest / Mid Chest").
 the curated table or the rules corrects rows already stored.
 
 The acceptance pass audited ~45 exercises (the dataset's common lifts and every
-strength exercise in the owner's starter program) against what the app derived,
+strength exercise in the maintainer's own training program at the time) against what the app derived,
 and corrected what was plainly wrong:
 
-- **The owner's starter exercises** are custom rows with a category and nothing
+- **Custom exercises** (including the maintainer's own at the time) are custom rows with a category and nothing
   else, so they only ever got the category fallback — which put biceps _and_
   triceps on a pressdown, quads _and_ hamstrings on a leg curl, the lateral
   deltoid on a face pull and calves on a tibialis raise. ~30 of them are now

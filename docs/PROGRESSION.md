@@ -280,8 +280,7 @@ it, plus the group tier for the mid-round case.
   picking arbitrarily — the handoff's own "preferred default: longest
   relevant member rest" rule.
 - `member_rest_seconds` — between members _within_ a round. Null/absent
-  by default (no rest between members), matching the owner's Pre-Going-Out
-  Pump guide's actual structure ("Exercise A → Exercise B → end round →
+  by default (no rest between members), matching a typical superset circuit ("Exercise A → Exercise B → end round →
   rest"). `SupersetRound.tsx` logs a whole round in one action (no
   per-member step to insert a real timer into), so a configured
   `member_rest_seconds` is surfaced as an informational line rather than

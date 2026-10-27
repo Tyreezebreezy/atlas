@@ -426,48 +426,24 @@ requires a major unrelated migration, document it for the next phase
 rather than destabilizing v0.2.0"), this is deferred rather than
 half-built. See docs/ROADMAP.md.
 
-## Owner starter data (v0.2.1)
+## Starter data (removed from this repository)
 
-v0.2.0 shipped the HTML-plan import pipeline (`parseHtmlPlan` →
-`matchExercise` → `buildImportPreview` → `applyImport`) and validated it
-against fixtures copied from the owner's real documents, but nobody ever
-ran that pipeline against the owner's actual production database --
-tested capability, not applied data. v0.2.1 closes that gap with a
-built-in, idempotent seeder rather than asking the owner to import the
-files themselves.
+Between v0.2.1 and v1.1.0 the app seeded one personal training program and
+several Quick Workouts into a fresh install, generated from the maintainer's
+own workout documents. That data, its seeder and its fixtures are not part of
+this repository's public history. The app shipped here starts **blank**: no
+programs, no workouts, no history. Only the exercise library and the benchmark
+and milestone catalogs are seeded, because those are reference data.
 
-`packages/import-export/src/ownerStarterData.ts` is normalized,
-already-resolved ATLAS domain data (a Program + five Quick Workouts)
-generated once from the real pipeline against
-`packages/import-export/src/fixtures/*.html` -- not reparsed on every
-boot. `ownerStarterData.provenance.test.ts` reparses those same fixtures
-fresh and fails if the static data ever drifts from what the live
-pipeline would produce, so the fixtures stay the source of truth without
-paying HTML-parsing cost at startup.
+The `starter_pack` field on `Program` and `WorkoutTemplate`
+(`OwnerStarterPackProvenance` in `packages/data-model/src/sync.ts`) is a leftover
+from that seeder. It is optional, informational only, never read for any
+decision, and stays in the schema so existing databases that carry it keep
+validating. New installs never set it.
 
-`ensureOwnerStarterDataSeeded()` (`seedOwnerStarterData.ts`) is called
-from `TodayScreen` (dynamically imported -- see its own comment for why:
-a static import would pull the ~1,300-exercise seed dataset into Today's
-eagerly-loaded bundle) alongside `ensureExercisesSeeded()`, mirroring that
-function's own "seed once, backfill what's still missing on every later
-install" shape. Idempotency is by each record's own **stable id**
-(`owner-weekly-workout-guide-v5`, `owner-pre-going-out-pump-v2`, etc.),
-checked independently per record -- an install can have the Program but
-not the Pump workout, and a re-run creates only what's actually missing.
-Once a record exists at all, it is never touched again regardless of what
-it now contains, so an owner edit (renamed, reordered, reprogrammed)
-survives every future launch. A `starter_pack` field on the seeded
-Program/WorkoutTemplate (`OwnerStarterPackProvenance`, `packages/data-model/src/sync.ts`)
-records where it came from for debugging; it is never read for the
-idempotency check itself.
-
-An exercise name that the real matcher resolves (exact/normalized/alias)
-uses the real library exercise, picking up its media automatically. A
-name it does not confidently resolve becomes a **custom** exercise using
-the owner's own wording (never guessed from a low-confidence candidate --
-same "never silently mapped" rule as the matcher itself), keyed by a
-content-derived stable id so the same phrasing repeated across days
-("Wall slides" on both Monday and Thursday) is one Exercise, not two.
+To get your own plan in, use import (paste text, an `atlas-plan-v1` file, or an
+HTML plan page) or build it in the Program tab. See
+[IMPORT_FORMAT.md](IMPORT_FORMAT.md).
 
 ## Weekly schedule resolution (v0.2.2)
 

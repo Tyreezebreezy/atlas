@@ -20,7 +20,16 @@ The layout adapts from phone to wide desktop: bottom navigation on a phone, a si
 
 ## Screenshots
 
-I haven't added screenshots to this repo yet. A fresh install starts empty (no programs, no history), so useful captures need a synthetic profile, and I haven't built one for the README. Until then, the best way to see it is to run it (below).
+These are real captures of the running app with made-up demo data (a three-day push/pull/legs program and a few weeks of fake sessions). None of it is my training history. A fresh install starts empty.
+
+<p>
+  <img src="docs/screenshots/today.png" width="24%" alt="Today screen showing the scheduled Friday legs workout and the week so far">
+  <img src="docs/screenshots/gym-mode.png" width="24%" alt="Gym Mode mid-workout with a rest timer running and two sets logged">
+  <img src="docs/screenshots/progress.png" width="24%" alt="Progress overview with weekly sessions, PRs and recent estimated 1RM gains">
+  <img src="docs/screenshots/muscles.png" width="24%" alt="Muscle volume body map for the last 30 days, back view">
+</p>
+
+Left to right: Today, Gym Mode, Progress, and the muscle volume map. More: [the program editor](docs/screenshots/program.png) and [the post-workout summary](docs/screenshots/workout-complete.png).
 
 ## Built with
 
@@ -39,9 +48,12 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - **Version:** 1.1.0 (tagged `v1.1.0`; earlier releases from `v0.0.1` through `v1.0.0` are tagged too).
 - **Platforms:** the PWA is the main target. The Windows desktop shell builds from `apps/desktop`. I have not published an Android or iOS-native build.
+- **Known issue:** `npm run build` currently fails at the last step. Vite bundles the app, then the PWA plugin errors while writing the service worker (`Unable to write the service worker file ... is not valid JSON`). `npm run dev` works, and I haven't fixed the build yet, so the installable/offline PWA build is broken on this branch.
+- **Tests:** `npm run test` passes (124 files, 1343 tests) and `npm run typecheck` and `npm run lint` are clean as of the last check. I haven't run the Rust side of the desktop shell for this repo copy.
+- **Starting data:** the app starts blank. Earlier versions seeded a personal program; that was removed before this repo went public. Import your own plan or build one in the Program tab.
 - **Docs drift:** `docs/ROADMAP.md` still lists some later versions as "not started" and is behind the tags. Treat the tags and `package.json` as the source of truth.
 - **Out of scope:** nutrition tracking, social features, XP and levels.
-- **Planned, not built:** syncing between devices.
+- **Planned, not built:** syncing between devices. CITADEL in the docs is the name of my own self-hosted sync idea for that; none of it exists yet.
 
 ## Run it from source
 
@@ -66,4 +78,4 @@ Exercise data is MIT-licensed structured data (see [docs/EXERCISE_DATA.md](docs/
 
 ## License
 
-The application source has no license chosen yet (`package.json` says `UNLICENSED`), so all rights are reserved for now. The third-party material above keeps its own licenses.
+The source is publicly viewable, but I haven't granted an open-source license (`package.json` says `UNLICENSED`), so all rights are reserved for now. The third-party material above keeps its own licenses.
