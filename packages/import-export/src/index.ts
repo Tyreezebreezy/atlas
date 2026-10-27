@@ -12,5 +12,3 @@ export * from './exportProgram';
 export * from './backupStores';
 export * from './exportBackup';
 export * from './restoreBackup';
-export * from './ownerStarterData';
-export * from './seedOwnerStarterData';

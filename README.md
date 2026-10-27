@@ -1,69 +1,69 @@
 # ATLAS
 
-A personal, local-first fitness and training tracker. Create or import workouts and
-programs, run them in the gym, log every set, detect PRs, track milestones, and see
-progress over time — offline-first, syncing later through CITADEL.
+A local-first training app: build your own programs, run the workout in the gym, log every set, and watch the numbers move.
 
-ATLAS is a training app, not a general health platform. No nutrition tracking, no
-social features, no XP/levels. See [docs/ROADMAP.md](docs/ROADMAP.md) for scope.
+I built ATLAS because I wanted my workout system to fit my own programs instead of squeezing them into a social or gamified fitness app. You can write a program or paste one in, run it set by set, and the app tracks PRs, milestones, body measurements and history from what you actually logged. There are no accounts, no nutrition tracking, no social features and no XP or levels. All your data stays on the device.
 
-The same codebase adapts from phone to ultrawide desktop — bottom nav on a
-phone, a sidebar from tablet up, bounded content width so nothing stretches
-edge-to-edge on a large monitor. See [docs/ADAPTIVE_UI.md](docs/ADAPTIVE_UI.md)
-and [docs/MOBILE.md](docs/MOBILE.md).
+## What it does
 
-## Structure
+- **Programs and quick workouts.** Build workout templates and multi-week programs, activate one program at a time, and keep a Quick Workout library. Programs can be fixed or sequential (Today shows the current rotation day and only advances when that day is completed).
+- **Gym Mode.** Start a workout and log sets with immediate autosave, previous-performance lookup, session notes, rest and timed-exercise timers, skip/replace/add exercise, supersets and circuits, and recovery of an interrupted session.
+- **Exercise library.** 1,324 seeded exercises with search and filters, custom exercises, notes, a body-map muscle browser, and looping demonstrations for 64 of them (see attribution below).
+- **Substitutions.** Deterministic, offline exercise-substitution scoring.
+- **Progress.** PR detection (max load, reps, rep ranges, estimated 1RM, volume, bodyweight, timed, distance) with historical recalculation, per-exercise trend charts, and training distribution.
+- **Milestones and benchmarks.** Built-in and custom milestones, plus percentile benchmarks.
+- **Body composition.** Manual measurement entry and trend charts.
+- **Import / export.** A portable `atlas-plan-v1` format for workouts, programs and full backups, with a paste-text workout parser and preview before anything is applied.
+- **Works offline.** It's an installable PWA with a service worker, and there's a Windows desktop shell too.
+
+The layout adapts from phone to wide desktop: bottom navigation on a phone, a sidebar from tablet width up, with content width bounded so nothing stretches across a big monitor. See [docs/ADAPTIVE_UI.md](docs/ADAPTIVE_UI.md) and [docs/MOBILE.md](docs/MOBILE.md).
+
+## Screenshots
+
+I haven't added screenshots to this repo yet. A fresh install starts empty (no programs, no history), so useful captures need a synthetic profile, and I haven't built one for the README. Until then, the best way to see it is to run it (below).
+
+## Built with
+
+TypeScript and React, Vite as a PWA, IndexedDB (Dexie) in the browser, and a Tauri 2 shell with a SQLite adapter for Windows. The domain logic lives in separate packages (`workout-engine`, `program-engine`, `pr-engine`, `progress-engine`, `milestone-engine`, `benchmark-engine`, `substitution-engine`, `import-export` and others) shared by both shells. Tests run on Vitest.
 
 ```
-apps/
-  web/       React + TypeScript + Vite PWA — the shared frontend
-  desktop/   Tauri 2 shell wrapping apps/web for Windows
-packages/
-  data-model/       Shared TypeScript types for every core entity
-  storage/          Storage interface + IndexedDB (Dexie) and SQLite (Tauri SQL) adapters
-  core/             Platform-independent domain logic (IDs, device identity, storage selection)
-  ui/               Shared design tokens
-  exercise-library/     Exercise search/seed/custom-exercise logic + curated enrichment
-  workout-engine/       Workout template authoring + session execution (Gym Mode), timers, skip, replace, add exercise, supersets/circuits
-  program-engine/       Program authoring + active-program selection + sequential progression
-  substitution-engine/  Deterministic, offline exercise-substitution scoring
-  pr-engine/            Personal-record eligibility, calculation, and recalculation
-  progress-engine/      Exercise summaries, chart-series generation, training distribution
-  milestone-engine/     Built-in + custom milestone evaluation
-  benchmark-engine/     Population-benchmark percentile interpolation + seeded dataset
-  body-composition/     Body-measurement chart series + bodyweight selection rule
-  import-export/        atlas-plan-v1 format, paste-text parsing, exercise matching, preview/apply, full backup/restore
-docs/          Architecture, data model, roadmap, security notes
+apps/web/       the React PWA
+apps/desktop/   Tauri 2 shell for Windows
+packages/       data model, storage adapters, and the engines above
+docs/           architecture, data model, roadmap, security notes
 ```
 
-One core, two shells. All fitness/domain logic lives in `packages/`, not duplicated
-per platform. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Develop
+## Current status
+
+- **Version:** 1.1.0 (tagged `v1.1.0`; earlier releases from `v0.0.1` through `v1.0.0` are tagged too).
+- **Platforms:** the PWA is the main target. The Windows desktop shell builds from `apps/desktop`. I have not published an Android or iOS-native build.
+- **Docs drift:** `docs/ROADMAP.md` still lists some later versions as "not started" and is behind the tags. Treat the tags and `package.json` as the source of truth.
+- **Out of scope:** nutrition tracking, social features, XP and levels.
+- **Planned, not built:** syncing between devices.
+
+## Run it from source
+
+Node 20 or newer. For the desktop shell on Windows you also need Rust and the Tauri 2 prerequisites (WebView2, MSVC build tools).
 
 ```bash
 npm install
 npm run dev          # web app at http://localhost:5173
-npm run tauri dev    # desktop shell (wraps the same web app)
-```
+npm run tauri dev    # desktop shell
 
-## Validate
-
-```bash
 npm run lint
 npm run typecheck
 npm run test
 npm run build
-cd apps/desktop/src-tauri && cargo check && cargo test   # Rust compiles + Rust-side tests
-npm run tauri build                                      # required to verify the *packaged app*
 ```
 
-`cargo check`/`cargo test` only validate the Rust code compiles — they don't
-catch frontend-loading issues. A raw `cargo build --release` (skipping the
-Tauri CLI) has been observed to load the Vite dev URL instead of the bundled
-app; always go through `npm run tauri build` / `npm run tauri dev` when the
-question is "does the packaged app actually work," not just "does it compile."
+For the desktop build, go through `npm run tauri build` rather than a raw `cargo build --release`, which can load the dev URL instead of the bundled app.
 
-## Requirements
+## Third-party material
 
-Node ≥20, Rust stable + Cargo, and on Windows: WebView2 runtime (ships with Windows 11) and the Visual Studio Build Tools C++ workload (for Tauri).
+Exercise data is MIT-licensed structured data (see [docs/EXERCISE_DATA.md](docs/EXERCISE_DATA.md)). The looping exercise demonstrations come from Workout Guide under CC BY-SA 4.0 ([THIRD_PARTY_MEDIA.md](THIRD_PARTY_MEDIA.md)). The body-map geometry is vendored from `vulovix/body-muscles` under Apache-2.0 ([docs/ANATOMY.md](docs/ANATOMY.md), [LICENSES](LICENSES)).
+
+## License
+
+The application source has no license chosen yet (`package.json` says `UNLICENSED`), so all rights are reserved for now. The third-party material above keeps its own licenses.
